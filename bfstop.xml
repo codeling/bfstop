@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension version="1.6" type="plugin" group="system" method="upgrade">
+	<name>PLG_BFSTOP_NAME</name>
+	<author>Bernhard Froehler</author>
+	<creationDate>November 2012</creationDate>
+	<copyright>Copyleft (C) 2012</copyright>
+	<license>http://www.gnu.org/licenses/gpl-2.0.html GNU/GPL</license>
+	<homepage>https://github.com/codeling/bfstop</homepage>
+	<authorEmail>joomla@bfroehler.info</authorEmail>
+	<authorUrl></authorUrl>
+	<version>1.5.6</version>
+	<description>PLG_BFSTOP_DESC</description>
+	<files>
+		<filename plugin="bfstop">bfstop.php</filename>
+	</files>
+	<languages>
+		<language tag="en-GB">en-GB.plg_system_bfstop.ini</language>
+		<language tag="en-GB">en-GB.plg_system_bfstop.sys.ini</language>
+		<language tag="de-DE">de-DE.plg_system_bfstop.ini</language>
+		<language tag="de-DE">de-DE.plg_system_bfstop.sys.ini</language>
+	</languages>
+	<config>
+		<fields name="params">
+			<fieldset name="basic">
+				<field name="guitype" type="list" default="2" label="NOTIFYSOURCELABEL" description="NOTIFYSOURCEDESC">
+					<option value="0">NOTIFY_NONE</option>
+					<option value="1">NOTIFY_FRONTEND</option>
+					<option value="2">NOTIFY_BACKEND</option>
+					<option value="3">NOTIFY_BOTH</option>
+				</field>
+				<field name="emailtype" type="list" default="1" label="EMAILSOURCELABEL" description="EMAILSOURCEDESC">
+					<option value="0">SELECTEDUSERS</option>
+					<option value="1">CUSTOMEMAILADDRESS</option>
+				</field>
+				<field name="emailaddress" type="text" size="40" default="" label="ENTEREMAILLABEL" description="ENTEREMAILDESC" />
+				<field name="userIDs" type="user" default="" label="SELECTUSERLABEL" description="SELECTUSERDESC" />
+			</fieldset>
+			<fieldset name="advanced">
+				<field name="notifyNumber" type="integer" default="1" first="1" last="5" step="1" label="NOTIFYNUMBERLABEL" description="NOTIFYNUMBERDESC" />
+				<field name="notifyInterval" type="integer" default="2" first="1" last="24" step="1" label="NOTIFYINTERVALLABEL" description="NOTIFYINTERVALDESC" />
+				<field name="blockNumber" type="integer" default="20" first="3" last="20" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
+				<field name="blockInterval" type="integer" default="24" first="1" last="24" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
+				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
+			</fieldset>
+		</fields>
+	</config>
+</extension>
