@@ -192,7 +192,7 @@ class plgSystembfstop extends JPlugin
 			!$this->tooManyRecentEvents($db, $logEntry->logtime, $interval, $maxNumber))
 		{
 			$body = $this->getFailedLoginBody($logEntry);
-			$subject = JText::_sprintf("FAILED_LOGIN_ATTEMPT", .JURI::root());
+			$subject = JText::_sprintf("FAILED_LOGIN_ATTEMPT", JURI::root());
 			$this->sendMailNotification($db, $log, $subject, $body);
 		}
 		$this->blockIfTooManyAttempts($db, $logEntry, $log);

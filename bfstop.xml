@@ -22,7 +22,10 @@
 	<config>
 		<fields name="params">
 			<fieldset name="basic">
-				<field name="blockEnabled" type="checkbox" default="true" label="ENABLEBLOCKLABEL" description="ENABLEBLOCKDESC" />
+				<field name="blockEnabled" type="list" default="1" label="ENABLEBLOCKLABEL" description="ENABLEBLOCKDESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
 				<field name="blockNumber" type="integer" default="20" first="3" last="20" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
 				<field name="blockInterval" type="integer" default="24" first="1" last="24" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
@@ -33,7 +36,7 @@
 					<option value="1">CUSTOMEMAILADDRESS</option>
 				</field>
 				<field name="emailaddress" type="text" size="40" default="" label="ENTEREMAILLABEL" description="ENTEREMAILDESC" />
-				<field name="userIDs" type="user" default="" label="SELECTEDUSERLABEL" description="SELECTEDUSERDESC" />
+				<field name="userIDs" type="user" default="" label="SELECTUSERLABEL" description="SELECTUSERDESC" />
 				<field name="notifyBlockedSource" type="list" default="3" label="NOTIFYBLOCKEDSOURCELABEL" description="NOTIFYBLOCKEDSOURCEDESC">
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">NOTIFY_FRONTEND</option>
