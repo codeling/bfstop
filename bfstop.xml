@@ -26,8 +26,8 @@
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
-				<field name="blockNumber" type="integer" default="20" first="3" last="20" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
-				<field name="blockInterval" type="integer" default="24" first="1" last="24" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
+				<field name="blockNumber" type="integer" default="15" first="3" last="25" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
+				<field name="blockInterval" type="integer" default="24" first="1" last="48" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
 			</fieldset>
 			<fieldset name="notify">
@@ -43,17 +43,28 @@
 					<option value="2">NOTIFY_BACKEND</option>
 					<option value="3">NOTIFY_BOTH</option>
 				</field>
-				<field name="notifyBlockedNumber" type="integer" default="1" first="1" last="5" step="1" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC" />
-				<field name="notifyBlockedInterval" type="integer" default="24" first="1" last="24" step="1" label="NOTIFYBLOCKEDINTERVALLABEL" description="NOTIFYBLOCKEDINTERVALDESC" />
-
+				<field name="notifyBlockedNumber" type="list" default="0" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
+					<option value="0">UNLIMITED</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+				</field>
 				<field name="notifyFailedSource" type="list" default="0" label="NOTIFYFAILEDSOURCELABEL" description="NOTIFYFAILEDSOURCEDESC">
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">NOTIFY_FRONTEND</option>
 					<option value="2">NOTIFY_BACKEND</option>
 					<option value="3">NOTIFY_BOTH</option>
 				</field>
-				<field name="notifyFailedNumber" type="integer" default="1" first="1" last="5" step="1" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC" />
-				<field name="notifyFailedInterval" type="integer" default="24" first="1" last="24" step="1" label="NOTIFYFAILEDINTERVALLABEL" description="NOTIFYFAILEDINTERVALDESC" />
+				<field name="notifyFailedNumber" type="list" default="1" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC">
+					<option value="0">UNLIMITED</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+				</field>
 			</fieldset>
 		</fields>
 	</config>
