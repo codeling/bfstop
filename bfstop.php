@@ -72,13 +72,42 @@ class plgSystembfstop extends JPlugin
 		return ($db->loadResult() > 0);
 	}
 
-	function getBlockedBody($logEntry)
+	function getFormattedFailedList($db, $ipAddress, $curTime, $interval)
 	{
-		return JText::sprintf('BLOCKED_IP_ADDRESS_BODY', $logEntry->ipaddress,
-				$this->getFailedLoginBody($logEntry));
+		$sql = "SELECT * FROM #__bfstop_failedlogin where ipaddress='$ipAddress'".
+			" AND logtime between DATE_SUB('$curTime', INTERVAL $interval HOUR) AND '$curTime'";
+		$db->setQuery($sql);
+		$entries = $db->loadObjectList();
+		$result = str_pad(JText::_('USERNAME'), 25)." ".
+				str_pad(JText::_('PASSWORD')  , 25)." ".
+				str_pad(JText::_('IPADDRESS') , 15)." ".
+				str_pad(JText::_('DATETIME')  , 20)." ".
+				str_pad(JText::_('ORIGIN')    ,  8)."\n".
+				str_repeat("-", 97)."\n";
+		foreach ($entries as $entry)
+		{
+			$result .= str_pad($entry->username               , 25)." ".
+				str_pad($entry->password                      , 25)." ".
+				str_pad($entry->ipaddress                     , 15)." ".
+				str_pad($entry->logtime                       , 20)." ".
+				str_pad($this->getClientString($entry->origin),  8)."\n";
+		}
+		return $result;
 	}
 
-	function block($db, $logEntry)
+	function getBlockedBody($db, $logEntry, $interval)
+	{
+		return JText::sprintf('BLOCKED_IP_ADDRESS_BODY',
+			$logEntry->ipaddress,
+			$this->getFormattedFailedList($db,
+				$logEntry->ipaddress,
+				$logEntry->logtime,
+				$interval
+			)
+		);
+	}
+
+	function block($db, $logEntry, $blockInterval)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled');
 		if (!$blockEnabled) {
@@ -101,7 +130,7 @@ class plgSystembfstop extends JPlugin
 		if ($this->isNotifyEnabled('notifyBlockedSource') &&
 			!$this->tooManyRecentEvents($db, $logEntry->logtime, $interval, $maxNumber, '#__banip_entries', 'crdate'))
 		{
-			$body = $this->getBlockedBody($logEntry);
+			$body = $this->getBlockedBody($db, $logEntry, $blockInterval);
 			$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT', $logEntry->ipaddress);
 			$this->sendMailNotification($db, $subject, $body);
 		}
@@ -127,7 +156,7 @@ class plgSystembfstop extends JPlugin
 			" AND ipaddress='".$logEntry->ipaddress."'")) {
 			return;
 		}
-		$this->block($db, $logEntry);
+		$this->block($db, $logEntry, $interval);
 	}
 
 	function getFailedLoginBody($logEntry)
@@ -138,7 +167,7 @@ class plgSystembfstop extends JPlugin
 		$bodys.= JText::_('IPADDRESS') . " :\t". $logEntry->ipaddress ."\n";
 		$bodys.= JText::_('ERROR')     . " :\t". $logEntry->error     ."\n";
 		$bodys.= JText::_('DATETIME')  . " :\t". $logEntry->logtime   ."\n";
-		$bodys.= JText::_('ORIGIN')    . " :\t". $logEntry->origin    ."\n";
+		$bodys.= JText::_('ORIGIN')    . " :\t". $this->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
 	
@@ -165,6 +194,11 @@ class plgSystembfstop extends JPlugin
 		$this->log->addEntry(array('comment' => 'Sending was '.(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo))));
 	}
 
+	function getClientString($id)
+	{
+		return ($id == 0) ? 'Frontend': 'Backend';
+	}
+
  	public function onUserLoginFailure($user, $options=null)
 	{
 		JPlugin::loadLanguage('plg_system_bfstop');
@@ -186,7 +220,7 @@ class plgSystembfstop extends JPlugin
 		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
 		$logEntry->password  = $user['password'];
-		$logEntry->origin    = ($app->getClientId() == 0) ? 'Frontend': 'Backend';
+		$logEntry->origin    = $app->getClientId();
 
 		$this->createTable($db);
 	
@@ -215,7 +249,7 @@ class plgSystembfstop extends JPlugin
 			.'id int(10) NOT NULL auto_increment,'
 			.'username varchar(25) NOT NULL,'
 			.'password varchar(25) NOT NULL,'
-			.'ipaddress varchar(35) NOT NULL,'
+			.'ipaddress varchar(39) NOT NULL,'
 			.'error varchar(55) NOT NULL,'
 			.'logtime datetime NOT NULL,'
 			.'origin int NOT NULL,'
