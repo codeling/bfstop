@@ -221,8 +221,6 @@ class plgSystembfstop extends JPlugin
 		$logEntry->username  = $user['username'];
 		$logEntry->password  = $user['password'];
 		$logEntry->origin    = $app->getClientId();
-
-		$this->createTable($db);
 	
 		// insert into log:
 		$logQuery = $db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
@@ -241,23 +239,5 @@ class plgSystembfstop extends JPlugin
 		$this->blockIfTooManyAttempts($db, $logEntry);
 		return true;
 	}
-
-	function createTable($db)
-	{
-		// TODO: move that to install!
-		$createTableQuery = 'CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin('
-			.'id int(10) NOT NULL auto_increment,'
-			.'username varchar(25) NOT NULL,'
-			.'password varchar(25) NOT NULL,'
-			.'ipaddress varchar(39) NOT NULL,'
-			.'error varchar(55) NOT NULL,'
-			.'logtime datetime NOT NULL,'
-			.'origin int NOT NULL,'
-			.'PRIMARY KEY  (id)'
-			.')';
-		$db->setQuery( $createTableQuery );
-		$db->query();
-	}
-
 }
 
