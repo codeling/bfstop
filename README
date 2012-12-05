@@ -16,3 +16,12 @@ https://github.com/codeling/bfstop
 For any further questions, don't hesitate to contact me under
 bfstop@bfroehler.info
 
+The original idea was born out of need because of brute force login attempts on
+a Joomla site I administrate. It was inspired by, and small parts were reused
+from the following plugins:
+  - Login Failed Log
+  - Redirect Failed Logins
+  - Ban IP Address/Range
+Thanks very much for the authors of these plugins!
+
+
