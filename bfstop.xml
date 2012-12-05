@@ -49,28 +49,18 @@
 				</field>
 				<field name="emailaddress" type="text" size="40" default="" label="ENTEREMAILLABEL" description="ENTEREMAILDESC" />
 				<field name="userIDs" type="user" default="" label="SELECTUSERLABEL" description="SELECTUSERDESC" />
-				<field name="notifyBlockedSource" type="list" default="3" label="NOTIFYBLOCKEDSOURCELABEL" description="NOTIFYBLOCKEDSOURCEDESC">
+				<field name="notifyBlockedNumber" type="list" default="-1" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
+					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
-					<option value="1">NOTIFY_FRONTEND</option>
-					<option value="2">NOTIFY_BACKEND</option>
-					<option value="3">NOTIFY_BOTH</option>
-				</field>
-				<field name="notifyBlockedNumber" type="list" default="0" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
-					<option value="0">UNLIMITED</option>
 					<option value="1">1</option>
 					<option value="2">2</option>
 					<option value="3">3</option>
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="notifyFailedSource" type="list" default="0" label="NOTIFYFAILEDSOURCELABEL" description="NOTIFYFAILEDSOURCEDESC">
-					<option value="0">NOTIFY_NEVER</option>
-					<option value="1">NOTIFY_FRONTEND</option>
-					<option value="2">NOTIFY_BACKEND</option>
-					<option value="3">NOTIFY_BOTH</option>
-				</field>
 				<field name="notifyFailedNumber" type="list" default="1" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC">
-					<option value="0">UNLIMITED</option>
+					<option value="-1">NOTIFY_UNLIMITED</option>
+					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">1</option>
 					<option value="2">2</option>
 					<option value="3">3</option>

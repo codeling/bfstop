@@ -66,21 +66,21 @@ class plgSystembfstop extends JPlugin
 		return $recentEvents > $maxNumber;
 	}
 
-	function tooManyRecentEvents($logtime, $interval, $maxNumber,
+	function isNotificationAllowed($logtime, $interval, $maxNumber,
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
 	{
-		return $this->moreThanGivenEvents($interval, $maxNumber, $logtime, '', $table, $timecol);
-	}
-
-	function isNotifyEnabled($notifyOption)
-	{
-		$notifySources = $this->params->get($notifyOption);
-		$currentSource = $this->app->getClientId() + 1;
-//		$this->log("isNotifyEnabled(notifyOption=$notifyOption)\n".
-//          "    currentSource: $currentSource; notifySources: $notifySources; result: ".
-//			(( ($notifySources & $currentSource) == $currentSource )? 'true': 'false'));
-		return ( ($notifySources & $currentSource) == $currentSource );
+		// -1 stands for an unlimited number of notifications
+		if ($maxNumber == -1)
+		{
+			return true;
+		}
+		// 0 stands for no notifications
+		else if ($maxNumber == 0)
+		{
+			return false;
+		}
+		return !$this->moreThanGivenEvents($interval, $maxNumber, $logtime, '', $table, $timecol);
 	}
 
 	function getFormattedFailedList($ipAddress, $curTime, $interval)
@@ -150,8 +150,9 @@ class plgSystembfstop extends JPlugin
 		// send email notification if not too many notifications already...
 		$interval  = self::$ONE_DAY;
 		$maxNumber = $this->params->get('notifyBlockedNumber');
-		if ($this->isNotifyEnabled('notifyBlockedSource') &&
-			!$this->tooManyRecentEvents($logEntry->logtime, $interval, $maxNumber, '#__bfstop_bannedip', 'crdate'))
+		if ($this->isNotificationAllowed(
+			$logEntry->logtime, $interval, $maxNumber,
+			'#__bfstop_bannedip', 'crdate'))
 		{
 			$body = $this->getBlockedBody($logEntry, $blockInterval);
 			$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT', $logEntry->ipaddress);
@@ -163,7 +164,8 @@ class plgSystembfstop extends JPlugin
 	{
 		$interval = $this->params->get('blockInterval');
 		$maxNumber = $this->params->get('blockNumber');
-		if (!$this->moreThanGivenEvents($interval, $maxNumber, $logEntry->logtime,
+		// -1 to block for the blockNumber'th time already
+		if (!$this->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
 			" AND ipaddress='".$logEntry->ipaddress."'")) {
 			return;
 		}
@@ -173,12 +175,12 @@ class plgSystembfstop extends JPlugin
 	function getFailedLoginBody($logEntry)
 	{
 		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT', JURI::root()) ."\n";
-		$bodys.= JText::_('USERNAME')  . " :\t". $logEntry->username  ."\n";
-		$bodys.= JText::_('PASSWORD')  . " :\t". $logEntry->password  ."\n";
-		$bodys.= JText::_('IPADDRESS') . " :\t". $logEntry->ipaddress ."\n";
-		$bodys.= JText::_('ERROR')     . " :\t". $logEntry->error     ."\n";
-		$bodys.= JText::_('DATETIME')  . " :\t". $logEntry->logtime   ."\n";
-		$bodys.= JText::_('ORIGIN')    . " :\t". $this->getClientString($logEntry->origin)."\n";
+		$bodys.= str_pad(JText::_('USERNAME').":",15)  . $logEntry->username  ."\n";
+		$bodys.= str_pad(JText::_('PASSWORD').":",15)  . $logEntry->password  ."\n";
+		$bodys.= str_pad(JText::_('IPADDRESS').":",15) . $logEntry->ipaddress ."\n";
+		$bodys.= str_pad(JText::_('ERROR').":",15)     . $logEntry->error     ."\n";
+		$bodys.= str_pad(JText::_('DATETIME').":",15)  . $logEntry->logtime   ."\n";
+		$bodys.= str_pad(JText::_('ORIGIN').":",15)    . $this->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
 	
@@ -189,19 +191,19 @@ class plgSystembfstop extends JPlugin
 			$uid = $this->params->get('userIDs');
 			$sql = "select email from #__users where id='$uid'";
 			$this->db->setQuery($sql);
-			$eid = $this->db->loadResult();
+			$emailAddress = $this->db->loadResult();
 			$this->checkDBError();
 		}
 		else if($this->params->get( 'emailtype' ) == 1)
 		{
-			$eid = $this->params->get('emailaddress');
+			$emailAddress = $this->params->get('emailaddress');
 		}
 		else
 		{
 			$this->log('Invalid source for retrieval of email address!');
 			return;
 		}
-		if (!isset($eid) || strcmp($eid, '') == 0)
+		if (!isset($emailAddress) || strcmp($emailAddress, '') == 0)
 		{
 			$this->log('No user selected or no email address specified!');
 			return;
@@ -210,10 +212,10 @@ class plgSystembfstop extends JPlugin
 		$mail =& JFactory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
-		$mail->addRecipient($eid);
-		$this->log('Sending out email notification to '.$eid.', subject: '.$subject);
+		$mail->addRecipient($emailAddress);
 		$sendSuccess = $mail->Send();
-		$this->log('Sending was '.(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)));
+		$this->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
+			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)));
 	}
 
 	function getClientString($id)
@@ -260,8 +262,7 @@ class plgSystembfstop extends JPlugin
 		// for our purpose (bitmask), we need 1-frontend 2-backend
 		$interval  = self::$ONE_DAY;
 		$maxNumber = $this->params->get('notifyFailedNumber');
-		if( $this->isNotifyEnabled('notifyFailedSource') &&
-			!$this->tooManyRecentEvents($logEntry->logtime, $interval, $maxNumber))
+		if( $this->isNotificationAllowed($logEntry->logtime, $interval, $maxNumber))
 		{
 			$body = $this->getFailedLoginBody($logEntry);
 			$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT", JURI::root());
