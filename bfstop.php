@@ -27,13 +27,30 @@ class plgSystembfstop extends JPlugin
 	// default interval used for notifications is one day:
 	private static $ONE_DAY=24;
 	private $log;
+	private $db;
+	private $app;
+
+	function log($msg)
+	{
+		$this->log->addEntry(array('comment' => $msg));
+	}
 
 	function plgSystembfstop(& $subject, $config) 
 	{
 		parent::__construct($subject, $config);
 	}
 
-	function moreThanGivenEvents($db, $interval, $maxNumber, $logtime,
+	function checkDBError()
+	{
+		$errNum = $this->db->getErrorNum();
+		if ($errNum != 0)
+		{
+			$errMsg = $this->db->getErrorMsg();
+			$this->log("Database error (#$errNum) occured: $errMsg");
+		}
+	}
+
+	function moreThanGivenEvents($interval, $maxNumber, $logtime,
 		$additionalWhere = '',
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
@@ -42,42 +59,37 @@ class plgSystembfstop extends JPlugin
 		$sql = "SELECT COUNT(*) FROM ".$table." ".
 				"WHERE ".$timecol." between DATE_SUB('$logtime', INTERVAL $interval HOUR) AND '$logtime'".
 				$additionalWhere;
-		$db->setQuery($sql);
-		$recentEvents = ((int)$db->loadResult());
-		$this->log->addEntry(array('comment' => "moreThanGivenEvents(interval=$interval, maxNumber=$maxNumber, logtime=$logtime, additionalWhere=$additionalWhere, table=$table, timecol=$timecol)\n    sql: $sql; recentEvents: $recentEvents"));
+		$this->db->setQuery($sql);
+		$recentEvents = ((int)$this->db->loadResult());
+		$this->checkDBError();
+//		$this->log("moreThanGivenEvents(interval=$interval, maxNumber=$maxNumber, logtime=$logtime, additionalWhere=$additionalWhere, table=$table, timecol=$timecol)\n    sql: $sql; recentEvents: $recentEvents");
 		return $recentEvents > $maxNumber;
 	}
 
-	function tooManyRecentEvents($db, $logtime, $interval, $maxNumber,
+	function tooManyRecentEvents($logtime, $interval, $maxNumber,
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
 	{
-		return $this->moreThanGivenEvents($db, $interval, $maxNumber, $logtime, '', $table, $timecol);
+		return $this->moreThanGivenEvents($interval, $maxNumber, $logtime, '', $table, $timecol);
 	}
 
 	function isNotifyEnabled($notifyOption)
 	{
 		$notifySources = $this->params->get($notifyOption);
-		$app =& JFactory::getApplication();
-		$currentSource = $app->getClientId() + 1;
-		$this->log->addEntry(array('comment' => "isNotifyEnabled(notifyOption=$notifyOption)\n    currentSource: $currentSource; notifySources: $notifySources; result: ".
-			(( ($notifySources & $currentSource) == $currentSource )? 'true': 'false')));
+		$currentSource = $this->app->getClientId() + 1;
+//		$this->log("isNotifyEnabled(notifyOption=$notifyOption)\n".
+//          "    currentSource: $currentSource; notifySources: $notifySources; result: ".
+//			(( ($notifySources & $currentSource) == $currentSource )? 'true': 'false'));
 		return ( ($notifySources & $currentSource) == $currentSource );
 	}
 
-	function plgBanIPEnabled($db)
-	{
-		$sql = "select COUNT(*) from `#__extensions` where name='plg_system_banip'";
-		$db->setQuery($sql);
-		return ($db->loadResult() > 0);
-	}
-
-	function getFormattedFailedList($db, $ipAddress, $curTime, $interval)
+	function getFormattedFailedList($ipAddress, $curTime, $interval)
 	{
 		$sql = "SELECT * FROM #__bfstop_failedlogin where ipaddress='$ipAddress'".
 			" AND logtime between DATE_SUB('$curTime', INTERVAL $interval HOUR) AND '$curTime'";
-		$db->setQuery($sql);
-		$entries = $db->loadObjectList();
+		$this->db->setQuery($sql);
+		$entries = $this->db->loadObjectList();
+		$this->checkDBError();
 		$result = str_pad(JText::_('USERNAME'), 25)." ".
 				str_pad(JText::_('PASSWORD')  , 25)." ".
 				str_pad(JText::_('IPADDRESS') , 15)." ".
@@ -95,19 +107,27 @@ class plgSystembfstop extends JPlugin
 		return $result;
 	}
 
-	function getBlockedBody($db, $logEntry, $interval)
+	function getBlockedBody($logEntry, $interval)
 	{
 		return JText::sprintf('BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
-			$this->getFormattedFailedList($db,
-				$logEntry->ipaddress,
+			$this->getFormattedFailedList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
 			)
 		);
 	}
 
-	function block($db, $logEntry, $blockInterval)
+	function isIPBlocked($ipaddress)
+	{
+		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip where ipaddress='$ipaddress'";
+		$this->db->setQuery($sqlCheck);
+		$numRows = $this->db->loadResult();
+		$this->checkDBError();
+		return ($numRows > 0);
+	}
+
+	function block($logEntry, $blockInterval)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled');
 		if (!$blockEnabled) {
@@ -115,48 +135,39 @@ class plgSystembfstop extends JPlugin
 		}
 		// if the IP address is blocked we actually shouldn't be here in the first place
 		// I guess, but just to make sure
-		$sqlCheck = "select COUNT(*) from #__banip_entries where entry='$logEntry->ipaddress'";
-		$db->setQuery($sqlCheck);
-		$numRows = $db->loadResult();
-		if ($numRows > 0)
+		if ($this->isIPBlocked($logEntry->ipaddress))
 		{
-			$this->log->addEntry(array('comment' => 'IP '.$logEntry->ipaddress.' is already blocked!'));
+			$this->log('IP '.$logEntry->ipaddress.' is already blocked!');
 			return;
 		}
-		$this->log->addEntry(array('comment' => 'Blocking IP address '.$logEntry->ipaddress));
+		$blockEntry = new stdClass();
+		$blockEntry->ipaddress = $logEntry->ipaddress;
+		$blockEntry->crdate = date("Y-m-d H:i:s");
+		$this->db->insertObject('#__bfstop_bannedip', $blockEntry);
+		$this->checkDBError();
+
+		$this->log('Blocked IP address '.$logEntry->ipaddress);
 		// send email notification if not too many notifications already...
 		$interval  = self::$ONE_DAY;
 		$maxNumber = $this->params->get('notifyBlockedNumber');
 		if ($this->isNotifyEnabled('notifyBlockedSource') &&
-			!$this->tooManyRecentEvents($db, $logEntry->logtime, $interval, $maxNumber, '#__banip_entries', 'crdate'))
+			!$this->tooManyRecentEvents($logEntry->logtime, $interval, $maxNumber, '#__bfstop_bannedip', 'crdate'))
 		{
-			$body = $this->getBlockedBody($db, $logEntry, $blockInterval);
+			$body = $this->getBlockedBody($logEntry, $blockInterval);
 			$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT', $logEntry->ipaddress);
-			$this->sendMailNotification($db, $subject, $body);
+			$this->sendMailNotification($subject, $body);
 		}
-
-		$blockEntry = new stdClass();
-		$blockEntry->entry = $logEntry->ipaddress;
-		$blockEntry->type  = 1;
-		$blockEntry->client = 0;
-		$db->insertObject('#__banip_entries', $blockEntry);
-		$blockEntry->client = 1;
-		$db->insertObject('#__banip_entries', $blockEntry);
 	}
 
-	function blockIfTooManyAttempts($db, $logEntry)
+	function blockIfTooManyAttempts($logEntry)
 	{
-		if (!$this->plgBanIPEnabled($db))
-		{
-			$this->log->addEntry("BanIP plugin is not available!");
-		}
 		$interval = $this->params->get('blockInterval');
 		$maxNumber = $this->params->get('blockNumber');
-		if (!$this->moreThanGivenEvents($db, $interval, $maxNumber, $logEntry->logtime,
+		if (!$this->moreThanGivenEvents($interval, $maxNumber, $logEntry->logtime,
 			" AND ipaddress='".$logEntry->ipaddress."'")) {
 			return;
 		}
-		$this->block($db, $logEntry, $interval);
+		$this->block($logEntry, $interval);
 	}
 
 	function getFailedLoginBody($logEntry)
@@ -171,27 +182,38 @@ class plgSystembfstop extends JPlugin
 		return $bodys;
 	}
 	
-	function sendMailNotification($db, $subject, $body)
+	function sendMailNotification($subject, $body)
 	{
-		if($this->params->get( 'emailtype' ) ==1)
-		{
-			$eid = $this->params->get('emailaddress');
-		}
-		if($this->params->get( 'emailtype' ) ==0)
+		if($this->params->get( 'emailtype' ) == 0)
 		{
 			$uid = $this->params->get('userIDs');
 			$sql = "select email from #__users where id='$uid'";
-			$db->setQuery($sql);
-			$eid = $db->loadResult();
+			$this->db->setQuery($sql);
+			$eid = $this->db->loadResult();
+			$this->checkDBError();
+		}
+		else if($this->params->get( 'emailtype' ) == 1)
+		{
+			$eid = $this->params->get('emailaddress');
+		}
+		else
+		{
+			$this->log('Invalid source for retrieval of email address!');
+			return;
+		}
+		if (!isset($eid) || strcmp($eid, '') == 0)
+		{
+			$this->log('No user selected or no email address specified!');
+			return;
 		}
 		$response->error_message = '';
 		$mail =& JFactory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
 		$mail->addRecipient($eid);
-		$this->log->addEntry(array('comment' => 'Sending out email notification to '.$eid.', subject: '.$subject));
+		$this->log('Sending out email notification to '.$eid.', subject: '.$subject);
 		$sendSuccess = $mail->Send();
-		$this->log->addEntry(array('comment' => 'Sending was '.(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo))));
+		$this->log('Sending was '.(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)));
 	}
 
 	function getClientString($id)
@@ -199,45 +221,74 @@ class plgSystembfstop extends JPlugin
 		return ($id == 0) ? 'Frontend': 'Backend';
 	}
 
+	function getIPAddr()
+	{
+		return getenv('REMOTE_ADDR');
+	}
+	
+	private function init()
+	{
+		$this->log =& JLog::getInstance('plg_system_bfstop.log.php');
+		$this->db  =& JFactory::getDbo();
+		$this->app =& JFactory::getApplication();
+	}
+
  	public function onUserLoginFailure($user, $options=null)
 	{
+		$this->init();
 		JPlugin::loadLanguage('plg_system_bfstop');
-
-		$this->log =& JLog::getInstance('plg_system_bfstop.log.php');
-
 		$delayDuration = (int)$this->params->get('delayDuration');
 		if ($delayDuration != 0)
 		{
 			sleep($delayDuration);
 		}
-		$db = JFactory::getDbo();
-		$app =& JFactory::getApplication();
 
 		$logEntry = new stdClass();
 		$logEntry->id        = null;
-		$logEntry->ipaddress = getenv('REMOTE_ADDR');
+		$logEntry->ipaddress = $this->getIPAddr();
 		$logEntry->logtime   = date("Y-m-d H:i:s");
 		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
 		$logEntry->password  = $user['password'];
-		$logEntry->origin    = $app->getClientId();
+		$logEntry->origin    = $this->app->getClientId();
 	
 		// insert into log:
-		$logQuery = $db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		$logQuery = $this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		$this->checkDBError();
 
 		// client ID's: 0-frontend, 1-backend
 		// for our purpose (bitmask), we need 1-frontend 2-backend
 		$interval  = self::$ONE_DAY;
 		$maxNumber = $this->params->get('notifyFailedNumber');
 		if( $this->isNotifyEnabled('notifyFailedSource') &&
-			!$this->tooManyRecentEvents($db, $logEntry->logtime, $interval, $maxNumber))
+			!$this->tooManyRecentEvents($logEntry->logtime, $interval, $maxNumber))
 		{
 			$body = $this->getFailedLoginBody($logEntry);
 			$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT", JURI::root());
-			$this->sendMailNotification($db, $subject, $body);
+			$this->sendMailNotification($subject, $body);
 		}
-		$this->blockIfTooManyAttempts($db, $logEntry);
+		$this->blockIfTooManyAttempts($logEntry);
 		return true;
 	}
+
+	public function onAfterInitialise()
+	{
+		$this->init();
+		$ipaddress = $this->getIPAddr();
+//		$this->log("onAfterInitialise; ipAddress: $ipaddress");
+		if ($this->isIPBlocked($ipaddress))
+		{
+			$this->log("Blocked IP Address $ipaddress tried to access ".
+				$this->getClientString($this->app->getClientId()) );
+			JPlugin::loadLanguage('plg_system_bfstop');
+			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
+			echo $message;
+			$this->app =& JFactory::getApplication();
+			$this->app->close();
+			return false;
+		}
+		return true;
+	}
+
 }
 
