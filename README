@@ -1,0 +1,18 @@
+Brute Force Stop (bfstop)
+Joomla System Plugin
+by Bernhard Froehler
+
+This plugin is intended to hinder brute force login attempts to any Joomla! site.
+
+For detailed instructions on how to use it, please browse to
+https://github.com/codeling/bfstop/wiki
+
+If you find any issues, please report them at
+https://github.com/codeling/bfstop/issues
+
+If you are interested in the source code, or want to contribute, the repository can be found under
+https://github.com/codeling/bfstop
+
+For any further questions, don't hesitate to contact me under
+bfstop@bfroehler.info
+
