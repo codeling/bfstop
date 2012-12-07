@@ -1,14 +1,30 @@
 #!/bin/bash
+# set to the joomla directory you want to deploy to:
+dstdir=
+
+# internal variables to be updated when files are added:
 extname=bfstop
 sqlfiles="install.mysql.utf8.sql uninstall.mysql.utf8.sql"
-srcfiles="$extname.php $extname.xml $sqlfiles"
+srcfiles="$extname.php $extname.xml $sqlfiles index.html"
+docs="README LICENSE.txt"
 plgtype="system"
 langs="en-GB de-DE"
-dstdir=~/htdocs/hdh
+langfilefilter="*.ini"
 
 if [ "$1" == "zip" ]
 then
-    zip $extname.zip *.ini *.php *.xml *.sql
+    zip $extname.zip $sqlfiles $srcfiles $docs $langfilefilter
+	exit
+fi
+
+if [ "$1" != "" ]
+then
+	dstdir=$1
+fi
+
+if [ "$dstdir" == "" ]
+then
+	echo "You have to set dstdir variable first (to the joomla directory you want to deploy to)"
 	exit
 fi
 
@@ -18,6 +34,4 @@ for lang in $langs
 do
     cp $lang.* $dstdir/administrator/language/$lang/
 done
-
-
 
