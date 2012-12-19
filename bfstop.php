@@ -80,7 +80,6 @@ class plgSystembfstop extends JPlugin
 		$entries = $this->db->loadObjectList();
 		$this->checkDBError();
 		$result = str_pad(JText::_('USERNAME'), 25)." ".
-				str_pad(JText::_('PASSWORD')  , 25)." ".
 				str_pad(JText::_('IPADDRESS') , 15)." ".
 				str_pad(JText::_('DATETIME')  , 20)." ".
 				str_pad(JText::_('ORIGIN')    ,  8)."\n".
@@ -88,7 +87,6 @@ class plgSystembfstop extends JPlugin
 		foreach ($entries as $entry)
 		{
 			$result .= str_pad($entry->username               , 25)." ".
-				str_pad($entry->password                      , 25)." ".
 				str_pad($entry->ipaddress                     , 15)." ".
 				str_pad($entry->logtime                       , 20)." ".
 				str_pad($this->getClientString($entry->origin),  8)."\n";
@@ -165,7 +163,6 @@ class plgSystembfstop extends JPlugin
 	{
 		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT', JURI::root()) ."\n";
 		$bodys.= str_pad(JText::_('USERNAME').":",15)  . $logEntry->username  ."\n";
-		$bodys.= str_pad(JText::_('PASSWORD').":",15)  . $logEntry->password  ."\n";
 		$bodys.= str_pad(JText::_('IPADDRESS').":",15) . $logEntry->ipaddress ."\n";
 		$bodys.= str_pad(JText::_('ERROR').":",15)     . $logEntry->error     ."\n";
 		$bodys.= str_pad(JText::_('DATETIME').":",15)  . $logEntry->logtime   ."\n";
@@ -240,7 +237,6 @@ class plgSystembfstop extends JPlugin
 		$logEntry->logtime   = date("Y-m-d H:i:s");
 		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
-		$logEntry->password  = $user['password'];
 		$logEntry->origin    = $this->app->getClientId();
 	
 		// insert into log:
