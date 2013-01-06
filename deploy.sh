@@ -10,7 +10,7 @@ docs="README LICENSE.txt"
 plgtype="system"
 langs="en-GB de-DE"
 langfilefilter="*.ini"
-version=0.9.5
+version=0.9.6
 
 if [ "$1" == "zip" ]
 then
