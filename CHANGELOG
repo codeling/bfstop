@@ -1,3 +1,10 @@
+0.9.7 (2013-01-07)
+  - corrects the plugin name (meaning you have to uninstall previous versions
+    manually! if this is the first version you installed, there's nothing
+    special to do)
+  - corrects problems with not loaded language files during install,
+    causing a text like PLG_BFSTOP_DESC instead of a meaningful description
+
 0.9.6 (2013-01-06)
   - removes password from failed login entries in the database to prevent
     information disclosure

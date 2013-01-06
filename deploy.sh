@@ -5,12 +5,12 @@ dstdir=
 # internal variables to be updated when files are added:
 extname=bfstop
 sqlfiles="sql"
-srcfiles="$extname.php $extname.xml $sqlfiles index.html"
+srcfiles="$extname.php $extname.xml $sqlfiles index.html setupscripts.php"
 docs="README LICENSE.txt"
 plgtype="system"
 langs="en-GB de-DE"
 langfilefilter="*.ini"
-version=0.9.6
+version=0.9.7
 
 if [ "$1" == "zip" ]
 then
