@@ -4,16 +4,17 @@ dstdir=
 
 # internal variables to be updated when files are added:
 extname=bfstop
-sqlfiles="install.mysql.utf8.sql uninstall.mysql.utf8.sql"
+sqlfiles="sql"
 srcfiles="$extname.php $extname.xml $sqlfiles index.html"
 docs="README LICENSE.txt"
 plgtype="system"
 langs="en-GB de-DE"
 langfilefilter="*.ini"
+version=0.9.5
 
 if [ "$1" == "zip" ]
 then
-    zip $extname.zip $sqlfiles $srcfiles $docs $langfilefilter
+    zip -r $extname-$version.zip $sqlfiles $srcfiles $docs $langfilefilter
 	exit
 fi
 
