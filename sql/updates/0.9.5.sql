@@ -1,0 +1,1 @@
+-- dummy 0.9.5 schema file to make updates possible
