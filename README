@@ -4,13 +4,22 @@ by Bernhard Froehler
 
 This plugin is intended to hinder brute force login attempts to any Joomla! site.
 
+To get the latest version, go to "Files" section on github
+(https://github.com/codeling/bfstop) - if you're not already there -
+then in the branch/tags dropdown go to the "Tags" tab and select the highest
+version. Then press the "ZIP" button. This will download the plugin as zip file,
+which you can directly import into your Joomla! installation.
+
 For detailed instructions on how to use it, please browse to
 https://github.com/codeling/bfstop/wiki
+
+For information on what changed in recent versions, see the CHANGELOG file
 
 If you find any issues, please report them at
 https://github.com/codeling/bfstop/issues
 
-If you are interested in the source code, or want to contribute, the repository can be found under
+If you are interested in the source code, or want to contribute, the
+repository can be found under
 https://github.com/codeling/bfstop
 
 For any further questions, don't hesitate to contact me under
