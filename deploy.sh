@@ -6,15 +6,15 @@ dstdir=
 extname=bfstop
 sqlfiles="sql"
 srcfiles="$extname.php $extname.xml $sqlfiles index.html setupscripts.php"
+langfiles="language"
 docs="README LICENSE.txt"
 plgtype="system"
-langs="en-GB de-DE"
-langfilefilter="*.ini"
+langs="de-DE en-GB"
 version=0.9.7
 
 if [ "$1" == "zip" ]
 then
-    zip -r $extname-$version.zip $sqlfiles $srcfiles $docs $langfilefilter
+    zip -r $extname-$version.zip $sqlfiles $srcfiles $docs $langfiles
 	exit
 fi
 
@@ -33,6 +33,6 @@ cp $srcfiles $dstdir/plugins/$plgtype/$extname/
 
 for lang in $langs
 do
-    cp $lang.* $dstdir/administrator/language/$lang/
+    cp language/$lang/* $dstdir/administrator/language/$lang/
 done
 

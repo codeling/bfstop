@@ -2,6 +2,7 @@
 <extension version="2.5" type="plugin" group="system" method="upgrade">
 	<name>PLG_BFSTOP</name>
 	<author>Bernhard Froehler</author>
+	<description>PLG_BFSTOP_DESC</description>
 	<creationDate>November 2012</creationDate>
 	<copyright>Copyright (C) 2012 by Bernhard Froehler</copyright>
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
@@ -9,13 +10,18 @@
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
 	<version>0.9.7</version>
-	<scriptfile>setupscripts.php</scriptfile>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
-		<filename>setupscripts.php</filename>
 		<filename>index.html</filename>
+		<folder>language</folder>
 		<folder>sql</folder>
 	</files>
+	<languages folder="language">
+			<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.ini</language>
+			<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.sys.ini</language>
+			<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.ini</language>
+			<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.sys.ini</language>
+	</languages>
 	<install>
 		<sql>
 			<file driver="mysql" charset="utf8">sql/install.mysql.utf8.sql</file>
@@ -31,12 +37,6 @@
 			<schemapath type="mysql">sql/updates</schemapath>
 		</schemas>
 	</update>
-	<languages>
-		<language tag="en-GB">en-GB.plg_system_bfstop.ini</language>
-		<language tag="en-GB">en-GB.plg_system_bfstop.sys.ini</language>
-		<language tag="de-DE">de-DE.plg_system_bfstop.ini</language>
-		<language tag="de-DE">de-DE.plg_system_bfstop.sys.ini</language>
-	</languages>
 	<config>
 		<fields name="params">
 			<fieldset name="basic">
