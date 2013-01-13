@@ -4,6 +4,7 @@
     special to do)
   - corrects problems with not loaded language files during install,
     causing a text like PLG_BFSTOP_DESC instead of a meaningful description
+  - adds an option to en- or disable logging, disables it by default
 
 0.9.6 (2013-01-06)
   - removes password from failed login entries in the database to prevent

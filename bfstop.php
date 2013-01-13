@@ -15,13 +15,21 @@ class plgSystembfstop extends JPlugin
 
 	// default interval used for notifications is one day:
 	private static $ONE_DAY=24;
-	private $log;
+	private $logAccess;
 	private $db;
 	private $app;
 
+	function isLoggingEnabled() {
+		return (bool)$this->params->get('loggingEnabled');
+	}
+
+
 	function log($msg)
 	{
-		$this->log->addEntry(array('comment' => $msg));
+		if ($this->isLoggingEnabled())
+		{
+			$this->logAccess->addEntry(array('comment' => $msg));
+		}
 	}
 
 	function plgSystembfstop(& $subject, $config) 
@@ -216,7 +224,10 @@ class plgSystembfstop extends JPlugin
 	
 	private function init()
 	{
-		$this->log =& JLog::getInstance('plg_system_bfstop.log.php');
+		if ($this->isLoggingEnabled())
+		{
+			$this->logAccess =& JLog::getInstance('plg_system_bfstop.log.php');
+		}
 		$this->db  =& JFactory::getDbo();
 		$this->app =& JFactory::getApplication();
 	}

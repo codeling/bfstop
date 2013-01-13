@@ -48,6 +48,10 @@
 				<field name="blockNumber" type="integer" default="15" first="3" last="25" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
 				<field name="blockInterval" type="integer" default="24" first="1" last="48" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
+				<field name="loggingEnabled" type="list" default="0" label="ENABLELOGGINGLABEL" description="ENABLELOGGINGDESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
 			</fieldset>
 			<fieldset name="notify">
 				<field name="emailtype" type="list" default="0" label="EMAILSOURCELABEL" description="EMAILSOURCEDESC">
