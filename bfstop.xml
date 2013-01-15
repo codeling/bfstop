@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension version="2.5" type="plugin" group="system" method="upgrade">
-	<name>PLG_BFSTOP</name>
+	<name>plg_system_bfstop</name>
 	<author>Bernhard Froehler</author>
 	<description>PLG_BFSTOP_DESC</description>
 	<creationDate>November 2012</creationDate>

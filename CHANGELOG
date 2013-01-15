@@ -1,6 +1,7 @@
 0.9.7 (2013-01-15)
   - corrects the plugin name (meaning you have to uninstall previous versions
-    manually! if this is the first version you installed, there's nothing
+    manually! if this is the first version you installed - which is very likely,
+    since no version before has been published to JED -  there's nothing
     special to do)
   - corrects problems with not loaded language files during install,
     causing a text like PLG_BFSTOP_DESC instead of a meaningful description
