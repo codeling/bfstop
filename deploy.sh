@@ -1,4 +1,9 @@
 #!/bin/bash
+#
+# Simple deployment script. Can create a zip file from all
+# files or can copy to a Joomla! folder (to update an
+# existing installation)
+#
 # set to the joomla directory you want to deploy to:
 dstdir=
 
