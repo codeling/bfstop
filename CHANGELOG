@@ -1,4 +1,4 @@
-0.9.7 (2013-01-07)
+0.9.7 (2013-01-15)
   - corrects the plugin name (meaning you have to uninstall previous versions
     manually! if this is the first version you installed, there's nothing
     special to do)
@@ -9,7 +9,8 @@
 0.9.6 (2013-01-06)
   - removes password from failed login entries in the database to prevent
     information disclosure
-	
 
 0.9.5 (2012-12-06)
-    Version initially released to the public
+  - Version initially released to the public
+  - fixes uninstall script previusly causing an error
+
