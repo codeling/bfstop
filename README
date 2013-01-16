@@ -4,7 +4,7 @@ by Bernhard Froehler
 
 This plugin is intended to hinder brute force login attempts to any Joomla! site.
 
-For detailed instructions on how to download, install, configure and use it, please browse to
+For detailed instructions on how to download, install and configure it, please browse to
 https://github.com/codeling/bfstop/wiki
 
 For information on what changed in recent versions, see the CHANGELOG file
@@ -25,6 +25,4 @@ from the following plugins:
   - Login Failed Log
   - Redirect Failed Logins
   - Ban IP Address/Range
-Thanks very much for the authors of these plugins!
-
-
+A big thanks you to the authors of these plugins!
