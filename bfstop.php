@@ -8,27 +8,27 @@
 defined('_JEXEC') or die;
 
 jimport('joomla.event.plugin');
-jimport('joomla.error.log');
+jimport('joomla.log.log');
 
 class plgSystembfstop extends JPlugin
 {
 
 	// default interval used for notifications is one day:
 	private static $ONE_DAY=24;
-	private $logAccess;
 	private $db;
 	private $app;
+	private static $logCategory = 'bfstop';
 
 	function isLoggingEnabled() {
 		return (bool)$this->params->get('loggingEnabled');
 	}
 
 
-	function log($msg)
+	function log($msg, $priority)
 	{
 		if ($this->isLoggingEnabled())
 		{
-			$this->logAccess->addEntry(array('comment' => $msg));
+			JLog::add($msg, $priority, self::$logCategory);
 		}
 	}
 
@@ -43,7 +43,7 @@ class plgSystembfstop extends JPlugin
 		if ($errNum != 0)
 		{
 			$errMsg = $this->db->getErrorMsg();
-			$this->log("Database error (#$errNum) occured: $errMsg");
+			$this->log("Database error (#$errNum) occured: $errMsg", JLog::EMERGENCY);
 		}
 	}
 
@@ -59,7 +59,6 @@ class plgSystembfstop extends JPlugin
 		$this->db->setQuery($sql);
 		$recentEvents = ((int)$this->db->loadResult());
 		$this->checkDBError();
-//		$this->log("moreThanGivenEvents(interval=$interval, maxNumber=$maxNumber, logtime=$logtime, additionalWhere=$additionalWhere, table=$table, timecol=$timecol)\n    sql: $sql; recentEvents: $recentEvents");
 		return $recentEvents > $maxNumber;
 	}
 
@@ -132,7 +131,7 @@ class plgSystembfstop extends JPlugin
 		// I guess, but just to make sure
 		if ($this->isIPBlocked($logEntry->ipaddress))
 		{
-			$this->log('IP '.$logEntry->ipaddress.' is already blocked!');
+			$this->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
 			return;
 		}
 		$blockEntry = new stdClass();
@@ -141,7 +140,7 @@ class plgSystembfstop extends JPlugin
 		$this->db->insertObject('#__bfstop_bannedip', $blockEntry);
 		$this->checkDBError();
 
-		$this->log('Blocked IP address '.$logEntry->ipaddress);
+		$this->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification if not too many notifications already...
 		$interval  = self::$ONE_DAY;
 		$maxNumber = $this->params->get('notifyBlockedNumber');
@@ -194,12 +193,12 @@ class plgSystembfstop extends JPlugin
 		}
 		else
 		{
-			$this->log('Invalid source for retrieval of email address!');
+			$this->log('Invalid source for retrieval of email address!', JLog::ERROR);
 			return;
 		}
 		if (!isset($emailAddress) || strcmp($emailAddress, '') == 0)
 		{
-			$this->log('No user selected or no email address specified!');
+			$this->log('No user selected or no email address specified!', JLog::ERROR);
 			return;
 		}
 		$response->error_message = '';
@@ -209,7 +208,7 @@ class plgSystembfstop extends JPlugin
 		$mail->addRecipient($emailAddress);
 		$sendSuccess = $mail->Send();
 		$this->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
-			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)));
+			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)), JLog::INFO);
 	}
 
 	function getClientString($id)
@@ -226,7 +225,10 @@ class plgSystembfstop extends JPlugin
 	{
 		if ($this->isLoggingEnabled())
 		{
-			$this->logAccess =& JLog::getInstance('plg_system_bfstop.log.php');
+			JLog::addLogger(array(
+				'text_file' => 'plg_system_bfstop.log.php'
+			), JLog::ALL,
+			self::$logCategory);
 		}
 		$this->db  =& JFactory::getDbo();
 		$this->app =& JFactory::getApplication();
@@ -249,6 +251,8 @@ class plgSystembfstop extends JPlugin
 		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
 		$logEntry->origin    = $this->app->getClientId();
+
+		$this->log('Failed login attempt from IP address '.$logEntry->ipaddress, JLog::DEBUG);
 	
 		// insert into log:
 		$logQuery = $this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
@@ -272,11 +276,10 @@ class plgSystembfstop extends JPlugin
 	{
 		$this->init();
 		$ipaddress = $this->getIPAddr();
-//		$this->log("onAfterInitialise; ipAddress: $ipaddress");
 		if ($this->isIPBlocked($ipaddress))
 		{
 			$this->log("Blocked IP Address $ipaddress tried to access ".
-				$this->getClientString($this->app->getClientId()) );
+				$this->getClientString($this->app->getClientId()), JLog::INFO );
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
