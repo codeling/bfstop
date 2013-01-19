@@ -10,7 +10,7 @@ dstdir=
 # internal variables to be updated when files are added:
 extname=bfstop
 sqlfiles="sql"
-srcfiles="$extname.php $extname.xml $sqlfiles index.html setupscripts.php"
+srcfiles="$extname.php $extname.xml $sqlfiles index.html"
 langfiles="language"
 docs="CHANGELOG LICENSE.txt README"
 plgtype="system"
@@ -19,7 +19,7 @@ version=0.9.7
 
 if [ "$1" == "zip" ]
 then
-    zip -r $extname-$version.zip $sqlfiles $srcfiles $docs $langfiles
+    zip -r $extname-$version.zip $srcfiles $docs $langfiles
 	exit
 fi
 
@@ -34,7 +34,7 @@ then
 	exit
 fi
 
-cp $srcfiles $dstdir/plugins/$plgtype/$extname/
+cp -r $srcfiles $dstdir/plugins/$plgtype/$extname/
 
 for lang in $langs
 do
