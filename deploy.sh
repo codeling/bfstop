@@ -15,7 +15,7 @@ langfiles="language"
 docs="CHANGELOG LICENSE.txt README"
 plgtype="system"
 langs="de-DE en-GB"
-version=0.9.7
+version=0.9.8
 
 if [ "$1" == "zip" ]
 then

@@ -1,3 +1,9 @@
+0.9.8 (2013-01-23)
+  - corrects small problems with logging which prevented previous versions
+    to be installable on Joomla! 3.0. This should now be possible. In case you
+	look at the log and wonder about some deprecation warnings - it seems that
+	some functions were deprecated without providing replacement yet...
+
 0.9.7 (2013-01-15)
   - corrects the plugin name (meaning you have to uninstall previous versions
     manually! if this is the first version you installed - which is very likely,
