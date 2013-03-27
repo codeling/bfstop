@@ -17,10 +17,10 @@
 		<folder>sql</folder>
 	</files>
 	<languages folder="language">
-			<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.ini</language>
-			<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.sys.ini</language>
-			<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.ini</language>
-			<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.sys.ini</language>
+		<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.ini</language>
+		<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.sys.ini</language>
+		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.ini</language>
+		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.sys.ini</language>
 	</languages>
 	<install>
 		<sql>
@@ -47,6 +47,18 @@
 				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
 				<field name="blockNumber" type="integer" default="15" first="3" last="25" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
 				<field name="blockInterval" type="integer" default="24" first="1" last="48" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
+				<field name="blockDuration" type="list" default="30" label="BLOCKDURATIONLABEL" description="BLOCKDURATIONDESC">
+					<option    value="0">BLOCK_UNLIMITED</option>
+					<option    value="5">BLOCK_5MINUTES</option>
+					<option   value="10">BLOCK_10MINUTES</option>
+					<option   value="15">BLOCK_15MINUTES</option>
+					<option   value="30">BLOCK_30MINUTES</option>
+					<option   value="60">BLOCK_1HOUR</option>
+					<option  value="120">BLOCK_2HOURS</option>
+					<option  value="240">BLOCK_4HOURS</option>
+					<option  value="480">BLOCK_8HOURS</option>
+					<option value="1440">BLOCK_24HOURS</option>
+				</field>
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
 				<field name="loggingEnabled" type="list" default="0" label="ENABLELOGGINGLABEL" description="ENABLELOGGINGDESC">
 					<option value="0">DISABLED</option>

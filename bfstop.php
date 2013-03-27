@@ -114,7 +114,12 @@ class plgSystembfstop extends JPlugin
 
 	function isIPBlocked($ipaddress)
 	{
-		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip where ipaddress='$ipaddress'";
+		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip WHERE ipaddress='$ipaddress'";
+		$blockDuration = (int) $this->params->get('blockDuration');
+		if ($blockDuration != 0)
+		{
+			$sqlCheck .= " and DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= NOW()";
+		}
 		$this->db->setQuery($sqlCheck);
 		$numRows = $this->db->loadResult();
 		$this->checkDBError();
@@ -230,8 +235,8 @@ class plgSystembfstop extends JPlugin
 			), JLog::ALL,
 			self::$logCategory);
 		}
-		$this->db  =& JFactory::getDbo();
-		$this->app =& JFactory::getApplication();
+		$this->db  = JFactory::getDbo();
+		$this->app = JFactory::getApplication();
 	}
 
  	public function onUserLoginFailure($user, $options=null)
@@ -283,7 +288,7 @@ class plgSystembfstop extends JPlugin
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
-			$this->app =& JFactory::getApplication();
+			$this->app = JFactory::getApplication();
 			$this->app->close();
 			return false;
 		}
