@@ -13,8 +13,8 @@ jimport('joomla.log.log');
 class plgSystembfstop extends JPlugin
 {
 
-	// default interval used for notifications is one day:
-	private static $ONE_DAY=24;
+	// default interval used for notifications is one day (in minutes):
+	private static $ONE_DAY=1440;
 	private $db;
 	private $app;
 	private static $logCategory = 'bfstop';
@@ -54,7 +54,7 @@ class plgSystembfstop extends JPlugin
 	{
 		// check if in the last $interval hours, $number incidents have occured already:
 		$sql = "SELECT COUNT(*) FROM ".$table." ".
-				"WHERE ".$timecol." between DATE_SUB('$logtime', INTERVAL $interval HOUR) AND '$logtime'".
+				"WHERE ".$timecol." between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime'".
 				$additionalWhere;
 		$this->db->setQuery($sql);
 		$recentEvents = ((int)$this->db->loadResult());
@@ -82,7 +82,7 @@ class plgSystembfstop extends JPlugin
 	function getFormattedFailedList($ipAddress, $curTime, $interval)
 	{
 		$sql = "SELECT * FROM #__bfstop_failedlogin where ipaddress='$ipAddress'".
-			" AND logtime between DATE_SUB('$curTime', INTERVAL $interval HOUR) AND '$curTime'";
+			" AND logtime between DATE_SUB('$curTime', INTERVAL $interval MINUTE) AND '$curTime'";
 		$this->db->setQuery($sql);
 		$entries = $this->db->loadObjectList();
 		$this->checkDBError();
@@ -161,8 +161,8 @@ class plgSystembfstop extends JPlugin
 
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = $this->params->get('blockInterval');
-		$maxNumber = $this->params->get('blockNumber');
+		$interval = min( (int)$this->params->get('blockInterval'), (int) $this->params->get('blockDuration'));
+		$maxNumber = (int)$this->params->get('blockNumber');
 		// -1 to block for the blockNumber'th time already
 		if (!$this->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
 			" AND ipaddress='".$logEntry->ipaddress."'")) {
@@ -184,17 +184,17 @@ class plgSystembfstop extends JPlugin
 	
 	function sendMailNotification($subject, $body)
 	{
-		if($this->params->get( 'emailtype' ) == 0)
+		if((int)$this->params->get( 'emailtype' ) == 1)
+		{
+			$emailAddress = $this->params->get('emailaddress');
+		}
+		else if((int)$this->params->get( 'emailtype' ) == 0)
 		{
 			$uid = $this->params->get('userIDs');
 			$sql = "select email from #__users where id='$uid'";
 			$this->db->setQuery($sql);
 			$emailAddress = $this->db->loadResult();
 			$this->checkDBError();
-		}
-		else if($this->params->get( 'emailtype' ) == 1)
-		{
-			$emailAddress = $this->params->get('emailaddress');
 		}
 		else
 		{
@@ -266,7 +266,7 @@ class plgSystembfstop extends JPlugin
 		// client ID's: 0-frontend, 1-backend
 		// for our purpose (bitmask), we need 1-frontend 2-backend
 		$interval  = self::$ONE_DAY;
-		$maxNumber = $this->params->get('notifyFailedNumber');
+		$maxNumber = (int)$this->params->get('notifyFailedNumber');
 		if( $this->isNotificationAllowed($logEntry->logtime, $interval, $maxNumber))
 		{
 			$body = $this->getFailedLoginBody($logEntry);

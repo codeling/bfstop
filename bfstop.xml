@@ -40,13 +40,7 @@
 	<config>
 		<fields name="params">
 			<fieldset name="basic">
-				<field name="blockEnabled" type="list" default="1" label="ENABLEBLOCKLABEL" description="ENABLEBLOCKDESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
-				</field>
-				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
 				<field name="blockNumber" type="integer" default="15" first="3" last="25" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
-				<field name="blockInterval" type="integer" default="24" first="1" last="48" step="1" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" />
 				<field name="blockDuration" type="list" default="30" label="BLOCKDURATIONLABEL" description="BLOCKDURATIONDESC">
 					<option    value="0">BLOCK_UNLIMITED</option>
 					<option    value="5">BLOCK_5MINUTES</option>
@@ -59,19 +53,33 @@
 					<option  value="480">BLOCK_8HOURS</option>
 					<option value="1440">BLOCK_24HOURS</option>
 				</field>
-				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
-				<field name="loggingEnabled" type="list" default="0" label="ENABLELOGGINGLABEL" description="ENABLELOGGINGDESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
-				</field>
-			</fieldset>
-			<fieldset name="notify">
 				<field name="emailtype" type="list" default="0" label="EMAILSOURCELABEL" description="EMAILSOURCEDESC">
-					<option value="0">SELECTEDUSERS</option>
 					<option value="1">CUSTOMEMAILADDRESS</option>
+					<option value="0">SELECTEDUSERS</option>
 				</field>
 				<field name="emailaddress" type="text" size="40" default="" label="ENTEREMAILLABEL" description="ENTEREMAILDESC" />
 				<field name="userIDs" type="user" default="" label="SELECTUSERLABEL" description="SELECTUSERDESC" />
+
+			</fieldset>
+			<fieldset name="advanced">
+				<field name="blockEnabled" type="list" default="1" label="ENABLEBLOCKLABEL" description="ENABLEBLOCKDESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
+				<field name="blockInterval" type="list" default="30" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" >
+					<option    value="5">BLOCK_5MINUTES</option>
+					<option   value="10">BLOCK_10MINUTES</option>
+					<option   value="15">BLOCK_15MINUTES</option>
+					<option   value="30">BLOCK_30MINUTES</option>
+					<option   value="60">BLOCK_1HOUR</option>
+					<option  value="120">BLOCK_2HOURS</option>
+					<option  value="240">BLOCK_4HOURS</option>
+					<option  value="480">BLOCK_8HOURS</option>
+					<option value="1440">BLOCK_24HOURS</option>
+				</field>
+
+				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
 				<field name="notifyBlockedNumber" type="list" default="-1" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
@@ -90,6 +98,11 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
+				<field name="loggingEnabled" type="list" default="0" label="ENABLELOGGINGLABEL" description="ENABLELOGGINGDESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+
 			</fieldset>
 		</fields>
 	</config>
