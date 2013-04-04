@@ -283,7 +283,9 @@ class plgSystembfstop extends JPlugin
 		// for our purpose (bitmask), we need 1-frontend 2-backend
 		$interval  = self::$ONE_DAY;
 		$maxNumber = (int)$this->params->get('notifyFailedNumber');
-		if ( (bool)$this->params->get('notifyRemainingAttempts') )
+		// remaining attempts notification only makes sense if we even do block...
+		if ( (bool)$this->params->get('blockEnabled') &&
+			(bool)$this->params->get('notifyRemainingAttempts') )
 		{
 			$attemptsLeft = (int)$this->params->get('blockNumber') 
 				- $this->getNumberOfFailedLogins(
