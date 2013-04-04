@@ -1,3 +1,10 @@
+0.9.9 (2013-04-05)
+  - adds a configurable "automatic unblock time", i.e. a time after which an IP
+    address will be automatically allowed to do further login attempts.
+    this replaces the previous "block interval"
+  - implements optional notification about the number of remaining login
+    attempts before the IP address will be blocked
+
 0.9.8 (2013-01-23)
   - corrects small problems with logging which prevented previous versions
     to be installable on Joomla! 3.0. This should now be possible. In case you

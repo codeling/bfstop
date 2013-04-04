@@ -170,9 +170,14 @@ class plgSystembfstop extends JPlugin
 		}
 	}
 
+	function getBlockInterval()
+	{
+		return min( 1440, (int) $this->params->get('blockDuration'));
+	}
+
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = min( 1440, (int) $this->params->get('blockDuration'));
+		$interval = $this->getBlockInterval();
 		$maxNumber = (int)$this->params->get('blockNumber');
 		// -1 to block for the blockNumber'th time already
 		if (!$this->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
@@ -282,7 +287,8 @@ class plgSystembfstop extends JPlugin
 		{
 			$attemptsLeft = (int)$this->params->get('blockNumber') 
 				- $this->getNumberOfFailedLogins(
-				$interval, $logEntry->ipaddress, $logEntry->logtime);
+				$this->getBlockInterval(),
+				$logEntry->ipaddress, $logEntry->logtime);
 			$application = JFactory::getApplication();
 			$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
 		}

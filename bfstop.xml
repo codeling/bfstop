@@ -9,7 +9,7 @@
 	<homepage>https://github.com/codeling/bfstop</homepage>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
-	<version>0.9.8</version>
+	<version>0.9.9</version>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
 		<filename>index.html</filename>
@@ -72,7 +72,7 @@
 				</field>
 				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
-				<field name="notifyBlockedNumber" type="list" default="-1" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
+				<field name="notifyBlockedNumber" type="list" default="5" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">1</option>
@@ -81,7 +81,7 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="notifyFailedNumber" type="list" default="1" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC">
+				<field name="notifyFailedNumber" type="list" default="0" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">1</option>
