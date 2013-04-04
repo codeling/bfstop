@@ -62,6 +62,17 @@ class plgSystembfstop extends JPlugin
 		return $recentEvents > $maxNumber;
 	}
 
+	function getNumberOfFailedLogins($interval, $ipaddress, $logtime)
+	{
+		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
+				"WHERE logtime between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime' ".
+				"AND ipaddress = '".$ipaddress."'";
+		$this->db->setQuery($sql);
+		$number = ((int)$this->db->loadResult());
+		$this->checkDBError();
+		return $number;
+	}
+
 	function isNotificationAllowed($logtime, $interval, $maxNumber,
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
@@ -267,6 +278,14 @@ class plgSystembfstop extends JPlugin
 		// for our purpose (bitmask), we need 1-frontend 2-backend
 		$interval  = self::$ONE_DAY;
 		$maxNumber = (int)$this->params->get('notifyFailedNumber');
+		if ( (bool)$this->params->get('notifyRemainingAttempts') )
+		{
+			$attemptsLeft = (int)$this->params->get('blockNumber') 
+				- $this->getNumberOfFailedLogins(
+				$interval, $logEntry->ipaddress, $logEntry->logtime);
+			$application = JFactory::getApplication();
+			$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+		}
 		if( $this->isNotificationAllowed($logEntry->logtime, $interval, $maxNumber))
 		{
 			$body = $this->getFailedLoginBody($logEntry);
