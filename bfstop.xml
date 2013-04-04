@@ -67,18 +67,6 @@
 					<option value="1">ENABLED</option>
 				</field>
 				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
-				<field name="blockInterval" type="list" default="30" label="BLOCKINTERVALLABEL" description="BLOCKINTERVALDESC" >
-					<option    value="5">BLOCK_5MINUTES</option>
-					<option   value="10">BLOCK_10MINUTES</option>
-					<option   value="15">BLOCK_15MINUTES</option>
-					<option   value="30">BLOCK_30MINUTES</option>
-					<option   value="60">BLOCK_1HOUR</option>
-					<option  value="120">BLOCK_2HOURS</option>
-					<option  value="240">BLOCK_4HOURS</option>
-					<option  value="480">BLOCK_8HOURS</option>
-					<option value="1440">BLOCK_24HOURS</option>
-				</field>
-
 				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
 				<field name="notifyBlockedNumber" type="list" default="-1" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>

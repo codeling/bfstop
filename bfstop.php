@@ -126,7 +126,7 @@ class plgSystembfstop extends JPlugin
 		return ($numRows > 0);
 	}
 
-	function block($logEntry, $blockInterval)
+	function block($logEntry, $interval)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled');
 		if (!$blockEnabled) {
@@ -153,7 +153,7 @@ class plgSystembfstop extends JPlugin
 			$logEntry->logtime, $interval, $maxNumber,
 			'#__bfstop_bannedip', 'crdate'))
 		{
-			$body = $this->getBlockedBody($logEntry, $blockInterval);
+			$body = $this->getBlockedBody($logEntry, $interval);
 			$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT', $logEntry->ipaddress);
 			$this->sendMailNotification($subject, $body);
 		}
@@ -161,7 +161,7 @@ class plgSystembfstop extends JPlugin
 
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = min( (int)$this->params->get('blockInterval'), (int) $this->params->get('blockDuration'));
+		$interval = min( 1440, (int) $this->params->get('blockDuration'));
 		$maxNumber = (int)$this->params->get('blockNumber');
 		// -1 to block for the blockNumber'th time already
 		if (!$this->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
