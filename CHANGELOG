@@ -2,6 +2,13 @@
   - adds a configurable "automatic unblock time", i.e. a time after which an IP
     address will be automatically allowed to do further login attempts.
     this replaces the previous "block interval"
+    Note (added 2013-04-20): The default value for the block duration was set
+    to 30 minutes with the introduction of this version; meaning that the
+    default behavior of the plugin changed from blocking an IP address forever
+    to blocking it only 30 minutes, and also to considering only the failed
+    login attempts from those last 30 minutes; meaning the number of attempts
+    allowed for attackers was drastically increased. The default values will
+    be adjusted with the next version to allow less attempts.
   - implements optional notification about the number of remaining login
     attempts before the IP address will be blocked
 
