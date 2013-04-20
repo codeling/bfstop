@@ -53,8 +53,8 @@ class plgSystembfstop extends JPlugin
 		$timecol='logtime')
 	{
 		// check if in the last $interval hours, $number incidents have occured already:
-		$sql = "SELECT COUNT(*) FROM ".$table." ".
-				"WHERE ".$timecol." between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime'".
+		$sql = "SELECT COUNT(*) FROM ".$table." t ".
+				"WHERE t.".$timecol." between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime'".
 				$additionalWhere;
 		$this->db->setQuery($sql);
 		$recentEvents = ((int)$this->db->loadResult());
@@ -64,9 +64,13 @@ class plgSystembfstop extends JPlugin
 
 	function getNumberOfFailedLogins($interval, $ipaddress, $logtime)
 	{
-		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
-				"WHERE logtime between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime' ".
-				"AND ipaddress = '".$ipaddress."'";
+		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin t ".
+			"WHERE logtime between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime' ".
+			"AND ipaddress = '".$ipaddress."' ".
+			"AND NOT exists (SELECT 1 FROM #__bfstop_lastlogin u".
+			" WHERE u.username = t.username ".
+			"     AND u.ipaddress = t.ipaddress ".
+			"     AND u.logtime > t.logtime)";
 		$this->db->setQuery($sql);
 		$number = ((int)$this->db->loadResult());
 		$this->checkDBError();
@@ -181,7 +185,11 @@ class plgSystembfstop extends JPlugin
 		$maxNumber = (int)$this->params->get('blockNumber');
 		// -1 to block for the blockNumber'th time already
 		if (!$this->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
-			" AND ipaddress='".$logEntry->ipaddress."'")) {
+			" AND t.ipaddress='".$logEntry->ipaddress."'".
+			" AND NOT exists (SELECT 1 FROM #__bfstop_lastlogin u".
+			" WHERE u.username = t.username ".
+			"     AND u.ipaddress = t.ipaddress ".
+			"     AND u.logtime > t.logtime)")) {
 			return;
 		}
 		$this->block($logEntry, $interval);
@@ -302,6 +310,30 @@ class plgSystembfstop extends JPlugin
 		}
 		$this->blockIfTooManyAttempts($logEntry);
 		return true;
+	}
+
+	public function OnUserLogin($user, $options)
+	{
+		$this->init();
+		$ipaddress = $this->getIPAddr();
+		$logEntry = new stdClass();
+		$logEntry->ipaddress = $this->getIPAddr();
+		$logEntry->logtime   = date("Y-m-d H:i:s");
+		$logEntry->username  = $user['username'];
+		$this->log('Successful login by '.$logEntry->username.' from IP address '.$logEntry->ipaddress, JLog::DEBUG);
+	
+		// insert into log:
+		$deleteQuery = $this->db->getQuery(true);
+		$conditions = array(
+			"username='".$logEntry->username."'");
+		$deleteQuery->delete($this->db->quoteName('#__bfstop_lastlogin'));
+		$deleteQuery->where($conditions);
+		$this->db->setQuery($deleteQuery);
+		$this->db->query();
+		$this->checkDBError();
+
+		$logQuery = $this->db->insertObject('#__bfstop_lastlogin', $logEntry, 'username');
+		$this->checkDBError();
 	}
 
 	public function onAfterInitialise()
