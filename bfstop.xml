@@ -12,6 +12,7 @@
 	<version>0.9.10</version>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
+		<filename>helper.db.php</filename>
 		<filename>index.html</filename>
 		<folder>language</folder>
 		<folder>sql</folder>
