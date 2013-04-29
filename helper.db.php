@@ -1,20 +1,18 @@
 <?php
 class BFStopDBHelper {
 
-	public static function getInstance() {
-		return new BFStopDBHelper();
-	}
-
 	private $db;
+	private $logger;
 
 	function getClientString($id)
 	{
 		return ($id == 0) ? 'Frontend': 'Backend';
 	}
 
-	public function __construct()
+	public function __construct($logger)
 	{
 		$this->db = JFactory::getDbo();
+		$this->logger = $logger;
 	}
 
 	public function checkDBError()
@@ -23,7 +21,7 @@ class BFStopDBHelper {
 		if ($errNum != 0)
 		{
 			$errMsg = $this->db->getErrorMsg();
-			$this->log("Database error (#$errNum) occured: $errMsg", JLog::EMERGENCY);
+			$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::EMERGENCY);
 		}
 	}
 
