@@ -16,7 +16,7 @@ class BFStopNotifier
 		}
 		else if ($config == 0)
 		{
-		        $emailAddress = $this->db->getEmailAddress($userID);
+		        $this->notifyAddress = $this->db->getUserEmailByID($userID);
 		}
 		else
 		{

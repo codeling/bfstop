@@ -50,7 +50,7 @@ class plgSystembfstop extends JPlugin
 		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration, $this->params->get('notifyBlockedNumber'));
 		if ($this->params->get('notifyBlockedUser'))
 		{
-			$userEmail = $this->db->getUserEmail($logEntry->username);
+			$userEmail = $this->db->getUserEmailByName($logEntry->username);
 			if ($userEmail != null)
 			{
 				// TODO: send token link to unblock!

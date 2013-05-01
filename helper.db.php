@@ -105,9 +105,10 @@ class BFStopDBHelper {
 		$this->db->setQuery($sql);
 		$emailAddress = $this->db->loadResult();
 		$this->checkDBError();
+		return $emailAddress;
 	}
 
-	public function getEmailAddress($uid)
+	public function getUserEmailByID($uid)
 	{
 		return $this->getUserEmailWhere("id='$uid'");
 	}
@@ -132,7 +133,7 @@ class BFStopDBHelper {
 		$this->checkDBError();
 	}
 
-	public function getUserEmail($username)
+	public function getUserEmailByName($username)
 	{
 		return $this->getUserEmailWhere("username='$username'");
 	}
