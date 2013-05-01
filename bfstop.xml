@@ -47,7 +47,7 @@
 					default="15" first="3" last="25" step="1"
 					label="BLOCK_NUMBER_LABEL"
 					description="BLOCK_NUMBER_DESC" />
-				<field name="blockDuration" type="list" default="30"
+				<field name="blockDuration" type="list" default="1440"
 					label="BLOCK_DURATION_LABEL"
 					description="BLOCK_DURATION_DESC">
 					<option    value="0">BLOCK_UNLIMITED</option>
@@ -96,7 +96,7 @@
 					description="DELAY_DURATION_DESC" />
 				<field name="notifyBlockedUser" type="list" default="0"
 					label="NOTIFY_BLOCKED_USER_LABEL"
-					desc="NOTIFY_BLOCKED_USER_DESC">
+					description="NOTIFY_BLOCKED_USER_DESC">
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
