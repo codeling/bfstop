@@ -6,3 +6,5 @@ DROP TABLE IF EXISTS `#__bfstop_bannedip`;
 
 DROP TABLE IF EXISTS `#__bfstop_lastlogin`;
 
+DROP TABLE IF EXISTS `#__bfstop_unblock`;
+
