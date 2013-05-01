@@ -46,8 +46,20 @@ class plgSystembfstop extends JPlugin
 		$this->db->blockIP($logEntry);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
-		// send email notification if not too many notifications already...
-		$this->notifier->blocked($logEntry, $blockDuration, $this->params->get('notifyBlockedNumber'));
+		// send email notification to admin
+		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration, $this->params->get('notifyBlockedNumber'));
+		if ($this->params->get('notifyBlockedUser'))
+		{
+			$userEmail = $this->db->getUserEmail($logEntry->username);
+			if ($userEmail != null)
+			{
+				// TODO: send token link to unblock!
+				$this->logger->log("User ".$logEntry->username." was blocked, sending unblock instructions", JLog::DEBUG);
+				$this->notifier->sendMail('You have been blocked', 'Blocked', $userEmail);
+			} else {
+				$this->logger->log("Unknown user (".$logEntry->username.") blocked, not sending any notifications", JLog::DEBUG);
+			}
+		}
 	}
 
 	function getBlockInterval()

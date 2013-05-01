@@ -99,12 +99,17 @@ class BFStopDBHelper {
 		$this->checkDBError();
 	}
 
-	public function getEmailAddress($uid)
+	private function getUserEmailWhere($where)
 	{
-		$sql = "select email from #__users where id='$uid'";
+		$sql = "select email from #__users where $where";
 		$this->db->setQuery($sql);
 		$emailAddress = $this->db->loadResult();
 		$this->checkDBError();
+	}
+
+	public function getEmailAddress($uid)
+	{
+		return $this->getUserEmailWhere("id='$uid'");
 	}
 
 	public function insertFailedLogin($logEntry)
@@ -127,4 +132,8 @@ class BFStopDBHelper {
 		$this->checkDBError();
 	}
 
+	public function getUserEmail($username)
+	{
+		return $this->getUserEmailWhere("username='$username'");
+	}
 }

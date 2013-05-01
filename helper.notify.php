@@ -93,7 +93,7 @@ class BFStopNotifier
 		$this->sendMail($subject, $body, $this->notifyAddress);
 	}
 
-	public function blocked($logEntry, $interval, $maxNumber)
+	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
 	{
 		if (!$this->isNotificationAllowed(
 			$logEntry->logtime, $maxNumber,

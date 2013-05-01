@@ -4,7 +4,7 @@
 	<author>Bernhard Froehler</author>
 	<description>PLG_BFSTOP_DESC</description>
 	<creationDate>November 2012</creationDate>
-	<copyright>Copyright (C) 2012 by Bernhard Froehler</copyright>
+	<copyright>Copyright (C) 2013 by Bernhard Froehler</copyright>
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
 	<homepage>https://github.com/codeling/bfstop</homepage>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
@@ -43,8 +43,13 @@
 	<config>
 		<fields name="params">
 			<fieldset name="basic">
-				<field name="blockNumber" type="integer" default="15" first="3" last="25" step="1" label="BLOCKNUMBERLABEL" description="BLOCKNUMBERDESC" />
-				<field name="blockDuration" type="list" default="30" label="BLOCKDURATIONLABEL" description="BLOCKDURATIONDESC">
+				<field name="blockNumber" type="integer"
+					default="15" first="3" last="25" step="1"
+					label="BLOCK_NUMBER_LABEL"
+					description="BLOCK_NUMBER_DESC" />
+				<field name="blockDuration" type="list" default="30"
+					label="BLOCK_DURATION_LABEL"
+					description="BLOCK_DURATION_DESC">
 					<option    value="0">BLOCK_UNLIMITED</option>
 					<option    value="5">BLOCK_5MINUTES</option>
 					<option   value="10">BLOCK_10MINUTES</option>
@@ -56,26 +61,48 @@
 					<option  value="480">BLOCK_8HOURS</option>
 					<option value="1440">BLOCK_24HOURS</option>
 				</field>
-				<field name="emailtype" type="list" default="0" label="EMAILSOURCELABEL" description="EMAILSOURCEDESC">
+				<field name="emailtype" type="list" default="0"
+					label="EMAIL_SOURCE_LABEL"
+					description="EMAIL_SOURCE_DESC">
 					<option value="1">CUSTOMEMAILADDRESS</option>
 					<option value="0">SELECTEDUSERS</option>
 				</field>
-				<field name="emailaddress" type="text" size="40" default="" label="ENTEREMAILLABEL" description="ENTEREMAILDESC" />
-				<field name="userIDs" type="user" default="" label="SELECTUSERLABEL" description="SELECTUSERDESC" />
-
+				<field name="emailaddress" type="text" size="40" default=""
+					label="EMAIL_ADDRESS_LABEL"
+					description="EMAIL_ADDRESS_DESC" />
+				<field name="userIDs" type="user" default=""
+					label="USERID_LABEL"
+					description="USERID_DESC" />
 			</fieldset>
 			<fieldset name="advanced">
-				<field name="blockEnabled" type="list" default="1" label="ENABLEBLOCKLABEL" description="ENABLEBLOCKDESC">
+				<field name="blockEnabled" type="list" default="1"
+					label="BLOCK_ENABLED_LABEL"
+					description="BLOCK_ENABLED_DESC">
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
-				<field name="notifyRemainingAttempts" type="list" default="0" label="ENABLENOTIFYREMAININGATTEMPTSLABEL" description="ENABLENOTIFYREMAININGATTEMPTSDESC">
+				<field name="notifyRemainingAttempts" type="list" default="0"
+					label="NOTIFY_REMAINING_ATTEMPTS_LABEL"
+					description="NOTIFY_REMAINING_ATTEMPTS_DESC">
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
-				<field name="blockedMessage" type="text" size="40" default="" label="BLOCKEDMESSAGELABEL" description="BLOCKEDMESSAGEDESC" />
-				<field name="delayDuration" type="integer" default="0" first="0" last="60" step="5" label="DELAYDURATIONLABEL" description="DELAYDURATIONDESC" />
-				<field name="notifyBlockedNumber" type="list" default="5" label="NOTIFYBLOCKEDNUMBERLABEL" description="NOTIFYBLOCKEDNUMBERDESC">
+				<field name="blockedMessage" type="text" size="40" default=""
+					label="BLOCKED_MESSAGE_LABEL"
+					description="BLOCKED_MESSAGE_DESC" />
+				<field name="delayDuration" type="integer"
+					default="0" first="0" last="60" step="5"
+					label="DELAY_DURATION_LABEL"
+					description="DELAY_DURATION_DESC" />
+				<field name="notifyBlockedUser" type="list" default="0"
+					label="NOTIFY_BLOCKED_USER_LABEL"
+					desc="NOTIFY_BLOCKED_USER_DESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+				<field name="notifyBlockedNumber" type="list" default="5"
+					label="NOTIFY_BLOCKED_NUMBER_LABEL"
+					description="NOTIFY_BLOCKED_NUMBER_DESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">1</option>
@@ -84,7 +111,9 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="notifyFailedNumber" type="list" default="0" label="NOTIFYFAILEDNUMBERLABEL" description="NOTIFYFAILEDNUMBERDESC">
+				<field name="notifyFailedNumber" type="list" default="0"
+					label="NOTIFY_FAILED_NUMBER_LABEL"
+					description="NOTIFY_FAILED_NUMBER_DESC">
 					<option value="-1">NOTIFY_UNLIMITED</option>
 					<option value="0">NOTIFY_NEVER</option>
 					<option value="1">1</option>
@@ -93,7 +122,9 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="loggingEnabled" type="list" default="0" label="ENABLELOGGINGLABEL" description="ENABLELOGGINGDESC">
+				<field name="loggingEnabled" type="list" default="0"
+					label="LOGGING_ENABLED_LABEL"
+					description="LOGGING_ENABLED_DESC">
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
