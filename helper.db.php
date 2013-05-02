@@ -96,8 +96,34 @@ class BFStopDBHelper {
 		$blockEntry = new stdClass();
 		$blockEntry->ipaddress = $logEntry->ipaddress;
 		$blockEntry->crdate = date("Y-m-d H:i:s");
-		$this->db->insertObject('#__bfstop_bannedip', $blockEntry);
+		if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
+		{
+			$this->logger->log('Insert block entry failed!', JLog::WARNING);
+			$blockEntry->id = -1;
+		}
 		$this->checkDBError();
+		return $blockEntry->id;
+	}
+
+	public function getNewUnblockToken($id)
+	{
+		$strongCrypto = false;
+		$tokenEntry = new stdClass();
+		$tokenEntry->token = sha1(openssl_random_pseudo_bytes(64, $strongCrypto));
+		if (!$strongCrypto)
+		{
+			$this->logger->log('Your server does not use strong cryptographics to produce tokens!', JLog::WARNING);
+		}
+		$tokenEntry->block_id = $id;
+		$tokenEntry->crdate = date("Y-m-d H:i:s");
+		if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
+		{
+			// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
+			$this->logger->log('Insert unblock token failed!', JLog::WARNING);
+			$tokenEntry->token = null;
+		}
+		$this->checkDBError();
+		return $tokenEntry->token;
 	}
 
 	private function getUserEmailWhere($where)

@@ -28,6 +28,16 @@ class plgSystembfstop extends JPlugin
 	}
 
 
+	function getUnblockLink($id)
+	{
+		$token = $this->db->getNewUnblockToken($id);
+		$link = 'index.php?option=com_bfstop'.
+			'&task=tokenunblock'.
+			'&token='.$token;
+		return JRoute::_($link, true, -1);
+	}
+
+
 	function block($logEntry, $interval)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled');
@@ -43,7 +53,7 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 
-		$this->db->blockIP($logEntry);
+		$id = $this->db->blockIP($logEntry);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification to admin
@@ -53,9 +63,17 @@ class plgSystembfstop extends JPlugin
 			$userEmail = $this->db->getUserEmailByName($logEntry->username);
 			if ($userEmail != null)
 			{
-				// TODO: send token link to unblock!
 				$this->logger->log("User ".$logEntry->username." was blocked, sending unblock instructions", JLog::DEBUG);
-				$this->notifier->sendMail('You have been blocked', 'Blocked', $userEmail);
+				$config = JFactory::getConfig();
+				$siteName = $config->getValue('config.sitename' );
+				$this->notifier->sendMail(
+					JText::sprintf('BLOCKED_SUBJECT',
+						$siteName),
+					JText::sprintf('BLOCKED_BODY',
+						$siteName,
+						$this->getUnblockLink($id)
+					),
+					$userEmail);
 			} else {
 				$this->logger->log("Unknown user (".$logEntry->username.") blocked, not sending any notifications", JLog::DEBUG);
 			}

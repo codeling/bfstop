@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	logtime datetime NOT NULL,
 	origin int NOT NULL,
 	PRIMARY KEY  (id)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8;
 
 
 CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 	ipaddress varchar(39) NOT NULL,
 	crdate datetime NOT NULL,
 	PRIMARY KEY (id)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8;
 
 
 -- create log for last successful to enable counter reset
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_lastlogin (
 	ipaddress varchar(39) NOT NULL,
 	logtime datetime NOT NULL,
 	PRIMARY KEY (username)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8;
 
 
 -- stores a new entry if an IP address was unblocked, the
@@ -39,5 +39,14 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock (
 	source int(10) NOT NULL,
 	crdate datetime NOT NULL,
 	PRIMARY KEY (block_id)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8;
 
+
+-- stores randomized tokens for unblocking an IP via an email
+-- to the blocked user
+CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
+	token varchar(40) NOT NULL,
+	block_id int(10) NOT NULL,
+	crdate datetime NOT NULL,
+	PRIMARY KEY (token)
+) DEFAULT CHARSET=utf8;
