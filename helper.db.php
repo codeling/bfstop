@@ -126,6 +126,18 @@ class BFStopDBHelper {
 		return $tokenEntry->token;
 	}
 
+	public function unblockTokenExists($token)
+	{
+		$query = $this->db->setQuery(true);
+		$query->select(array('token'));
+		$query->from('#__bfstop_unblock_token');
+		$query->where("token='".$this->db->quote($token)."'");
+		$db->setQuery($query);
+		$result = $this->db->loadResult();
+		$this->checkDBError();
+		return $result != null;
+	}
+
 	private function getUserEmailWhere($where)
 	{
 		$sql = "select email from #__users where $where";

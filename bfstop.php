@@ -179,8 +179,19 @@ class plgSystembfstop extends JPlugin
 		$blockDuration = (int) $this->params->get('blockDuration');
 		if ($this->db->isIPBlocked($ipaddress, $blockDuration))
 		{
-			$this->logger->log("Blocked IP Address $ipaddress tried to access ".
-				$this->db->getClientString($this->app->getClientId()), JLog::INFO );
+			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
+			$this->db->getClientString($this->app->getClientId()), JLog::INFO );
+			// check if this is maybe an attempt to unblock via the link sent by email
+			$input = JFactory::getApplication()->input;
+			$option = $input->get('option', null);
+			$token  = $input->get('token', null);
+			$this->logger->log('Option: '.$option.'; token: '.$token, JLog::DEBUG);
+			if (strcmp($option, "com_bfstop") == 0 &&
+				$this->db->unblockTokenExists($token))
+			{
+				$this->logger->log('Seeing valid unblock token, letting the request pass through to com_bfstop', JLog::INFO);
+				return true;
+			}
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;

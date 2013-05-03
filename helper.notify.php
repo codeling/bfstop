@@ -74,7 +74,7 @@ class BFStopNotifier
 			return;
 		}
 		$response->error_message = '';
-		$mail =& JFactory::getMailer();
+		$mail = JFactory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
 		$mail->addRecipient($emailAddress);
