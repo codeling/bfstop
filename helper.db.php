@@ -1,4 +1,6 @@
 <?php
+defined('_JEXEC') or die;
+
 class BFStopDBHelper {
 
 	private $db;
