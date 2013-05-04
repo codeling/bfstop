@@ -108,5 +108,25 @@ class BFStopNotifier
 		$this->sendMail($subject, $body, $this->notifyAddress);
 	}
 
+	public function sendUnblockMail($username, $unblockLink)
+	{
+		$userEmail = $this->db->getUserEmailByName($username);
+		if ($userEmail != null)
+		{
+			$this->logger->log("User ".$username." was blocked, sending unblock instructions", JLog::DEBUG);
+			$config = JFactory::getConfig();
+			$siteName = $config->getValue('config.sitename');
+			$this->sendMail(
+				JText::sprintf('BLOCKED_SUBJECT',
+					$siteName),
+				JText::sprintf('BLOCKED_BODY',
+					$siteName,
+					$unblockLink
+				),
+				$userEmail);
+		} else {
+			$this->logger->log("Unknown user (".$username.") blocked, not sending any notifications", JLog::DEBUG);
+		}
+	}
 }
 

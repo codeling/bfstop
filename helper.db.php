@@ -81,12 +81,14 @@ class BFStopDBHelper {
 
 	public function isIPBlocked($ipaddress, $blockDuration)
 	{
-		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip WHERE ipaddress='$ipaddress'";
+		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip b WHERE ipaddress=".
+			$this->db->quote($ipaddress);
 		if ($blockDuration != 0)
 		{
-			$sqlCheck .= " and DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= '".
+			$sqlCheck .= " AND DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= '".
 				date("Y-m-d H:i:s")."'";
 		}
+		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
 		$numRows = $this->db->loadResult();
 		$this->checkDBError();
@@ -130,11 +132,9 @@ class BFStopDBHelper {
 
 	public function unblockTokenExists($token)
 	{
-		$query = $this->db->setQuery(true);
-		$query->select(array('token'));
-		$query->from('#__bfstop_unblock_token');
-		$query->where("token='".$this->db->quote($token)."'");
-		$db->setQuery($query);
+		$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
+			$this->db->quote($token);
+		$this->db->setQuery($sql);
 		$result = $this->db->loadResult();
 		$this->checkDBError();
 		return $result != null;
@@ -160,7 +160,7 @@ class BFStopDBHelper {
 		$this->checkDBError();
 	}
 
-	public function insertSuccessLogin($logEntry)
+	public function successfulLogin($logEntry)
 	{
 		$deleteQuery = $this->db->getQuery(true);
 		$conditions = array(

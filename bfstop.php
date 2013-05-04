@@ -27,16 +27,14 @@ class plgSystembfstop extends JPlugin
 		parent::__construct($subject, $config);
 	}
 
-
 	function getUnblockLink($id)
 	{
 		$token = $this->db->getNewUnblockToken($id);
 		$link = 'index.php?option=com_bfstop'.
-			'&task=tokenunblock'.
+			'&view=tokenunblock'.
 			'&token='.$token;
-		return JRoute::_($link, true, -1);
+		return JURI::base().$link;
 	}
-
 
 	function block($logEntry, $interval)
 	{
@@ -60,23 +58,7 @@ class plgSystembfstop extends JPlugin
 		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration, $this->params->get('notifyBlockedNumber'));
 		if ($this->params->get('notifyBlockedUser'))
 		{
-			$userEmail = $this->db->getUserEmailByName($logEntry->username);
-			if ($userEmail != null)
-			{
-				$this->logger->log("User ".$logEntry->username." was blocked, sending unblock instructions", JLog::DEBUG);
-				$config = JFactory::getConfig();
-				$siteName = $config->getValue('config.sitename' );
-				$this->notifier->sendMail(
-					JText::sprintf('BLOCKED_SUBJECT',
-						$siteName),
-					JText::sprintf('BLOCKED_BODY',
-						$siteName,
-						$this->getUnblockLink($id)
-					),
-					$userEmail);
-			} else {
-				$this->logger->log("Unknown user (".$logEntry->username.") blocked, not sending any notifications", JLog::DEBUG);
-			}
+			$this->notifier->sendUnblockMail($logEntry->username, $this->getUnblockLink($id));
 		}
 	}
 
@@ -167,9 +149,25 @@ class plgSystembfstop extends JPlugin
 		$logEntry->logtime   = date("Y-m-d H:i:s");
 		$logEntry->username  = $user['username'];
 		$this->logger->log('Successful login by '.$logEntry->username.' from IP address '.$logEntry->ipaddress, JLog::DEBUG);
-	
-		// insert into log:
-		$this->db->insertSuccessLogin($logEntry);
+		$this->db->successfulLogin($logEntry);
+	}
+
+	function isUnblockRequest()
+	{
+		$input = JFactory::getApplication()->input;
+		$view  = $input->getString('view', '');
+		$token = $input->getString('token', '');
+		//$this->logger->log("URL: $url; Option: $option; Token: $token");
+		$result = (strcmp($view, "tokenunblock") == 0 &&
+			$this->db->unblockTokenExists($token));
+		if ($result) {
+			$this->logger->log('Seeing valid unblock token ('.
+				$token.'), letting the request pass through to com_bfstop',
+				JLog::INFO);
+		} else {
+			$this->logger->log('view: '.$view.'; token: '.$token, JLog::DEBUG);
+		}
+		return $result;
 	}
 
 	public function onAfterInitialise()
@@ -181,15 +179,8 @@ class plgSystembfstop extends JPlugin
 		{
 			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
 			$this->db->getClientString($this->app->getClientId()), JLog::INFO );
-			// check if this is maybe an attempt to unblock via the link sent by email
-			$input = JFactory::getApplication()->input;
-			$option = $input->get('option', null);
-			$token  = $input->get('token', null);
-			$this->logger->log('Option: '.$option.'; token: '.$token, JLog::DEBUG);
-			if (strcmp($option, "com_bfstop") == 0 &&
-				$this->db->unblockTokenExists($token))
+			if ($this->isUnblockRequest())
 			{
-				$this->logger->log('Seeing valid unblock token, letting the request pass through to com_bfstop', JLog::INFO);
 				return true;
 			}
 			JPlugin::loadLanguage('plg_system_bfstop');
@@ -201,6 +192,4 @@ class plgSystembfstop extends JPlugin
 		}
 		return true;
 	}
-
 }
-
