@@ -1,4 +1,5 @@
 <?php
+defined( '_JEXEC' ) or die;
 class BFStopNotifier
 {
 	private static $ONE_DAY=1440;
