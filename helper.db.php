@@ -1,4 +1,5 @@
 <?php
+defined( '_JEXEC' ) or die;
 class BFStopDBHelper {
 
 	private $db;
@@ -128,7 +129,7 @@ class BFStopDBHelper {
 
 	private function getUserEmailWhere($where)
 	{
-		$sql = "select email from #__users where $where";
+		$sql = "select email from #__users where $where LIMIT 1";
 		$this->db->setQuery($sql);
 		$emailAddress = $this->db->loadResult();
 		$this->checkDBError();
