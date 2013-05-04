@@ -24,6 +24,10 @@
 		<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.sys.ini</language>
 		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.ini</language>
 		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.sys.ini</language>
+		<language tag="pt-PT">pt-PT/pt-PT.plg_system_bfstop.ini</language>
+		<language tag="pt-PT">pt-PT/pt-PT.plg_system_bfstop.sys.ini</language>
+		<language tag="pt-BR">pt-BR/pt-BR.plg_system_bfstop.ini</language>
+		<language tag="pt-BR">pt-BR/pt-BR.plg_system_bfstop.sys.ini</language>
 	</languages>
 	<install>
 		<sql>
