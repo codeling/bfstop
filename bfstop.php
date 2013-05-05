@@ -10,7 +10,7 @@ defined('_JEXEC') or die;
 jimport('joomla.event.plugin');
 jimport('joomla.log.log');
 
-require_once dirname(__FILE__).'/helper.log.php';
+require_once dirname(__FILE__).'/helper_log.php';
 require_once dirname(__FILE__).'/helper.db.php';
 require_once dirname(__FILE__).'/helper.notify.php';
 
