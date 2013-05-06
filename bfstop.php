@@ -157,7 +157,6 @@ class plgSystembfstop extends JPlugin
 		$input = JFactory::getApplication()->input;
 		$view  = $input->getString('view', '');
 		$token = $input->getString('token', '');
-		//$this->logger->log("URL: $url; Option: $option; Token: $token");
 		$result = (strcmp($view, "tokenunblock") == 0 &&
 			$this->db->unblockTokenExists($token));
 		if ($result) {
