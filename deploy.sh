@@ -19,7 +19,7 @@ version=0.9.10
 
 if [ "$1" == "zip" ]
 then
-    zip -r $extname-$version.zip $srcfiles $docs $langfiles
+	zip -r $extname-$version.zip $srcfiles $docs $langfiles
 	exit
 fi
 
@@ -38,6 +38,6 @@ cp -r $srcfiles $dstdir/plugins/$plgtype/$extname/
 
 for lang in $langs
 do
-    cp language/$lang/* $dstdir/administrator/language/$lang/
+	cp language/$lang/* $dstdir/administrator/language/$lang/
 done
 

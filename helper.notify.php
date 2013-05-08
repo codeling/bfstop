@@ -14,16 +14,15 @@ class BFStopNotifier
 		$this->db = $db;
 		if($config == 1)
 		{
-		        $this->notifyAddress = $emailAddress;
+			$this->notifyAddress = $emailAddress;
 		}
 		else if ($config == 0)
 		{
-		        $this->notifyAddress = $this->db->getUserEmailByID($userID);
+			$this->notifyAddress = $this->db->getUserEmailByID($userID);
 		}
 		else
 		{
-		        $this->logger->log('Invalid source for retrieval of email address!', JLog::ERROR);
-		        return;
+			$this->logger->log('Invalid source for retrieval of email address!', JLog::ERROR);
 		}
 
 	}
