@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	error varchar(55) NOT NULL,
 	logtime datetime NOT NULL,
 	origin int NOT NULL,
+	handled BOOLEAN NOT NULL DEFAULT 0,
 	PRIMARY KEY  (id)
 ) DEFAULT CHARSET=utf8;
 
@@ -16,15 +17,6 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 	ipaddress varchar(39) NOT NULL,
 	crdate datetime NOT NULL,
 	PRIMARY KEY (id)
-) DEFAULT CHARSET=utf8;
-
-
--- create log for last successful to enable counter reset
-CREATE TABLE IF NOT EXISTS #__bfstop_lastlogin (
-	username varchar(25) NOT NULL,
-	ipaddress varchar(39) NOT NULL,
-	logtime datetime NOT NULL,
-	PRIMARY KEY (username)
 ) DEFAULT CHARSET=utf8;
 
 

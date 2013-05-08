@@ -74,10 +74,7 @@ class plgSystembfstop extends JPlugin
 		// -1 to block for the blockNumber'th time already
 		if (!$this->db->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
 			" AND t.ipaddress='".$logEntry->ipaddress."'".
-			" AND NOT exists (SELECT 1 FROM #__bfstop_lastlogin u".
-			" WHERE u.username = t.username ".
-			"     AND u.ipaddress = t.ipaddress ".
-			"     AND u.logtime > t.logtime)")) {
+			" AND handled=0")) {
 			return;
 		}
 		$this->block($logEntry, $interval);
@@ -144,12 +141,11 @@ class plgSystembfstop extends JPlugin
 	{
 		$this->init();
 		$ipaddress = $this->getIPAddr();
-		$logEntry = new stdClass();
-		$logEntry->ipaddress = $this->getIPAddr();
-		$logEntry->logtime   = date("Y-m-d H:i:s");
-		$logEntry->username  = $user['username'];
-		$this->logger->log('Successful login by '.$logEntry->username.' from IP address '.$logEntry->ipaddress, JLog::DEBUG);
-		$this->db->successfulLogin($logEntry);
+		$info = new stdClass();
+		$info->ipaddress = $this->getIPAddr();
+		$info->username  = $user['username'];
+		$this->logger->log('Successful login by '.$info->username.' from IP address '.$info->ipaddress, JLog::DEBUG);
+		$this->db->successfulLogin($info);
 	}
 
 	function isUnblockRequest()

@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS `#__bfstop_failedlogin`;
 
 DROP TABLE IF EXISTS `#__bfstop_bannedip`;
 
-DROP TABLE IF EXISTS `#__bfstop_lastlogin`;
-
 DROP TABLE IF EXISTS `#__bfstop_unblock`;
+
+DROP TABLE IF EXISTS `#__bfstop_unblock_token`;
 

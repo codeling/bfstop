@@ -47,10 +47,7 @@ class BFStopDBHelper {
 		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin t ".
 			"WHERE logtime between DATE_SUB('$logtime', INTERVAL $interval MINUTE) AND '$logtime' ".
 			"AND ipaddress = '".$ipaddress."' ".
-			"AND NOT exists (SELECT 1 FROM #__bfstop_lastlogin u".
-			" WHERE u.username = t.username ".
-			"     AND u.ipaddress = t.ipaddress ".
-			"     AND u.logtime > t.logtime)";
+			"AND handled = 0";
 		$this->db->setQuery($sql);
 		$number = ((int)$this->db->loadResult());
 		$this->checkDBError();
@@ -106,6 +103,7 @@ class BFStopDBHelper {
 			$blockEntry->id = -1;
 		}
 		$this->checkDBError();
+		$this->setFailedLoginHandled($logEntry);
 		return $blockEntry->id;
 	}
 
@@ -160,18 +158,20 @@ class BFStopDBHelper {
 		$this->checkDBError();
 	}
 
-	public function successfulLogin($logEntry)
+	public function setFailedLoginHandled($info)
 	{
-		$deleteQuery = $this->db->getQuery(true);
-		$conditions = array(
-			"username='".$logEntry->username."'");
-		$deleteQuery->delete($this->db->quoteName('#__bfstop_lastlogin'));
-		$deleteQuery->where($conditions);
-		$this->db->setQuery($deleteQuery);
+		$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
+			' WHERE username='.$this->db->quote($info->username).
+			' AND ipaddress='.$this->db->quote($info->ipaddress).
+			' AND handled=0';
+		$this->db->setQuery($sql);
 		$this->db->query();
 		$this->checkDBError();
-		$logQuery = $this->db->insertObject('#__bfstop_lastlogin', $logEntry, 'username');
-		$this->checkDBError();
+	}
+
+	public function successfulLogin($info)
+	{
+		$this->setFailedLoginHandled($info);
 	}
 
 	public function getUserEmailByName($username)
