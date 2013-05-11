@@ -41,7 +41,9 @@ class BFStopNotifier
 		{
 			return false;
 		}
-		return !$this->db->moreThanGivenEvents(self::$ONE_DAY, $maxNumber, $logtime, '', $table, $timecol);
+		return $this->db->eventsInInterval(
+			self::$ONE_DAY, $logtime, '', $table, $timecol)
+			< $maxNumber;
 	}
 
 	function getBlockedBody($logEntry, $interval)

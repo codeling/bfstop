@@ -71,10 +71,10 @@ class plgSystembfstop extends JPlugin
 	{
 		$interval = $this->getBlockInterval();
 		$maxNumber = (int)$this->params->get('blockNumber');
-		// -1 to block for the blockNumber'th time already
-		if (!$this->db->moreThanGivenEvents($interval, $maxNumber-1, $logEntry->logtime,
-			" AND t.ipaddress='".$logEntry->ipaddress."'".
-			" AND handled=0")) {
+		if ($this->db->getNumberOfFailedLogins(
+			$interval,
+			$logEntry->ipaddress,
+			$logEntry->logtime) < $maxNumber) {
 			return;
 		}
 		$this->block($logEntry, $interval);
@@ -95,6 +95,31 @@ class plgSystembfstop extends JPlugin
 			$this->params->get('emailaddress'),
 			$this->params->get('userIDs'));
 		$this->app = JFactory::getApplication();
+	}
+
+	function notifyOfRemainingAttempts($logEntry)
+	{
+		// remaining attempts notification only makes sense if we even do block...
+		if ( !(bool)$this->params->get('blockEnabled') ||
+			!(bool)$this->params->get('notifyRemainingAttempts') )
+		{
+			return;
+		}
+		$allowedAttempts = (int)$this->params->get('blockNumber');
+		$numberOfFailedLogins = $this->db->getNumberOfFailedLogins(
+			$this->getBlockInterval(),
+			$logEntry->ipaddress, $logEntry->logtime);
+		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
+		$this->logger->log("Failed logins: $numberOfFailedLogins; allowed: $allowedAttempts", JLog::DEBUG);
+		if ($attemptsLeft < 0)
+		{
+			$this->logger->log('Remaining attempts below zero ('.$attemptsLeft.
+				'), that should not happen. ',
+				JLog::ERROR);
+			return;
+		}
+		$application = JFactory::getApplication();
+		$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
 	}
 
  	public function onUserLoginFailure($user, $options=null)
@@ -120,17 +145,8 @@ class plgSystembfstop extends JPlugin
 		// insert into log:
 		$this->db->insertFailedLogin($logEntry);
 
-		// remaining attempts notification only makes sense if we even do block...
-		if ( (bool)$this->params->get('blockEnabled') &&
-			(bool)$this->params->get('notifyRemainingAttempts') )
-		{
-			$attemptsLeft = (int)$this->params->get('blockNumber') 
-				- $this->db->getNumberOfFailedLogins(
-				$this->getBlockInterval(),
-				$logEntry->ipaddress, $logEntry->logtime);
-			$application = JFactory::getApplication();
-			$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
-		}
+		$this->notifyOfRemainingAttempts($logEntry);
+
 		$maxNumber = (int)$this->params->get('notifyFailedNumber');
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry);
@@ -140,11 +156,11 @@ class plgSystembfstop extends JPlugin
 	public function OnUserLogin($user, $options)
 	{
 		$this->init();
-		$ipaddress = $this->getIPAddr();
 		$info = new stdClass();
 		$info->ipaddress = $this->getIPAddr();
 		$info->username  = $user['username'];
-		$this->logger->log('Successful login by '.$info->username.' from IP address '.$info->ipaddress, JLog::DEBUG);
+		$this->logger->log('Successful login by '.$info->username.
+			' from IP address '.$info->ipaddress, JLog::DEBUG);
 		$this->db->successfulLogin($info);
 	}
 
@@ -159,8 +175,6 @@ class plgSystembfstop extends JPlugin
 			$this->logger->log('Seeing valid unblock token ('.
 				$token.'), letting the request pass through to com_bfstop',
 				JLog::INFO);
-		} else {
-			$this->logger->log('view: '.$view.'; token: '.$token, JLog::DEBUG);
 		}
 		return $result;
 	}
@@ -173,18 +187,17 @@ class plgSystembfstop extends JPlugin
 		if ($this->db->isIPBlocked($ipaddress, $blockDuration))
 		{
 			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
-			$this->db->getClientString($this->app->getClientId()), JLog::INFO );
+				$this->db->getClientString($this->app->getClientId()),
+				JLog::INFO );
 			if ($this->isUnblockRequest())
 			{
-				return true;
+				return;
 			}
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
 			$this->app = JFactory::getApplication();
 			$this->app->close();
-			return false;
 		}
-		return true;
 	}
 }
