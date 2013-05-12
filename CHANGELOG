@@ -1,3 +1,14 @@
+0.9.10 (2013-05-13)
+  - adds pt-PT and pt-BR translations (thanks to solrac!)
+  - fixes a problem that no IP addresses were blocked when the MySQL timezone
+    and the PHP timezone were not the same
+  - adds a table to display and allow unblocking of the currently blocked IP
+    addresses to the backend
+  - adds the possibility to send an email to a user, in case login was tried
+    for an existing user, to allow him to unblock his IP.
+  - a successful login now resets the failed login count
+  - disables "remaining attempts" hint when blocking is disabled
+  - adapts default block interval to 1 day
 0.9.9 (2013-04-05)
   - adds a configurable "automatic unblock time", i.e. a time after which an IP
     address will be automatically allowed to do further login attempts.
