@@ -59,7 +59,7 @@ class BFStopDBHelper {
 
 	public function getFormattedFailedList($ipAddress, $curTime, $interval)
 	{
-		$sql = "SELECT * FROM #__bfstop_failedlogin where ipaddress=".
+		$sql = "SELECT * FROM #__bfstop_failedlogin t where ipaddress=".
 			$this->db->quote($ipAddress).
 			" AND t.logtime".
 			" between DATE_SUB(".$this->db->quote($curTime).
