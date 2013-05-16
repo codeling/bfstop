@@ -27,13 +27,30 @@ class plgSystembfstop extends JPlugin
 		parent::__construct($subject, $config);
 	}
 
+	static function endsWith($haystack, $needle)
+	{
+		$length = strlen($needle);
+		if ($length == 0)
+		{
+			return true;
+		}
+		return (substr($haystack, -$length) === $needle);
+	}
+
 	function getUnblockLink($id)
 	{
 		$token = $this->db->getNewUnblockToken($id);
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
-		return JURI::base().$link;
+                $linkBase = JURI::base();
+		// strip off an eventual administrator - tokenunblock is a site view
+		$adminDir = 'administrator/';
+		if (self::endsWith($linkBase, $adminDir))
+		{
+			$linkBase = substr($linkBase, 0, strlen($linkBase)-strlen($adminDir));
+		}
+		return $linkBase.$link;
 	}
 
 	function block($logEntry, $interval)
