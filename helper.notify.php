@@ -116,7 +116,7 @@ class BFStopNotifier
 		{
 			$this->logger->log("User ".$username." was blocked, sending unblock instructions", JLog::DEBUG);
 			$config = JFactory::getConfig();
-			$siteName = $config->getValue('config.sitename');
+			$siteName = $config->get('config.sitename');
 			$this->sendMail(
 				JText::sprintf('BLOCKED_SUBJECT',
 					$siteName),
