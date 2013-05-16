@@ -75,7 +75,6 @@ class BFStopNotifier
 			$this->logger->log('No user selected or no email address specified!', JLog::ERROR);
 			return;
 		}
-		$response->error_message = '';
 		$mail = JFactory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
