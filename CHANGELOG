@@ -1,3 +1,8 @@
+0.9.10.1 (2013-05-17)
+  - fix unblock by token link for administration login
+  - fix Joomla! 3 compatibility
+  - fix DB query problem introduced with refactoring
+
 0.9.10 (2013-05-13)
   - adds pt-PT and pt-BR translations (thanks to solrac!)
   - fixes a problem that no IP addresses were blocked when the MySQL timezone
@@ -9,6 +14,7 @@
   - a successful login now resets the failed login count
   - disables "remaining attempts" hint when blocking is disabled
   - adapts default block interval to 1 day
+
 0.9.9 (2013-04-05)
   - adds a configurable "automatic unblock time", i.e. a time after which an IP
     address will be automatically allowed to do further login attempts.
