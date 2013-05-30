@@ -6,7 +6,7 @@
 	<version>0.9.10.2</version>
 	<infourl title="Brute Force Stop">https://github.com/codeling/bfstop/wiki</infourl>
 	<downloads>
-		<downloadurl type="full" format="zip">https://github.com/codeling/pkg_bfstop/archive/0.9.10.2.zip</downloadurl>
+		<downloadurl type="full" format="zip">https://github.com/codeling/bfstop/archive/0.9.10.2.zip</downloadurl>
 	</downloads>
 	<tags>
 		<tag>stable</tag>
