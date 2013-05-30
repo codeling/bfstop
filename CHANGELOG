@@ -1,3 +1,7 @@
+0.9.10.2 (2013-05-28)
+  - fix for issue #12 "bfstop doesn't block", where a block duration of
+    unlimited would always lead to no IP being blocked
+
 0.9.10.1 (2013-05-17)
   - fix unblock by token link for administration login
   - fix Joomla! 3 compatibility

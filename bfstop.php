@@ -16,11 +16,12 @@ require_once dirname(__FILE__).'/helper.notify.php';
 
 class plgSystembfstop extends JPlugin
 {
-
-	// default interval used for notifications is one day (in minutes):
 	private $db;
 	private $app;
 	private $logger;
+
+	// 10 years in minutes. for all intents here sufficiently large to stand for "forever":
+	private static $UNLIMITED_DURATION = 5256000;
 
 	function plgSystembfstop(& $subject, $config) 
 	{
@@ -55,13 +56,13 @@ class plgSystembfstop extends JPlugin
 
 	function block($logEntry, $interval)
 	{
-		$blockEnabled  = (bool)$this->params->get('blockEnabled');
+		$blockEnabled  = (bool)$this->params->get('blockEnabled', true);
 		if (!$blockEnabled) {
 			return;
 		}
 		// if the IP address is blocked we actually shouldn't be here in the first place
 		// I guess, but just to make sure
-		$blockDuration = (int) $this->params->get('blockDuration');
+		$blockDuration = $this->getBlockInterval();
 		if ($this->db->isIPBlocked($logEntry->ipaddress, $blockDuration))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
@@ -72,8 +73,9 @@ class plgSystembfstop extends JPlugin
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification to admin
-		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration, $this->params->get('notifyBlockedNumber'));
-		if ($this->params->get('notifyBlockedUser'))
+		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration,
+			$this->params->get('notifyBlockedNumber', 5));
+		if ((bool)$this->params->get('notifyBlockedUser', false))
 		{
 			$this->notifier->sendUnblockMail($logEntry->username, $this->getUnblockLink($id));
 		}
@@ -81,13 +83,17 @@ class plgSystembfstop extends JPlugin
 
 	function getBlockInterval()
 	{
-		return min( 1440, (int) $this->params->get('blockDuration'));
+		$blockDuration = (int)$this->params->get('blockDuration',
+			BFStopNotifier::$ONE_DAY);
+		return ($blockDuration <= 0)
+			? self::$UNLIMITED_DURATION
+			: $blockDuration;
 	}
 
 	function blockIfTooManyAttempts($logEntry)
 	{
 		$interval = $this->getBlockInterval();
-		$maxNumber = (int)$this->params->get('blockNumber');
+		$maxNumber = (int)$this->params->get('blockNumber', 15);
 		if ($this->db->getNumberOfFailedLogins(
 			$interval,
 			$logEntry->ipaddress,
@@ -105,7 +111,7 @@ class plgSystembfstop extends JPlugin
 	
 	private function init()
 	{
-		$this->logger = new BFStopLogger((bool)$this->params->get('loggingEnabled'));
+		$this->logger = new BFStopLogger((bool)$this->params->get('loggingEnabled', false));
 		$this->db  = new BFStopDBHelper($this->logger);
 		$this->notifier = new BFStopNotifier($this->logger, $this->db,
 			(int)$this->params->get( 'emailtype' ),
@@ -117,12 +123,12 @@ class plgSystembfstop extends JPlugin
 	function notifyOfRemainingAttempts($logEntry)
 	{
 		// remaining attempts notification only makes sense if we even do block...
-		if ( !(bool)$this->params->get('blockEnabled') ||
-			!(bool)$this->params->get('notifyRemainingAttempts') )
+		if ( !(bool)$this->params->get('blockEnabled', true) ||
+			!(bool)$this->params->get('notifyRemainingAttempts', false) )
 		{
 			return;
 		}
-		$allowedAttempts = (int)$this->params->get('blockNumber');
+		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
 		$numberOfFailedLogins = $this->db->getNumberOfFailedLogins(
 			$this->getBlockInterval(),
 			$logEntry->ipaddress, $logEntry->logtime);
@@ -143,7 +149,7 @@ class plgSystembfstop extends JPlugin
 	{
 		$this->init();
 		JPlugin::loadLanguage('plg_system_bfstop');
-		$delayDuration = (int)$this->params->get('delayDuration');
+		$delayDuration = (int)$this->params->get('delayDuration', 0);
 		if ($delayDuration != 0)
 		{
 			sleep($delayDuration);
@@ -164,7 +170,7 @@ class plgSystembfstop extends JPlugin
 
 		$this->notifyOfRemainingAttempts($logEntry);
 
-		$maxNumber = (int)$this->params->get('notifyFailedNumber');
+		$maxNumber = (int)$this->params->get('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry);
 		return true;
@@ -200,7 +206,7 @@ class plgSystembfstop extends JPlugin
 	{
 		$this->init();
 		$ipaddress = $this->getIPAddr();
-		$blockDuration = (int) $this->params->get('blockDuration');
+		$blockDuration = $this->getBlockInterval();
 		if ($this->db->isIPBlocked($ipaddress, $blockDuration))
 		{
 			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
