@@ -46,6 +46,9 @@
 			<schemapath type="mysql">sql/updates</schemapath>
 		</schemas>
 	</update>
+	<updateservers>
+		<server type="extension" name="BFStop Plugin Updates">https://github.com/codeling/bfstop/blob/master/update.xml</server>
+	</updateservers>
 	<config>
 		<fields name="params">
 			<fieldset name="basic">
