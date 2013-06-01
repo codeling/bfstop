@@ -47,7 +47,7 @@
 		</schemas>
 	</update>
 	<updateservers>
-		<server type="extension" name="BFStop Plugin Updates">https://github.com/codeling/bfstop/blob/master/update.xml</server>
+		<server type="extension" name="BFStop Plugin Updates">https://raw.github.com/codeling/bfstop/master/update.xml</server>
 	</updateservers>
 	<config>
 		<fields name="params">
