@@ -9,7 +9,7 @@
 	<homepage>https://github.com/codeling/bfstop</homepage>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
-	<version>0.9.10.1</version>
+	<version>0.9.10.2</version>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
 		<filename>helper_log.php</filename>
@@ -46,6 +46,9 @@
 			<schemapath type="mysql">sql/updates</schemapath>
 		</schemas>
 	</update>
+	<updateservers>
+		<server type="extension" name="BFStop Plugin Updates">https://raw.github.com/codeling/bfstop/master/update.xml</server>
+	</updateservers>
 	<config>
 		<fields name="params">
 			<fieldset name="basic">

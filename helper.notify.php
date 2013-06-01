@@ -3,7 +3,7 @@ defined( '_JEXEC' ) or die;
 
 class BFStopNotifier
 {
-	private static $ONE_DAY=1440;
+	public static $ONE_DAY=1440;
 	private $logger;
 	private $db;
 	private $notifyAddress;

@@ -34,6 +34,10 @@ class BFStopDBHelper {
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
 	{
+		if ($interval <= 0)
+		{
+			$this->logger->log("Invalid interval $interval");
+		}
 		// check if in the last $interval hours, $number incidents have occured already:
 		$sql = "SELECT COUNT(*) FROM ".$table." t ".
 			"WHERE t.".$timecol.
@@ -87,11 +91,8 @@ class BFStopDBHelper {
 	{
 		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip b WHERE ipaddress=".
 			$this->db->quote($ipaddress);
-		if ($blockDuration != 0)
-		{
-			$sqlCheck .= " AND DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= '".
-				date("Y-m-d H:i:s")."'";
-		}
+		$sqlCheck .= " AND DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= '".
+			date("Y-m-d H:i:s")."'";
 		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
 		$numRows = $this->db->loadResult();

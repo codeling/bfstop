@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<updates>
+	<!-- 0.9.10.2 -->
+	<update>
+		<name>Brute Force Stop Plugin</name>
+		<description>Brute Force Stop Plugin</description>
+		<element>bfstop</element>
+		<type>plugin</type>
+		<folder>system</folder>
+		<client>0</client>
+		<version>0.9.10.2</version>
+<!--		<infourl title="Brute Force Stop">https://github.com/codeling/bfstop/wiki</infourl> -->
+		<downloads>
+			<downloadurl type="full" format="zip">https://github.com/codeling/bfstop/archive/0.9.10.2.zip</downloadurl>
+		</downloads>
+		<tags>
+			<tag>stable</tag>
+		</tags>
+		<maintainer>Bernhard Froehler</maintainer>
+		<maintainerurl>https://github.com/codeling/</maintainerurl>
+		<targetplatform name="joomla" version="2.5" />
+	</update>
+	<update>
+		<name>Brute Force Stop Plugin</name>
+		<description>Brute Force Stop Plugin</description>
+		<element>bfstop</element>
+		<type>plugin</type>
+		<folder>system</folder>
+		<client>0</client>
+		<version>0.9.10.2</version>
+<!--		<infourl title="Brute Force Stop">https://github.com/codeling/bfstop/wiki</infourl> -->
+		<downloads>
+			<downloadurl type="full" format="zip">https://github.com/codeling/bfstop/archive/0.9.10.2.zip</downloadurl>
+		</downloads>
+		<tags>
+			<tag>stable</tag>
+		</tags>
+		<maintainer>Bernhard Froehler</maintainer>
+		<maintainerurl>https://github.com/codeling/</maintainerurl>
+		<targetplatform name="joomla" version="3.[0123456789]" />
+	</update>
+</updates>
