@@ -27,6 +27,14 @@ class BFStopNotifier
 
 	}
 
+	function getSiteName()
+	{
+		$config = JFactory::getConfig();
+		$siteName = $config->get('sitename');	// Joomla! 3.x
+		$siteName = (strcmp($siteName,'') == 0) ? $config->get('config.sitename') : $siteName;
+		return $siteName;
+	}
+
 	function isNotificationAllowed($logtime, $maxNumber,
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
@@ -50,6 +58,7 @@ class BFStopNotifier
 	{
 		return JText::sprintf('BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
+			JURI::root(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
@@ -59,7 +68,9 @@ class BFStopNotifier
 
 	function getFailedLoginBody($logEntry)
 	{
-		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT', JURI::root()) ."\n";
+		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT',
+			$this->getSiteName(),
+			JURI::root()) ."\n";
 		$bodys.= str_pad(JText::_('USERNAME').":",15)  . $logEntry->username  ."\n";
 		$bodys.= str_pad(JText::_('IPADDRESS').":",15) . $logEntry->ipaddress ."\n";
 		$bodys.= str_pad(JText::_('ERROR').":",15)     . $logEntry->error     ."\n";
@@ -91,7 +102,9 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getFailedLoginBody($logEntry);
-		$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT", JURI::root());
+		$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT",
+			$this->getSiteName(),
+			JURI::root());
 		$this->sendMail($subject, $body, $this->notifyAddress);
 	}
 
@@ -104,7 +117,9 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getBlockedBody($logEntry, $interval);
-		$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT', $logEntry->ipaddress);
+		$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT',
+			$this->getSiteName(),
+			$logEntry->ipaddress);
 		$this->sendMail($subject, $body, $this->notifyAddress);
 	}
 
@@ -114,12 +129,9 @@ class BFStopNotifier
 		if ($userEmail != null)
 		{
 			$this->logger->log("User ".$username." was blocked, sending unblock instructions", JLog::DEBUG);
-			$config = JFactory::getConfig();
-			$siteName = $config->get('sitename');	// Joomla! 3.x
-			$siteName = (strcmp($siteName,'') == 0) ? $config->get('config.sitename') : $siteName;
+			$siteName = $this->getSiteName();
 			$this->sendMail(
-				JText::sprintf('BLOCKED_SUBJECT',
-					$siteName),
+				JText::sprintf('BLOCKED_SUBJECT', $siteName),
 				JText::sprintf('BLOCKED_BODY',
 					$siteName,
 					$unblockLink
