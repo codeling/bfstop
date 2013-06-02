@@ -1,14 +1,10 @@
-Brute Force Stop (bfstop)
+Brute Force Stop Plugin (plg_system_bfstop)
 Joomla System Plugin
-by Bernhard Froehler
 
-Contributors:
-Translations to portuguese/brasilian as well as some fixes by solrac comproperty247(at)gmail.com
+This is the plugin part of the Brute Force Stop Joomla! Extension package.
 
-
-This plugin is intended to hinder brute force login attempts to any Joomla! site.
-
-For detailed instructions on how to download, install and configure it, please browse to
+For detailed information, as well as instructions on how to download, install
+and configure it, please browse to
 https://github.com/codeling/bfstop/wiki
 
 For information on what changed in recent versions, see the CHANGELOG file
@@ -23,10 +19,3 @@ https://github.com/codeling/bfstop
 For any further questions, don't hesitate to contact me under
 bfstop@bfroehler.info
 
-The original idea was born out of need because of brute force login attempts on
-a Joomla site I administrate. It was inspired by, and small parts were reused
-from the following plugins:
-  - Login Failed Log
-  - Redirect Failed Logins
-  - Ban IP Address/Range
-My thanks go out to the authors of these plugins!
