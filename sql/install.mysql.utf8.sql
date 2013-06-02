@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 	id int(10) NOT NULL auto_increment,
 	ipaddress varchar(39) NOT NULL,
 	crdate datetime NOT NULL,
+	duration int NOT NULL,
 	PRIMARY KEY (id)
 ) DEFAULT CHARSET=utf8;
 
