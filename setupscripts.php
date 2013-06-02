@@ -18,7 +18,7 @@ class plgsystembfstopInstallerScript
 				// versions before always blocked an unlimited time
 				$duration = 0;
 			} else {
-				$duration = $this->getParam('blockDuration', 'params');
+				$duration = $this->getParam('blockDuration', 'params', 0);
 			}
 			echo "Updating block duration of existing blocked IP".
 				" addresses to the currently configured duration of ".
@@ -35,7 +35,7 @@ class plgsystembfstopInstallerScript
 	}
 	public function preflight($type, $parent)  {
 		$this->newVersion = $parent->get('manifest')->version;
-		$this->oldVersion = $this->getParam('version', 'manifest_cache');
+		$this->oldVersion = $this->getParam('version', 'manifest_cache', 0);
 	}
 	public function postflight($type, $parent) {
 	}
@@ -48,12 +48,12 @@ class plgsystembfstopInstallerScript
 		return $db->execute();
 	}
 
-	private function getParam($name, $column) {
+	private function getParam($name, $column, $defaultValue) {
 		$db = JFactory::getDbo();
 		$sql = "SELECT $column FROM #__extensions WHERE name = 'plg_system_bfstop'";
 		$db->setQuery($sql);
 		$rawSettings = $db->loadResult();
 		$settings = json_decode($rawSettings, true);
-		return $settings[$name];
+		return array_key_exists($name, $settings) ? $settings[$name] : $defaultValue ;
 	}
 }

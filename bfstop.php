@@ -62,14 +62,13 @@ class plgSystembfstop extends JPlugin
 		}
 		// if the IP address is blocked we actually shouldn't be here in the first place
 		// I guess, but just to make sure
-		$blockDuration = $this->getBlockInterval();
-		if ($this->db->isIPBlocked($logEntry->ipaddress, $blockDuration))
+		if ($this->db->isIPBlocked($logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
 			return;
 		}
-
-		$id = $this->db->blockIP($logEntry);
+		$blockDuration = $this->getBlockInterval();
+		$id = $this->db->blockIP($logEntry, $blockDuration);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification to admin
@@ -206,8 +205,7 @@ class plgSystembfstop extends JPlugin
 	{
 		$this->init();
 		$ipaddress = $this->getIPAddr();
-		$blockDuration = $this->getBlockInterval();
-		if ($this->db->isIPBlocked($ipaddress, $blockDuration))
+		if ($this->db->isIPBlocked($ipaddress))
 		{
 			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
 				$this->db->getClientString($this->app->getClientId()),

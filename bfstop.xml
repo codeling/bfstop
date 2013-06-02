@@ -58,7 +58,7 @@
 					default="15" first="3" last="25" step="1"
 					label="BLOCK_NUMBER_LABEL"
 					description="BLOCK_NUMBER_DESC" />
-				<field name="blockDuration" type="list" default="1440"
+				<field name="blockDuration" type="list" default="0"
 					label="BLOCK_DURATION_LABEL"
 					description="BLOCK_DURATION_DESC">
 					<option    value="0">BLOCK_UNLIMITED</option>

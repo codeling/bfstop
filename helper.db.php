@@ -87,11 +87,11 @@ class BFStopDBHelper {
 		return $result;
 	}
 
-	public function isIPBlocked($ipaddress, $blockDuration)
+	public function isIPBlocked($ipaddress)
 	{
 		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip b WHERE ipaddress=".
 			$this->db->quote($ipaddress);
-		$sqlCheck .= " AND DATE_ADD(crdate, INTERVAL $blockDuration MINUTE) >= '".
+		$sqlCheck .= " AND DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= '".
 			date("Y-m-d H:i:s")."'";
 		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
@@ -100,11 +100,12 @@ class BFStopDBHelper {
 		return ($numRows > 0);
 	}
 
-	public function blockIP($logEntry)
+	public function blockIP($logEntry, $duration)
 	{
 		$blockEntry = new stdClass();
 		$blockEntry->ipaddress = $logEntry->ipaddress;
 		$blockEntry->crdate = date("Y-m-d H:i:s");
+		$blockEntry->duration = $duration;
 		if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
 		{
 			$this->logger->log('Insert block entry failed!', JLog::WARNING);
