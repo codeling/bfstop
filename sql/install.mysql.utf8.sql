@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	id int(10) NOT NULL auto_increment,
 	username varchar(25) NOT NULL,
 	ipaddress varchar(39) NOT NULL,
-	error varchar(55) NOT NULL,
+	error varchar(255) NOT NULL,
 	logtime datetime NOT NULL,
 	origin int NOT NULL,
 	handled BOOLEAN NOT NULL DEFAULT 0,
