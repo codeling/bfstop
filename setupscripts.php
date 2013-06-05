@@ -5,8 +5,16 @@ class plgsystembfstopInstallerScript
 {
 	private $oldVersion;
 	private $newVersion;
+
 	public function install($parent)   { }
 	public function uninstall($parent) { }
+	public function postflight($type, $parent) { }
+
+	public function preflight($type, $parent)  {
+		$this->newVersion = $parent->get('manifest')->version;
+		$this->oldVersion = $this->getParam('version', 'manifest_cache', $this->newVersion);
+	}
+
 	public function update($parent)
 	{
 		if (version_compare($this->oldVersion, "0.9.11") < 0)
@@ -33,12 +41,6 @@ class plgsystembfstopInstallerScript
 				: 'Success!';
 		}
 	}
-	public function preflight($type, $parent)  {
-		$this->newVersion = $parent->get('manifest')->version;
-		$this->oldVersion = $this->getParam('version', 'manifest_cache', 0);
-	}
-	public function postflight($type, $parent) {
-	}
 
 	private function updateDuration($duration)
 	{
@@ -53,6 +55,9 @@ class plgsystembfstopInstallerScript
 		$sql = "SELECT $column FROM #__extensions WHERE name = 'plg_system_bfstop'";
 		$db->setQuery($sql);
 		$rawSettings = $db->loadResult();
+		if (is_null($rawSettings)) {
+			return $defaultValue;
+		}
 		$settings = json_decode($rawSettings, true);
 		return array_key_exists($name, $settings) ? $settings[$name] : $defaultValue ;
 	}
