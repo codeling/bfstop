@@ -51,7 +51,7 @@ class plgSystembfstop extends JPlugin
 		return $linkBase.$link;
 	}
 
-	function block($logEntry, $interval)
+	function block($logEntry, $duration)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled', true);
 		if (!$blockEnabled) {
@@ -64,12 +64,23 @@ class plgSystembfstop extends JPlugin
 			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
 			return;
 		}
-		$blockDuration = $this->getBlockInterval($logEntry->ipaddress);
-		$id = $this->db->blockIP($logEntry, $blockDuration);
+		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
+		if ($maxBlocksBefore > 0)
+		{
+			$numberOfPrevBlocks = $this->db->getNumberOfPreviousBlocks($logEntry->ipaddress);
+			$this->logger->log('Number of previous blocks for IP='.$logEntry->ipaddress.': '.$numberOfPrevBlocks, JLog::DEBUG);
+			if ($numberOfPrevBlocks >= $maxBlocksBefore)
+			{
+				$this->logger->log('Number of previous blocks exceeds configured maximum, blocking permanently!', JLog::INFO);
+				$duration = 0;
+			}
+		}
+		$id = $this->db->blockIP($logEntry, $duration);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification to admin
-		$this->notifier->blockedNotifyAdmin($logEntry, $blockDuration,
+		$this->notifier->blockedNotifyAdmin($logEntry,
+			$this->getRealDurationFromDBDuration($duration),
 			$this->params->get('notifyBlockedNumber', 5));
 		if ((bool)$this->params->get('notifyBlockedUser', false))
 		{
@@ -77,19 +88,18 @@ class plgSystembfstop extends JPlugin
 		}
 	}
 
+	function getRealDurationFromDBDuration($duration)
+	{
+		return ($duration <= 0)
+			? BFStopDBHelper::$UNLIMITED_DURATION
+			: $duration;
+	}
+
 	function getBlockInterval($ipaddress)
 	{
-		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
-		if ($maxBlocksBefore > 0 &&
-			$this->db->getNumberOfPreviousBlocks($ipaddress) >= $maxBlocksBefore)
-		{
-			BFStopDBHelper::$UNLIMITED_DURATION;
-		}
 		$blockDuration = (int)$this->params->get('blockDuration',
 			BFStopNotifier::$ONE_DAY);
-		return ($blockDuration <= 0)
-			? BFStopDBHelper::$UNLIMITED_DURATION
-			: $blockDuration;
+		return $this->getRealDurationFromDBDuration($blockDuration);
 	}
 
 	function blockIfTooManyAttempts($logEntry)

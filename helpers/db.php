@@ -7,7 +7,7 @@ class BFStopDBHelper {
 	private $logger;
 
 	// 10 years in minutes. for all intents here sufficiently large to stand for "forever":
-	private static $UNLIMITED_DURATION = 5256000;
+	public static $UNLIMITED_DURATION = 5256000;
 
 	function getClientString($id)
 	{
@@ -69,7 +69,9 @@ class BFStopDBHelper {
 		$interval = self::$UNLIMITED_DURATION;
 		$logtime = date("Y-m-d H:i:s");
 		return $this->eventsInInterval($interval, $logtime,
-			'AND ipaddress = '.$this->db->quote($ipaddress),
+			'AND ipaddress = '.$this->db->quote($ipaddress).
+			' AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u '.
+			' WHERE t.id=u.block_id AND source=0)',
 			'#__bfstop_bannedip', 'crdate');
 	}
 
