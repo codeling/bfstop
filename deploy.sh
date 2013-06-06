@@ -10,7 +10,7 @@ dstdir=
 # internal variables to be updated when files are added:
 extname=bfstop
 sqlfiles="sql"
-srcfiles="$extname.php helper_log.php helper.db.php helper.notify.php $extname.xml $sqlfiles setupscripts.php index.html"
+srcfiles="$extname.php helpers $extname.xml $sqlfiles setupscripts.php index.html"
 langfiles="language"
 docs="CHANGELOG LICENSE.txt README"
 plgtype="system"

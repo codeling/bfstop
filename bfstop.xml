@@ -13,11 +13,9 @@
 	<scriptfile>setupscripts.php</scriptfile>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
-		<filename>helper_log.php</filename>
-		<filename>helper.db.php</filename>
-		<filename>helper.notify.php</filename>
 		<filename>index.html</filename>
 		<filename>setupscripts.php</filename>
+		<folder>helpers</folder>
 		<folder>language</folder>
 		<folder>sql</folder>
 	</files>
