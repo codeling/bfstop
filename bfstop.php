@@ -20,9 +20,6 @@ class plgSystembfstop extends JPlugin
 	private $app;
 	private $logger;
 
-	// 10 years in minutes. for all intents here sufficiently large to stand for "forever":
-	private static $UNLIMITED_DURATION = 5256000;
-
 	function plgSystembfstop(& $subject, $config) 
 	{
 		parent::__construct($subject, $config);
@@ -67,7 +64,7 @@ class plgSystembfstop extends JPlugin
 			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
 			return;
 		}
-		$blockDuration = $this->getBlockInterval();
+		$blockDuration = $this->getBlockInterval($logEntry->ipaddress);
 		$id = $this->db->blockIP($logEntry, $blockDuration);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
@@ -80,18 +77,24 @@ class plgSystembfstop extends JPlugin
 		}
 	}
 
-	function getBlockInterval()
+	function getBlockInterval($ipaddress)
 	{
+		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
+		if ($maxBlocksBefore > 0 &&
+			$this->db->getNumberOfPreviousBlocks($ipaddress) >= $maxBlocksBefore)
+		{
+			BFStopDBHelper::$UNLIMITED_DURATION;
+		}
 		$blockDuration = (int)$this->params->get('blockDuration',
 			BFStopNotifier::$ONE_DAY);
 		return ($blockDuration <= 0)
-			? self::$UNLIMITED_DURATION
+			? BFStopDBHelper::$UNLIMITED_DURATION
 			: $blockDuration;
 	}
 
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = $this->getBlockInterval();
+		$interval = $this->getBlockInterval($logEntry->ipaddress);
 		$maxNumber = (int)$this->params->get('blockNumber', 15);
 		if ($this->db->getNumberOfFailedLogins(
 			$interval,
@@ -129,7 +132,7 @@ class plgSystembfstop extends JPlugin
 		}
 		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
 		$numberOfFailedLogins = $this->db->getNumberOfFailedLogins(
-			$this->getBlockInterval(),
+			$this->getBlockInterval($logEntry->ipaddress),
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
 		$this->logger->log("Failed logins: $numberOfFailedLogins; allowed: $allowedAttempts", JLog::DEBUG);

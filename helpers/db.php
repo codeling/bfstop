@@ -6,6 +6,9 @@ class BFStopDBHelper {
 	private $db;
 	private $logger;
 
+	// 10 years in minutes. for all intents here sufficiently large to stand for "forever":
+	private static $UNLIMITED_DURATION = 5256000;
+
 	function getClientString($id)
 	{
 		return ($id == 0) ? 'Frontend': 'Backend';
@@ -59,6 +62,15 @@ class BFStopDBHelper {
 			' AND handled = 0',
 			'#__bfstop_failedlogin',
 			'logtime');
+	}
+
+	public function getNumberOfPreviousBlocks($ipaddress)
+	{
+		$interval = self::$UNLIMITED_DURATION;
+		$logtime = date("Y-m-d H:i:s");
+		return $this->eventsInInterval($interval, $logtime,
+			'AND ipaddress = '.$this->db->quote($ipaddress),
+			'#__bfstop_bannedip', 'crdate');
 	}
 
 	public function getFormattedFailedList($ipAddress, $curTime, $interval)

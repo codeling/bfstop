@@ -90,6 +90,16 @@
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
+				<field name="maxBlocksBefore" type="list" default="3"
+					label="MAX_BLOCKS_BEFORE_LABEL"
+					description="MAX_BLOCKS_BEFORE_DESC">
+					<option value="0">MAX_BLOCK_NEVER</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+					<option value="5">6</option>
+				</field>
 				<field name="notifyRemainingAttempts" type="list" default="0"
 					label="NOTIFY_REMAINING_ATTEMPTS_LABEL"
 					description="NOTIFY_REMAINING_ATTEMPTS_DESC">
