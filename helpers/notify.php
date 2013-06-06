@@ -24,10 +24,14 @@ class BFStopNotifier
 		{
 			$this->logger->log('Invalid source for retrieval of email address!', JLog::ERROR);
 		}
-
 	}
 
-	function getSiteName()
+	public function getNotifyAddress()
+	{
+		return $this->notifyAddress;
+	}
+
+	public function getSiteName()
 	{
 		$config = JFactory::getConfig();
 		$siteName = $config->get('sitename');	// Joomla! 3.x
@@ -93,6 +97,7 @@ class BFStopNotifier
 		$sendSuccess = $mail->Send();
 		$this->logger->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
 			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)), JLog::INFO);
+		return $sendSuccess;
 	}
 
 	public function failedLogin($logEntry, $maxNumber)
