@@ -157,9 +157,19 @@ class plgSystembfstop extends JPlugin
 		$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
 	}
 
+	public function isEnabledForCurrentOrigin()
+	{
+		$enabledFor = (int)$this->getParam('enabledForOrigin', 3);
+		return ( ($enabledFor & ($this->app->getClientId()+1)) != 0);
+	}
+
  	public function onUserLoginFailure($user, $options=null)
 	{
 		$this->init();
+		if (!$this->isEnabledForCurrentOrigin())
+		{
+			return;
+		}
 		JPlugin::loadLanguage('plg_system_bfstop');
 		$delayDuration = (int)$this->params->get('delayDuration', 0);
 		if ($delayDuration != 0)
@@ -191,6 +201,10 @@ class plgSystembfstop extends JPlugin
 	public function OnUserLogin($user, $options)
 	{
 		$this->init();
+		if (!$this->isEnabledForCurrentOrigin())
+		{
+			return;
+		}
 		$info = new stdClass();
 		$info->ipaddress = $this->getIPAddr();
 		$info->username  = $user['username'];
@@ -217,6 +231,10 @@ class plgSystembfstop extends JPlugin
 	public function onAfterInitialise()
 	{
 		$this->init();
+		if (!$this->isEnabledForCurrentOrigin())
+		{
+			return;
+		}
 		$ipaddress = $this->getIPAddr();
 		if ($this->db->isIPBlocked($ipaddress))
 		{

@@ -84,6 +84,13 @@
 					description="USERID_DESC" />
 			</fieldset>
 			<fieldset name="advanced">
+				<field name="enabledForOrigin" type="list" default="3"
+					label="ENABLED_FOR_ORIGIN_LABEL"
+					description="ENABLED_FOR_ORIGIN_DESC">
+					<option value="1">ENABLED_FOR_FRONTEND</option>
+					<option value="2">ENABLED_FOR_BACKEND</option>
+					<option value="3">ENABLED_FOR_BOTH</option>
+				</field>
 				<field name="blockEnabled" type="list" default="1"
 					label="BLOCK_ENABLED_LABEL"
 					description="BLOCK_ENABLED_DESC">
