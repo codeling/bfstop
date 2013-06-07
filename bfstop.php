@@ -153,13 +153,12 @@ class plgSystembfstop extends JPlugin
 				JLog::ERROR);
 			return;
 		}
-		$application = JFactory::getApplication();
-		$application->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+		$this->app->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
 	}
 
 	public function isEnabledForCurrentOrigin()
 	{
-		$enabledFor = (int)$this->getParam('enabledForOrigin', 3);
+		$enabledFor = (int)$this->params->get('enabledForOrigin', 3);
 		return ( ($enabledFor & ($this->app->getClientId()+1)) != 0);
 	}
 
@@ -215,7 +214,7 @@ class plgSystembfstop extends JPlugin
 
 	function isUnblockRequest()
 	{
-		$input = JFactory::getApplication()->input;
+		$input = $this->app->input;
 		$view  = $input->getString('view', '');
 		$token = $input->getString('token', '');
 		$result = (strcmp($view, "tokenunblock") == 0 &&
@@ -248,7 +247,6 @@ class plgSystembfstop extends JPlugin
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
-			$this->app = JFactory::getApplication();
 			$this->app->close();
 		}
 	}
