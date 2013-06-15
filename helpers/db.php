@@ -20,14 +20,17 @@ class BFStopDBHelper {
 		$this->logger = $logger;
 	}
 
-	public function checkDBError()
-	{
-		$errNum = $this->db->getErrorNum();
-		if ($errNum != 0)
-		{
-			$errMsg = $this->db->getErrorMsg();
-			$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::EMERGENCY);
+	public static function checkDBError($db, $logger) {
+		$errNum = $db->getErrorNum();
+		if ($errNum != 0) {
+			$errMsg = $db->getErrorMsg();
+			$logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::EMERGENCY);
 		}
+	}
+
+	public function myCheckDBError()
+	{
+		BFStopDBHelper::checkDBError($this->db, $this->logger);
 	}
 
 	public function eventsInInterval(
@@ -51,7 +54,7 @@ class BFStopDBHelper {
 			" ".$additionalWhere;
 		$this->db->setQuery($sql);
 		$numberOfEvents = ((int)$this->db->loadResult());
-		$this->checkDBError();
+		$this->myCheckDBError();
 		return $numberOfEvents;
 	}
 
@@ -85,7 +88,7 @@ class BFStopDBHelper {
 			$this->db->quote($curTime);
 		$this->db->setQuery($sql);
 		$entries = $this->db->loadObjectList();
-		$this->checkDBError();
+		$this->myCheckDBError();
 		$result = str_pad(JText::_('USERNAME'), 25)." ".
 				str_pad(JText::_('IPADDRESS') , 15)." ".
 				str_pad(JText::_('DATETIME')  , 20)." ".
@@ -110,7 +113,7 @@ class BFStopDBHelper {
 		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
 		$numRows = $this->db->loadResult();
-		$this->checkDBError();
+		$this->myCheckDBError();
 		return ($numRows > 0);
 	}
 
@@ -125,7 +128,7 @@ class BFStopDBHelper {
 			$this->logger->log('Insert block entry failed!', JLog::WARNING);
 			$blockEntry->id = -1;
 		}
-		$this->checkDBError();
+		$this->myCheckDBError();
 		$this->setFailedLoginHandled($logEntry);
 		return $blockEntry->id;
 	}
@@ -147,7 +150,7 @@ class BFStopDBHelper {
 			$this->logger->log('Insert unblock token failed!', JLog::WARNING);
 			$tokenEntry->token = null;
 		}
-		$this->checkDBError();
+		$this->myCheckDBError();
 		return $tokenEntry->token;
 	}
 
@@ -157,7 +160,7 @@ class BFStopDBHelper {
 			$this->db->quote($token);
 		$this->db->setQuery($sql);
 		$result = $this->db->loadResult();
-		$this->checkDBError();
+		$this->myCheckDBError();
 		return $result != null;
 	}
 
@@ -166,7 +169,7 @@ class BFStopDBHelper {
 		$sql = "select email from #__users where $where LIMIT 1";
 		$this->db->setQuery($sql);
 		$emailAddress = $this->db->loadResult();
-		$this->checkDBError();
+		$this->myCheckDBError();
 		return $emailAddress;
 	}
 
@@ -178,7 +181,7 @@ class BFStopDBHelper {
 	public function insertFailedLogin($logEntry)
 	{
 		$logQuery = $this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
-		$this->checkDBError();
+		$this->myCheckDBError();
 	}
 
 	public function setFailedLoginHandled($info)
@@ -189,7 +192,7 @@ class BFStopDBHelper {
 			' AND handled=0';
 		$this->db->setQuery($sql);
 		$this->db->query();
-		$this->checkDBError();
+		$this->myCheckDBError();
 	}
 
 	public function successfulLogin($info)
