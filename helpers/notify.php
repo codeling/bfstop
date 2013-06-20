@@ -94,7 +94,9 @@ class BFStopNotifier
 		$mail->setSubject($subject);
 		$mail->setBody($body);
 		$mail->addRecipient($emailAddress);
-		$sendSuccess = $mail->Send();
+		$sendResult = $mail->Send();
+		$this->logger->log("phpmailer returned: $sendResult");
+		$sendSuccess = ($sendResult === true);
 		$this->logger->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
 			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)), JLog::INFO);
 		return $sendSuccess;
