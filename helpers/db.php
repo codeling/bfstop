@@ -108,8 +108,8 @@ class BFStopDBHelper {
 	{
 		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip b WHERE ipaddress=".
 			$this->db->quote($ipaddress);
-		$sqlCheck .= " AND DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= '".
-			date("Y-m-d H:i:s")."'";
+		$sqlCheck .= " AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= '".
+			date("Y-m-d H:i:s")."')";
 		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
 		$numRows = $this->db->loadResult();

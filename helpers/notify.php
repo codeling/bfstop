@@ -95,7 +95,6 @@ class BFStopNotifier
 		$mail->setBody($body);
 		$mail->addRecipient($emailAddress);
 		$sendResult = $mail->Send();
-		$this->logger->log("phpmailer returned: $sendResult");
 		$sendSuccess = ($sendResult === true);
 		$this->logger->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
 			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)), JLog::INFO);
@@ -135,7 +134,7 @@ class BFStopNotifier
 		$userEmail = $this->db->getUserEmailByName($username);
 		if ($userEmail != null)
 		{
-			$this->logger->log("User ".$username." was blocked, sending unblock instructions", JLog::DEBUG);
+			$this->logger->log("Existing user '".$username."' was blocked, sending unblock instructions", JLog::DEBUG);
 			$siteName = $this->getSiteName();
 			$this->sendMail(
 				JText::sprintf('BLOCKED_SUBJECT', $siteName),
