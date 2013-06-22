@@ -148,13 +148,16 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="loggingEnabled" type="list" default="0"
-					label="LOGGING_ENABLED_LABEL"
-					description="LOGGING_ENABLED_DESC">
+				<field name="logLevel" type="list" default="0"
+					label="LOGLEVEL_LABEL"
+					description="LOGLEVEL_DESC">
 					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					<option value="2">FATAL</option>
+					<option value="8">ERROR</option>
+					<option value="16">WARNING</option>
+					<option value="64">INFO</option>
+					<option value="128">DEBUG</option>
 				</field>
-
 			</fieldset>
 		</fields>
 	</config>

@@ -123,7 +123,7 @@ class plgSystembfstop extends JPlugin
 	
 	private function init()
 	{
-		$this->logger = new BFStopLogger((bool)$this->params->get('loggingEnabled', false));
+		$this->logger = new BFStopLogger((int)$this->params->get('logLevel', BFStopLogger::Disabled));
 		$this->db  = new BFStopDBHelper($this->logger);
 		$this->notifier = new BFStopNotifier($this->logger, $this->db,
 			(int)$this->params->get( 'emailtype' ),
@@ -146,14 +146,15 @@ class plgSystembfstop extends JPlugin
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
 		$this->logger->log("Failed logins: $numberOfFailedLogins; allowed: $allowedAttempts", JLog::DEBUG);
-		if ($attemptsLeft < 0)
-		{
+		if ($attemptsLeft < 0) {
 			$this->logger->log('Remaining attempts below zero ('.$attemptsLeft.
 				'), that should not happen. ',
 				JLog::ERROR);
 			return;
 		}
-		$this->app->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+		if ($attemptsLeft > 0) {
+			$this->app->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+		}
 	}
 
 	public function isEnabledForCurrentOrigin()
