@@ -148,7 +148,7 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
-				<field name="logLevel" type="list" default="0"
+				<field name="logLevel" type="list" default="8"
 					label="LOGLEVEL_LABEL"
 					description="LOGLEVEL_DESC">
 					<option value="0">DISABLED</option>
