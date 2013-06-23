@@ -9,7 +9,7 @@
 	<homepage>https://github.com/codeling/bfstop</homepage>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
-	<version>0.9.11beta1</version>
+	<version>0.9.11</version>
 	<scriptfile>setupscripts.php</scriptfile>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>

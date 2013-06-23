@@ -1,10 +1,12 @@
-0.9.11beta1 (2013-06-07)
+0.9.11 (2013-06-23)
+  - Improves blocked list status output
+  - Common log setting with configurable log levels
   - Adds ca-ES translations (thanks to nouespai)
   - Adds fr-FR translations (thanks to Flying_Lolo)
   - Adds nl-NL translations (thanks to Agrusoft)
   - Adds es-ES translations (thanks to Aimagen)
   - Optionally enable plugin only for backend or frontend
-  - When desired, after a configurable number of blocks the block duration can be set to permanent on the next block
+  - After a configurable number of blocks the block duration can be set to permanent on the next block
   - Update via automatic Joomla! update mechanism
   - Warning if there is a user with username 'admin'
   - View failed login attempts in backend
