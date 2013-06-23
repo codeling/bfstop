@@ -129,7 +129,7 @@ class BFStopDBHelper {
 			$blockEntry->id = -1;
 		}
 		$this->myCheckDBError();
-		$this->setFailedLoginHandled($logEntry);
+		$this->setFailedLoginHandled($logEntry, false);
 		return $blockEntry->id;
 	}
 
@@ -184,12 +184,14 @@ class BFStopDBHelper {
 		$this->myCheckDBError();
 	}
 
-	public function setFailedLoginHandled($info)
+	public function setFailedLoginHandled($info, $restrictOnUsername)
 	{
 		$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
-			' WHERE username='.$this->db->quote($info->username).
-			' AND ipaddress='.$this->db->quote($info->ipaddress).
+			' WHERE ipaddress='.$this->db->quote($info->ipaddress).
 			' AND handled=0';
+		if ($restrictOnUsername) {
+			$sql .= ' AND username='.$this->db->quote($info->username);
+		}
 		$this->db->setQuery($sql);
 		$this->db->query();
 		$this->myCheckDBError();
@@ -197,7 +199,7 @@ class BFStopDBHelper {
 
 	public function successfulLogin($info)
 	{
-		$this->setFailedLoginHandled($info);
+		$this->setFailedLoginHandled($info, true);
 	}
 
 	public function getUserEmailByName($username)
