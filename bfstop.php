@@ -95,7 +95,7 @@ class plgSystembfstop extends JPlugin
 			: $duration;
 	}
 
-	function getBlockInterval($ipaddress)
+	function getBlockInterval()
 	{
 		$blockDuration = (int)$this->params->get('blockDuration',
 			BFStopNotifier::$ONE_DAY);
@@ -104,7 +104,7 @@ class plgSystembfstop extends JPlugin
 
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = $this->getBlockInterval($logEntry->ipaddress);
+		$interval = $this->getBlockInterval();
 		$maxNumber = (int)$this->params->get('blockNumber', 15);
 		if ($this->db->getNumberOfFailedLogins(
 			$interval,
@@ -142,7 +142,7 @@ class plgSystembfstop extends JPlugin
 		}
 		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
 		$numberOfFailedLogins = $this->db->getNumberOfFailedLogins(
-			$this->getBlockInterval($logEntry->ipaddress),
+			$this->getBlockInterval(),
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
 		$this->logger->log("Failed logins: $numberOfFailedLogins; allowed: $allowedAttempts", JLog::DEBUG);
