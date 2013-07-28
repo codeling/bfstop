@@ -95,6 +95,13 @@ class plgSystembfstop extends JPlugin
 			: $duration;
 	}
 
+	function getDBDuration($duration)
+	{
+		return ($duration >= BFStopDBHelper::$UNLIMITED_DURATION)
+			? 0
+			: $duration;
+	}
+
 	function getBlockInterval()
 	{
 		$blockDuration = (int)$this->params->get('blockDuration',
@@ -112,7 +119,7 @@ class plgSystembfstop extends JPlugin
 			$logEntry->logtime) < $maxNumber) {
 			return;
 		}
-		$this->block($logEntry, $interval);
+		$this->block($logEntry, $this->getDBDuration($interval));
 	}
 
 
