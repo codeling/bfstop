@@ -16,8 +16,8 @@ require_once dirname(__FILE__).'/helpers/notify.php';
 
 class plgSystembfstop extends JPlugin
 {
-	private $db;
-	private $app;
+	private $myapp;
+	private $mydb;
 	private $logger;
 
 	function plgSystembfstop(& $subject, $config) 
@@ -37,7 +37,7 @@ class plgSystembfstop extends JPlugin
 
 	function getUnblockLink($id)
 	{
-		$token = $this->db->getNewUnblockToken($id);
+		$token = $this->mydb->getNewUnblockToken($id);
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
@@ -59,7 +59,7 @@ class plgSystembfstop extends JPlugin
 		}
 		// if the IP address is blocked we actually shouldn't be here in the first place
 		// I guess, but just to make sure
-		if ($this->db->isIPBlocked($logEntry->ipaddress))
+		if ($this->mydb->isIPBlocked($logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
 			return;
@@ -67,7 +67,7 @@ class plgSystembfstop extends JPlugin
 		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
 		if ($maxBlocksBefore > 0)
 		{
-			$numberOfPrevBlocks = $this->db->getNumberOfPreviousBlocks($logEntry->ipaddress);
+			$numberOfPrevBlocks = $this->mydb->getNumberOfPreviousBlocks($logEntry->ipaddress);
 			$this->logger->log('Number of previous blocks for IP='.$logEntry->ipaddress.': '.$numberOfPrevBlocks, JLog::DEBUG);
 			if ($numberOfPrevBlocks >= $maxBlocksBefore)
 			{
@@ -75,7 +75,7 @@ class plgSystembfstop extends JPlugin
 				$duration = 0;
 			}
 		}
-		$id = $this->db->blockIP($logEntry, $duration);
+		$id = $this->mydb->blockIP($logEntry, $duration);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
 		// send email notification to admin
@@ -106,7 +106,7 @@ class plgSystembfstop extends JPlugin
 	{
 		$interval = $this->getBlockInterval();
 		$maxNumber = (int)$this->params->get('blockNumber', 15);
-		if ($this->db->getNumberOfFailedLogins(
+		if ($this->mydb->getNumberOfFailedLogins(
 			$interval,
 			$logEntry->ipaddress,
 			$logEntry->logtime) < $maxNumber) {
@@ -124,12 +124,12 @@ class plgSystembfstop extends JPlugin
 	private function init()
 	{
 		$this->logger = new BFStopLogger((int)$this->params->get('logLevel', BFStopLogger::Disabled));
-		$this->db  = new BFStopDBHelper($this->logger);
-		$this->notifier = new BFStopNotifier($this->logger, $this->db,
+		$this->mydb  = new BFStopDBHelper($this->logger);
+		$this->notifier = new BFStopNotifier($this->logger, $this->mydb,
 			(int)$this->params->get( 'emailtype' ),
 			$this->params->get('emailaddress'),
 			$this->params->get('userIDs'));
-		$this->app = JFactory::getApplication();
+		$this->myapp = JFactory::getApplication();
 	}
 
 	function notifyOfRemainingAttempts($logEntry)
@@ -141,7 +141,7 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
-		$numberOfFailedLogins = $this->db->getNumberOfFailedLogins(
+		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
 			$this->getBlockInterval(),
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
@@ -153,14 +153,14 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		if ($attemptsLeft > 0) {
-			$this->app->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+			$this->myapp->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
 		}
 	}
 
 	public function isEnabledForCurrentOrigin()
 	{
 		$enabledFor = (int)$this->params->get('enabledForOrigin', 3);
-		return ( ($enabledFor & ($this->app->getClientId()+1)) != 0);
+		return ( ($enabledFor & ($this->myapp->getClientId()+1)) != 0);
 	}
 
  	public function onUserLoginFailure($user, $options=null)
@@ -183,12 +183,12 @@ class plgSystembfstop extends JPlugin
 		$logEntry->logtime   = date("Y-m-d H:i:s");
 		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
-		$logEntry->origin    = $this->app->getClientId();
+		$logEntry->origin    = $this->myapp->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.$logEntry->ipaddress, JLog::DEBUG);
 	
 		// insert into log:
-		$this->db->insertFailedLogin($logEntry);
+		$this->mydb->insertFailedLogin($logEntry);
 
 		$this->notifyOfRemainingAttempts($logEntry);
 
@@ -210,16 +210,16 @@ class plgSystembfstop extends JPlugin
 		$info->username  = $user['username'];
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, JLog::DEBUG);
-		$this->db->successfulLogin($info);
+		$this->mydb->successfulLogin($info);
 	}
 
 	function isUnblockRequest()
 	{
-		$input = $this->app->input;
+		$input = $this->myapp->input;
 		$view  = $input->getString('view', '');
 		$token = $input->getString('token', '');
 		$result = (strcmp($view, "tokenunblock") == 0 &&
-			$this->db->unblockTokenExists($token));
+			$this->mydb->unblockTokenExists($token));
 		if ($result) {
 			$this->logger->log('Seeing valid unblock token ('.
 				$token.'), letting the request pass through to com_bfstop',
@@ -236,10 +236,10 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		$ipaddress = $this->getIPAddr();
-		if ($this->db->isIPBlocked($ipaddress))
+		if ($this->mydb->isIPBlocked($ipaddress))
 		{
 			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
-				$this->db->getClientString($this->app->getClientId()),
+				$this->mydb->getClientString($this->myapp->getClientId()),
 				JLog::INFO );
 			if ($this->isUnblockRequest())
 			{
@@ -248,7 +248,7 @@ class plgSystembfstop extends JPlugin
 			JPlugin::loadLanguage('plg_system_bfstop');
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
-			$this->app->close();
+			$this->myapp->close();
 		}
 	}
 }
