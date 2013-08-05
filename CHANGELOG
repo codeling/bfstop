@@ -1,3 +1,9 @@
+1.0.0beta1 (2013-08-05)
+  - Possibility to send HTTP status code 403 instead of 200 in case of block
+  - fix Joomla 3.1.4 compatibility
+  - fix php 5.2 compatibility issue introduced with 0.9.11
+  - fix issue with display of permanent blocks
+
 0.9.11 (2013-06-23)
   - Improves blocked list status output
   - Common log setting with configurable log levels

@@ -3,8 +3,6 @@ Joomla System Plugin
 
 This is the plugin part of the Brute Force Stop Joomla! Extension package.
 
-Warning:  There have been reports that the bfstop plugin does not work with the latest 3.1.4 Joomla version. Until these problems have been resolved (which will be reported here by releasing a new version of bfstop) it is recommended to either stick with Joomla version 3.1.1 or to remove bfstop BEFORE the upgrade! For details, see this bug report: https://github.com/codeling/bfstop/issues/39#issuecomment-21666898
-
 For detailed information, as well as instructions on how to download, install
 and configure it, please browse to
 https://github.com/codeling/bfstop/wiki
