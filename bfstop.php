@@ -253,6 +253,10 @@ class plgSystembfstop extends JPlugin
 				return;
 			}
 			JPlugin::loadLanguage('plg_system_bfstop');
+			if ($this->params->get('useHttpError', false))
+			{
+				header('HTTP/1.0 403 Forbidden');
+			}
 			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
 			$this->myapp->close();

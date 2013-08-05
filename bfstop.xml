@@ -158,6 +158,12 @@
 					<option value="64">INFO</option>
 					<option value="128">DEBUG</option>
 				</field>
+				<field name="useHttpError" type="list" default="1"
+					label="USE_HTTP_ERROR_LABEL"
+					description="USE_HTTP_ERROR_DESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
 			</fieldset>
 		</fields>
 	</config>
