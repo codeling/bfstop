@@ -133,15 +133,10 @@ class BFStopDBHelper {
 		return $blockEntry->id;
 	}
 
-	public function getNewUnblockToken($id)
+	public function getNewUnblockToken($id, $token)
 	{
-		$strongCrypto = false;
 		$tokenEntry = new stdClass();
-		$tokenEntry->token = sha1(openssl_random_pseudo_bytes(64, $strongCrypto));
-		if (!$strongCrypto)
-		{
-			$this->logger->log('Your server does not use strong cryptographics to produce tokens!', JLog::WARNING);
-		}
+		$tokenEntry->token = $token;
 		$tokenEntry->block_id = $id;
 		$tokenEntry->crdate = date("Y-m-d H:i:s");
 		if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))

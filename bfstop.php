@@ -13,6 +13,7 @@ jimport('joomla.log.log');
 require_once dirname(__FILE__).'/helpers/log.php';
 require_once dirname(__FILE__).'/helpers/db.php';
 require_once dirname(__FILE__).'/helpers/notify.php';
+require_once dirname(__FILE__).'/helpers/crypto.php';
 
 class plgSystembfstop extends JPlugin
 {
@@ -37,7 +38,8 @@ class plgSystembfstop extends JPlugin
 
 	function getUnblockLink($id)
 	{
-		$token = $this->mydb->getNewUnblockToken($id);
+		$token = $this->mydb->getNewUnblockToken($id,
+			BFStopTokenGenerator::getToken($this->logger));
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
