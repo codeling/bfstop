@@ -18,11 +18,13 @@ class BFStopNotifier
 		}
 		else if ($config == 0)
 		{
-			$this->notifyAddress = $this->db->getUserEmailByID($userID);
+			$this->notifyAddress = $this->db->getUserEmailByID(
+				$userID);
 		}
 		else
 		{
-			$this->logger->log('Invalid source for retrieval of email address!', JLog::ERROR);
+			$this->logger->log('Invalid source for retrieval of '.
+				'email address!', JLog::ERROR);
 		}
 	}
 
@@ -35,7 +37,9 @@ class BFStopNotifier
 	{
 		$config = JFactory::getConfig();
 		$siteName = $config->get('sitename');	// Joomla! 3.x
-		$siteName = (strcmp($siteName,'') == 0) ? $config->get('config.sitename') : $siteName;
+		$siteName = (strcmp($siteName,'') == 0)
+			? $config->get('config.sitename')
+			: $siteName;
 		return $siteName;
 	}
 
@@ -75,11 +79,16 @@ class BFStopNotifier
 		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
 			JURI::root()) ."\n";
-		$bodys.= str_pad(JText::_('USERNAME').":",15)  . $logEntry->username  ."\n";
-		$bodys.= str_pad(JText::_('IPADDRESS').":",15) . $logEntry->ipaddress ."\n";
-		$bodys.= str_pad(JText::_('ERROR').":",15)     . $logEntry->error     ."\n";
-		$bodys.= str_pad(JText::_('DATETIME').":",15)  . $logEntry->logtime   ."\n";
-		$bodys.= str_pad(JText::_('ORIGIN').":",15)    . $this->db->getClientString($logEntry->origin)."\n";
+		$bodys.= str_pad(JText::_('USERNAME').":",15) .
+			$logEntry->username  ."\n";
+		$bodys.= str_pad(JText::_('IPADDRESS').":",15).
+			$logEntry->ipaddress ."\n";
+		$bodys.= str_pad(JText::_('ERROR').":",15)    .
+			$logEntry->error     ."\n";
+		$bodys.= str_pad(JText::_('DATETIME').":",15) .
+			$logEntry->logtime   ."\n";
+		$bodys.= str_pad(JText::_('ORIGIN').":",15)   .
+			$this->db->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
 
@@ -87,7 +96,8 @@ class BFStopNotifier
 	{
 		if (!isset($emailAddress) || strcmp($emailAddress, '') == 0)
 		{
-			$this->logger->log('No user selected or no email address specified!', JLog::ERROR);
+			$this->logger->log('No user selected or no email '.
+				'address specified!', JLog::ERROR);
 			return;
 		}
 		$mail = JFactory::getMailer();
@@ -96,14 +106,18 @@ class BFStopNotifier
 		$mail->addRecipient($emailAddress);
 		$sendResult = $mail->Send();
 		$sendSuccess = ($sendResult === true);
-		$this->logger->log('Sent email to '.$emailAddress.', subject: '.$subject.'; '.
-			(($sendSuccess)?'successful':'not successful: '.json_encode($mail->ErrorInfo)), JLog::INFO);
+		$this->logger->log('Sent email to '.$emailAddress.
+			', subject: '.$subject.'; '.(($sendSuccess)
+				? 'successful'
+				:'not successful: '.
+				json_encode($mail->ErrorInfo)), JLog::INFO);
 		return $sendSuccess;
 	}
 
 	public function failedLogin($logEntry, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber))
+		if (!$this->isNotificationAllowed($logEntry->logtime,
+			$maxNumber))
 		{
 			return;
 		}
@@ -129,23 +143,16 @@ class BFStopNotifier
 		$this->sendMail($subject, $body, $this->notifyAddress);
 	}
 
-	public function sendUnblockMail($username, $unblockLink)
+	public function sendUnblockMail($userEmail, $unblockLink)
 	{
-		$userEmail = $this->db->getUserEmailByName($username);
-		if ($userEmail != null)
-		{
-			$this->logger->log("Existing user '".$username."' was blocked, sending unblock instructions", JLog::DEBUG);
-			$siteName = $this->getSiteName();
-			$this->sendMail(
-				JText::sprintf('BLOCKED_SUBJECT', $siteName),
-				JText::sprintf('BLOCKED_BODY',
-					$siteName,
-					$unblockLink
-				),
-				$userEmail);
-		} else {
-			$this->logger->log("Unknown user (".$username.") blocked, not sending any notifications", JLog::DEBUG);
-		}
+		$siteName = $this->getSiteName();
+		$this->sendMail(
+			JText::sprintf('BLOCKED_SUBJECT', $siteName),
+			JText::sprintf('BLOCKED_BODY',
+				$siteName,
+				$unblockLink
+			),
+			$userEmail);
 	}
 }
 

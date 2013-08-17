@@ -48,7 +48,8 @@ class plgSystembfstop extends JPlugin
 		$adminDir = 'administrator/';
 		if (self::endsWith($linkBase, $adminDir))
 		{
-			$linkBase = substr($linkBase, 0, strlen($linkBase)-strlen($adminDir));
+			$linkBase = substr($linkBase, 0,
+				strlen($linkBase)-strlen($adminDir));
 		}
 		return $linkBase.$link;
 	}
@@ -59,34 +60,57 @@ class plgSystembfstop extends JPlugin
 		if (!$blockEnabled) {
 			return;
 		}
-		// if the IP address is blocked we actually shouldn't be here in the first place
-		// I guess, but just to make sure
+		// if the IP address is blocked we actually shouldn't be here in
+		// the first place I guess, but just to make sure
 		if ($this->mydb->isIPBlocked($logEntry->ipaddress))
 		{
-			$this->logger->log('IP '.$logEntry->ipaddress.' is already blocked!', JLog::WARNING);
+			$this->logger->log('IP '.$logEntry->ipaddress.
+				' is already blocked!', JLog::WARNING);
 			return;
 		}
 		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
 		if ($maxBlocksBefore > 0)
 		{
-			$numberOfPrevBlocks = $this->mydb->getNumberOfPreviousBlocks($logEntry->ipaddress);
-			$this->logger->log('Number of previous blocks for IP='.$logEntry->ipaddress.': '.$numberOfPrevBlocks, JLog::DEBUG);
+			$numberOfPrevBlocks = $this->mydb->
+				getNumberOfPreviousBlocks($logEntry->ipaddress);
+			$this->logger->log('Number of previous blocks for IP='.
+				$logEntry->ipaddress.': '.$numberOfPrevBlocks,
+				JLog::DEBUG);
 			if ($numberOfPrevBlocks >= $maxBlocksBefore)
 			{
-				$this->logger->log('Number of previous blocks exceeds configured maximum, blocking permanently!', JLog::INFO);
+				$this->logger->log('Number of previous blocks '.
+					'exceeds configured maximum, blocking '.
+					'permanently!', JLog::INFO);
 				$duration = 0;
 			}
 		}
 		$id = $this->mydb->blockIP($logEntry, $duration);
 
-		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', JLog::INFO);
+		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
+			' into block list', JLog::INFO);
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
 			$this->params->get('notifyBlockedNumber', 5));
 		if ((bool)$this->params->get('notifyBlockedUser', false))
 		{
-			$this->notifier->sendUnblockMail($logEntry->username, $this->getUnblockLink($id));
+			$userEmail = $this->mydb->getUserEmailByName(
+				$logEntry->username);
+			if ($userEmail != null)
+			{
+				$this->logger->log("Existing user '".
+					$logEntry->username.
+					"' was blocked, sending unblock ".
+					"instructions",
+					JLog::INFO);
+				$this->notifier->sendUnblockMail($userEmail,
+					$this->getUnblockLink($id));
+			} else {
+				$this->logger->log('Unknown user ('.
+					$logEntry->username.
+					') blocked, not sending any '.
+					'notifications', JLog::DEBUG);
+			}
 		}
 	}
 
@@ -132,7 +156,8 @@ class plgSystembfstop extends JPlugin
 	
 	private function init()
 	{
-		$this->logger = new BFStopLogger((int)$this->params->get('logLevel', BFStopLogger::Disabled));
+		$this->logger = new BFStopLogger((int)$this->params->get(
+			'logLevel', BFStopLogger::Disabled));
 		$this->mydb  = new BFStopDBHelper($this->logger);
 		$this->notifier = new BFStopNotifier($this->logger, $this->mydb,
 			(int)$this->params->get( 'emailtype' ),
@@ -143,9 +168,11 @@ class plgSystembfstop extends JPlugin
 
 	function notifyOfRemainingAttempts($logEntry)
 	{
-		// remaining attempts notification only makes sense if we even do block...
+		// remaining attempts notification only makes sense if we
+		// actually block
 		if ( !(bool)$this->params->get('blockEnabled', true) ||
-			!(bool)$this->params->get('notifyRemainingAttempts', false) )
+			!(bool)$this->params->get('notifyRemainingAttempts',
+				false) )
 		{
 			return;
 		}
@@ -154,15 +181,17 @@ class plgSystembfstop extends JPlugin
 			$this->getBlockInterval(),
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
-		$this->logger->log("Failed logins: $numberOfFailedLogins; allowed: $allowedAttempts", JLog::DEBUG);
+		$this->logger->log("Failed logins: $numberOfFailedLogins; ".
+			"allowed: $allowedAttempts", JLog::DEBUG);
 		if ($attemptsLeft < 0) {
-			$this->logger->log('Remaining attempts below zero ('.$attemptsLeft.
-				'), that should not happen. ',
+			$this->logger->log('Remaining attempts below zero ('.
+				$attemptsLeft.'), that should not happen. ',
 				JLog::ERROR);
 			return;
 		}
 		if ($attemptsLeft > 0) {
-			$this->myapp->enqueueMessage(JText::sprintf("X_ATTEMPTS_LEFT", $attemptsLeft));
+			$this->myapp->enqueueMessage(JText::sprintf(
+				"X_ATTEMPTS_LEFT", $attemptsLeft));
 		}
 	}
 
@@ -194,7 +223,8 @@ class plgSystembfstop extends JPlugin
 		$logEntry->username  = $user['username'];
 		$logEntry->origin    = $this->myapp->getClientId();
 
-		$this->logger->log('Failed login attempt from IP address '.$logEntry->ipaddress, JLog::DEBUG);
+		$this->logger->log('Failed login attempt from IP address '.
+			$logEntry->ipaddress, JLog::DEBUG);
 	
 		// insert into log:
 		$this->mydb->insertFailedLogin($logEntry);
@@ -231,7 +261,8 @@ class plgSystembfstop extends JPlugin
 			$this->mydb->unblockTokenExists($token));
 		if ($result) {
 			$this->logger->log('Seeing valid unblock token ('.
-				$token.'), letting the request pass through to com_bfstop',
+				$token.'), letting the request pass through '.
+				'to com_bfstop',
 				JLog::INFO);
 		}
 		return $result;
@@ -247,8 +278,10 @@ class plgSystembfstop extends JPlugin
 		$ipaddress = $this->getIPAddr();
 		if ($this->mydb->isIPBlocked($ipaddress))
 		{
-			$this->logger->log("Blocked IP Address $ipaddress trying to access ".
-				$this->mydb->getClientString($this->myapp->getClientId()),
+			$this->logger->log("Blocked IP Address $ipaddress ".
+				"trying to access ".
+				$this->mydb->getClientString(
+					$this->myapp->getClientId()),
 				JLog::INFO );
 			if ($this->isUnblockRequest())
 			{
@@ -259,7 +292,8 @@ class plgSystembfstop extends JPlugin
 			{
 				header('HTTP/1.0 403 Forbidden');
 			}
-			$message = $this->params->get('blockedMessage', JText::_('BLOCKED_IP_MESSAGE'));
+			$message = $this->params->get('blockedMessage',
+				JText::_('BLOCKED_IP_MESSAGE'));
 			echo $message;
 			$this->myapp->close();
 		}

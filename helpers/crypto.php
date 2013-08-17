@@ -25,7 +25,7 @@ class BFStopTokenGenerator {
 		if (function_exists('openssl_random_pseudo_bytes') ||
 			is_callable('openssl_random_pseudo_bytes'))
 		{
-			$logger->log('Using OpenSSL random number generator for token', JLog::INFO);
+			$logger->log('Using OpenSSL random number generator for token', JLog::DEBUG);
 			$token = openssl_random_pseudo_bytes($length, $strongCrypto);
 			if (!$strongCrypto)
 			{
@@ -37,7 +37,7 @@ class BFStopTokenGenerator {
 			(strtoupper(substr(PHP_OS, 0, 3)) !== 'WIN' ||
 			version_compare(phpversion(), '5.3.7') > 0) )
 		{
-			$logger->log('Using mcrypt for token', JLog::INFO);
+			$logger->log('Using mcrypt for token', JLog::DEBUG);
 			$seed = mcrypt_create_iv($length, MCRYPT_DEV_URANDOM);
 			if ($seed != false && strlen($seed) == $length) {
 				$token = $seed;
