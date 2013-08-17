@@ -61,10 +61,10 @@
 		<fields name="params">
 			<fieldset name="basic">
 				<field name="blockNumber" type="integer"
-					default="15" first="3" last="25" step="1"
+					default="10" first="3" last="25" step="1"
 					label="BLOCK_NUMBER_LABEL"
 					description="BLOCK_NUMBER_DESC" />
-				<field name="blockDuration" type="list" default="0"
+				<field name="blockDuration" type="list" default="1440"
 					label="BLOCK_DURATION_LABEL"
 					description="BLOCK_DURATION_DESC">
 					<option    value="0">BLOCK_UNLIMITED</option>
@@ -125,7 +125,7 @@
 					label="BLOCKED_MESSAGE_LABEL"
 					description="BLOCKED_MESSAGE_DESC" />
 				<field name="delayDuration" type="integer"
-					default="0" first="0" last="60" step="5"
+					default="5" first="0" last="60" step="5"
 					label="DELAY_DURATION_LABEL"
 					description="DELAY_DURATION_DESC" />
 				<field name="notifyBlockedUser" type="list" default="0"
