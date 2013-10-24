@@ -151,7 +151,7 @@ class plgSystembfstop extends JPlugin
 
 	function getIPAddr()
 	{
-		return getenv('REMOTE_ADDR');
+		return $_SERVER['REMOTE_ADDR'];
 	}
 	
 	private function init()
