@@ -172,6 +172,10 @@
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
+				<field name="deleteOld" type="integer" default="0"
+					first="0" last="24" step="1"
+					label="DELETE_OLD_ENTRIES_LABEL"
+					description="DELETE_OLD_ENTRIES_DESC" />
 			</fieldset>
 		</fields>
 	</config>

@@ -275,6 +275,7 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
+		$this->mydb->purgeOldEntries((int)$this->params->get('deleteOld', 0));
 		$ipaddress = $this->getIPAddr();
 		if ($this->mydb->isIPBlocked($ipaddress))
 		{

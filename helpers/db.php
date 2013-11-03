@@ -201,4 +201,19 @@ class BFStopDBHelper {
 	{
 		return $this->getUserEmailWhere("username='$username'");
 	}
+
+	public function purgeOldEntries($olderThanWeeks)
+	{
+		if ($olderThanWeeks == 0)
+		{
+			return;
+		}
+		$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < DATE_SUB('.
+			' NOW(), INTERVAL '.
+			$this->db->quote($olderThanWeeks).
+			' WEEK)';
+		$this->db->setQuery($sql);
+		$this->db->query();
+		$this->myCheckDBError();
+	}
 }
