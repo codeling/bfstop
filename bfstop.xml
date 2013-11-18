@@ -124,10 +124,6 @@
 				<field name="blockedMessage" type="text" size="40" default=""
 					label="BLOCKED_MESSAGE_LABEL"
 					description="BLOCKED_MESSAGE_DESC" />
-				<field name="delayDuration" type="integer"
-					default="5" first="0" last="60" step="5"
-					label="DELAY_DURATION_LABEL"
-					description="DELAY_DURATION_DESC" />
 				<field name="notifyBlockedUser" type="list" default="0"
 					label="NOTIFY_BLOCKED_USER_LABEL"
 					description="NOTIFY_BLOCKED_USER_DESC">
@@ -176,6 +172,31 @@
 					first="0" last="24" step="1"
 					label="DELETE_OLD_ENTRIES_LABEL"
 					description="DELETE_OLD_ENTRIES_DESC" />
+			</fieldset>
+			<fieldset name="delay" label="DELAY_FIELDSET_LABEL">
+				<field name="delayDuration" type="integer"
+					default="0" first="0" last="120" step="5"
+					label="DELAY_DURATION_LABEL"
+					description="DELAY_DURATION_DESC" />
+				<field name="adaptiveDelay" type="list" default="0"
+					label="ADAPTIVE_DELAY_LABEL"
+                                        description="ADAPTIVE_DELAY_DESC" >
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+
+				<field name="adaptiveDelayMax" type="integer" default="0"
+					first="0" last="120" step="5"
+					label="ADAPTIVE_DELAY_MAX_LABEL"
+					description="ADAPTIVE_DELAY_MAX_DESC" />
+				<field name="adaptiveDelayThresholdMin" type="integer" default="50"
+					first="0" last="500" step="25"
+					label="ADAPTIVE_DELAY_THRSH_MIN_LABEL"
+					description="ADAPTIVE_DELAY_THRSH_MIN_DESC" />
+				<field name="adaptiveDelayThresholdMax" type="integer" default="200"
+					first="100" last="2000" step="100"
+					label="ADAPTIVE_DELAY_THRSH_MAX_LABEL"
+					description="ADAPTIVE_DELAY_THRSH_MAX_DESC" />
 			</fieldset>
 		</fields>
 	</config>

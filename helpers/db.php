@@ -67,6 +67,19 @@ class BFStopDBHelper {
 			'logtime');
 	}
 
+	public function getFailedLoginsInLastHour()
+	{
+		$nowDateTime = date("Y-m-d H:i:s");
+		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
+			"WHERE logtime > DATE_SUB(".
+				$this->db->quote($nowDateTime).
+			", INTERVAL 1 HOUR)";
+		$this->db->setQuery($sql);
+		$numRows = $this->db->loadResult();
+		$this->myCheckDBError();
+		return $numRows;
+	}
+
 	public function getNumberOfPreviousBlocks($ipaddress)
 	{
 		$interval = self::$UNLIMITED_DURATION;

@@ -201,6 +201,46 @@ class plgSystembfstop extends JPlugin
 		return ( ($enabledFor & ($this->myapp->getClientId()+1)) != 0);
 	}
 
+	public function determineDelayDuration()
+	{
+		$delayDuration = (int)$this->params->get('delayDuration', 0);
+		$adaptive = (bool)$this->params->get('adaptiveDelay', false);
+		if ($adaptive)
+		{
+			$maxDelay = (int)$this->params->get('adaptiveDelayMax', 60);
+			$lowThreshold = (int)$this->params->get('adaptiveDelayThresholdMin', 50);
+			$highThreshold = (int)$this->params->get('adaptiveDelayThresholdMax', 1000);
+			if ($lowThreshold > $highThreshold)
+			{
+				$tmp = $lowThreshold;
+				$lowThreshold = $highThreshold;
+				$highThreshold = $tmp;
+				$this->logger->log('Lower threshold is configured to a smaller value than higher threshold!'.
+					' Please correct! Swapping the values for now!',
+					JLog::WARNING);
+			}
+			if ($lowThreshold == $highThreshold)
+			{
+				$this->logger->log('Lower and higher threshold cannot be configured to the same value!'.
+					' Either disable adaptive delay and use the delay duration instead, or'.
+					' set the thresholds to reasonable values! Using delay duration for now',
+					JLog::WARNING);
+				return $delayDuration;
+			}
+
+			$recentFailed = $this->mydb->getFailedLoginsInLastHour();
+			$recentFailed = min($recentFailed, $highThreshold);
+			if ($recentFailed > $lowThreshold)
+			{
+				$delay = $delayDuration + ($recentFailed-$lowThreshold)
+					* ($maxDelay-$delayDuration)
+					/ ($highThreshold-$lowThreshold);
+				return $delay;
+			}
+		}
+		return $delayDuration;
+	}
+
  	public function onUserLoginFailure($user, $options=null)
 	{
 		$this->init();
@@ -209,7 +249,7 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		JPlugin::loadLanguage('plg_system_bfstop');
-		$delayDuration = (int)$this->params->get('delayDuration', 0);
+		$delayDuration = $this->determineDelayDuration();
 		if ($delayDuration != 0)
 		{
 			sleep($delayDuration);
