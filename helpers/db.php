@@ -24,7 +24,7 @@ class BFStopDBHelper {
 		$errNum = $db->getErrorNum();
 		if ($errNum != 0) {
 			$errMsg = $db->getErrorMsg();
-			$logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::FATAL);
+			$logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::ERROR);
 		}
 	}
 

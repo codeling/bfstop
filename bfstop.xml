@@ -156,7 +156,6 @@
 					label="LOGLEVEL_LABEL"
 					description="LOGLEVEL_DESC">
 					<option value="0">DISABLED</option>
-					<option value="2">FATAL</option>
 					<option value="8">ERROR</option>
 					<option value="16">WARNING</option>
 					<option value="64">INFO</option>

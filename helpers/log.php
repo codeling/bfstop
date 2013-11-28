@@ -21,7 +21,7 @@ class BFStopLogger {
 		}
 	}
 
-	function isEnabled($priority = JLog::FATAL) {
+	function isEnabled($priority = JLog::ERROR) {
 		return $priority <= $this->log_level;
 	}
 
