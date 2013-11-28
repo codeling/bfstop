@@ -43,3 +43,12 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 	crdate datetime NOT NULL,
 	PRIMARY KEY (token)
 ) DEFAULT CHARSET=utf8;
+
+
+-- stores a whitelist of IPs which will never be blocked
+CREATE TABLE IF NOT EXISTS #__bfstop_whitelist (
+	id int(10) NOT NULL auto_increment,
+	ipaddress varchar(45) NOT NULL,
+	crdate datetime NOT NULL
+	PRIMARY KEY (id)
+) DEFAULT CHARSET=utf8;

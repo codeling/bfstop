@@ -10,11 +10,13 @@ class BFStopLogger {
 	function __construct($log_level)
 	{
 		$this->log_level = $log_level;
+		$priorities = JLog::ALL;
 		if ($log_level > self::Disabled)
 		{
 			JLog::addLogger(array(
 				'text_file' => 'plg_system_bfstop.log.php'
-			), JLog::ALL,
+			),
+			$priorities,
 			self::LogCategory);
 		}
 	}

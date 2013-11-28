@@ -65,7 +65,7 @@ class plgSystembfstop extends JPlugin
 		if ($this->mydb->isIPBlocked($logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
-				' is already blocked!', JLog::WARNING);
+				' is already blocked!', JLog::ERROR);
 			return;
 		}
 		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
@@ -248,6 +248,11 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
+		if ($this->mydb->isIPWhiteListed($this->getIPAddr()))
+		{
+			$this->logger->log('Ignoring failed login by whitelisted address '.$this->getIPAddr(), JLog::INFO);
+			return;
+		}
 		JPlugin::loadLanguage('plg_system_bfstop');
 		$delayDuration = $this->determineDelayDuration();
 		if ($delayDuration != 0)
@@ -274,7 +279,6 @@ class plgSystembfstop extends JPlugin
 		$maxNumber = (int)$this->params->get('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry);
-		return true;
 	}
 
 	public function OnUserLogin($user, $options)
@@ -317,6 +321,10 @@ class plgSystembfstop extends JPlugin
 		}
 		$this->mydb->purgeOldEntries((int)$this->params->get('deleteOld', 0));
 		$ipaddress = $this->getIPAddr();
+		if ($this->mydb->isIPWhiteListed($ipaddress))
+		{
+			return;
+		}
 		if ($this->mydb->isIPBlocked($ipaddress))
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".

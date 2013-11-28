@@ -138,7 +138,7 @@ class BFStopDBHelper {
 		$blockEntry->duration = $duration;
 		if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
 		{
-			$this->logger->log('Insert block entry failed!', JLog::WARNING);
+			$this->logger->log('Insert block entry failed!', JLog::ERROR);
 			$blockEntry->id = -1;
 		}
 		$this->myCheckDBError();
@@ -155,7 +155,7 @@ class BFStopDBHelper {
 		if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
 		{
 			// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
-			$this->logger->log('Insert unblock token failed!', JLog::WARNING);
+			$this->logger->log('Insert unblock token failed!', JLog::ERROR);
 			$tokenEntry->token = null;
 		}
 		$this->myCheckDBError();
@@ -228,5 +228,14 @@ class BFStopDBHelper {
 		$this->db->setQuery($sql);
 		$this->db->query();
 		$this->myCheckDBError();
+	}
+
+	public function isIPWhiteListed($ipaddress)
+	{
+		$sql = "SELECT COUNT(*) from #__bfstop_whitelist where ipaddress='$ipaddress'";
+		$this->db->setQuery($sql);
+		$numRows = $this->db->loadResult();
+		$this->myCheckDBError();
+		return ($numRows > 0);
 	}
 }
