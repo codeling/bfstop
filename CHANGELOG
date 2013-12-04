@@ -1,3 +1,7 @@
+1.1.1 (2013-12-05)
+  - Fix installation SQL error
+  - Correctly update package instead of component and plugin separately
+
 1.1.0 (2013-12-04)
   - Adds it-IT translations - thanks to Stefano Buscaglia!
   - Updated translations (ca-ES, nl-NL, fr-FR) - thanks to maintainers!
