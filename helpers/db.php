@@ -117,17 +117,63 @@ class BFStopDBHelper {
 		return $result;
 	}
 
+	private static $NetMask = '~((1 << (32 - SUBSTR(ipaddress, LOCATE("/", ipaddress)+1, LENGTH(ipaddress)-LOCATE("/", ipaddress))))-1)';
+	private static $SubNetAddress = 'SUBSTR(ipaddress, 1, LOCATE("/", ipaddress)-1)';
+
+	public function ipAddressMatch($ipaddress)
+	{
+		return
+		"(".
+			// literal match
+			"ipaddress=".$this->db->quote($ipaddress)." OR ".
+			// IPv4 subnet match (only supports CIDR Suffix notation)
+			"(".
+				"LENGTH(ipaddress) <= 18 AND LOCATE('/', ipaddress) != 0 AND ".
+				"(INET_ATON(".$this->db->quote($ipaddress).") & ".self::$NetMask.")".
+					" = ".
+				"(INET_ATON(".self::$SubNetAddress.") & ".self::$NetMask.")".
+			")".
+			// IPv6 subnet match -> needs mysql >= 5.6.3 for INET6_ATON
+		")";
+	}
+
 	public function isIPBlocked($ipaddress)
 	{
-		$sqlCheck = "SELECT COUNT(*) from #__bfstop_bannedip b WHERE ipaddress=".
-			$this->db->quote($ipaddress);
-		$sqlCheck .= " AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= '".
-			date("Y-m-d H:i:s")."')";
-		$sqlCheck .= " AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
+		$sqlCheck = "SELECT id, ipaddress, crdate, duration FROM #__bfstop_bannedip b WHERE ".
+			$this->ipAddressMatch($ipaddress).
+			" AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= ".
+			$this->db->quote(date("Y-m-d H:i:s")).")".
+			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$this->db->setQuery($sqlCheck);
-		$numRows = $this->db->loadResult();
+		$entries = $this->db->loadObjectList();
+		foreach($entries as $entry)
+		{
+			$this->logger->log("Blocked because of entry: ".
+				"id=".$entry->id.", ".
+				"ipaddress=".$entry->ipaddress.", ".
+				"crdate=".$entry->crdate,
+				JLog::DEBUG);
+		}
 		$this->myCheckDBError();
-		return ($numRows > 0);
+		return (count($entries) > 0);
+	}
+
+	public function isIPWhiteListed($ipaddress)
+	{
+		$sql = "SELECT id, ipaddress, crdate from #__bfstop_whitelist WHERE ".
+			$this->ipAddressMatch($ipaddress);
+		$this->db->setQuery($sql);
+		$entries = $this->db->loadObjectList();
+		foreach($entries as $entry)
+		{
+			$this->logger->log("whitelisted because of entry: ".
+				"id=".$entry->id.", ".
+				"ipaddress=".$entry->ipaddress.", ".
+				"crdate=".$entry->crdate,
+				JLog::DEBUG);
+		}
+		$this->myCheckDBError();
+		return (count($entries) > 0);
 	}
 
 	public function blockIP($logEntry, $duration)
@@ -236,14 +282,15 @@ class BFStopDBHelper {
 		$this->db->query();
 		$this->myCheckDBError();
 
-	}
-
-	public function isIPWhiteListed($ipaddress)
-	{
-		$sql = "SELECT COUNT(*) from #__bfstop_whitelist where ipaddress='$ipaddress'";
+		$sql = 'DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
+			'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)';
 		$this->db->setQuery($sql);
-		$numRows = $this->db->loadResult();
+		$this->db->query();
 		$this->myCheckDBError();
-		return ($numRows > 0);
+
+		$sql = 'DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate;
+		$this->db->setQuery($sql);
+		$this->db->query();
+		$this->myCheckDBError();
 	}
 }
