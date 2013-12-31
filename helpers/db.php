@@ -229,7 +229,29 @@ class BFStopDBHelper {
 
 	public function getUserEmailByID($uid)
 	{
-		return $this->getUserEmailWhere("id='$uid'");
+		return $this->getUserEmailWhere("id=".((int)$uid));
+	}
+
+	public function getUserEmailByName($username)
+	{
+		return $this->getUserEmailWhere("username='$username'");
+	}
+
+	public function getUserGroupEmail($gid)
+	{
+		$sql = "SELECT email from #__users u ".
+			"LEFT JOIN #__user_usergroup_map g ".
+			"ON u.id = g.user_id ".
+			"WHERE g.group_id = ".((int)($gid));
+		$this->db->setQuery($sql);
+		$dbrows = $this->db->loadAssocList();
+		$this->myCheckDBError();
+		$emailAddresses = array();
+		foreach($dbrows as $row)
+		{
+			$emailAddresses[] = $row['email'];
+		}
+		return $emailAddresses;
 	}
 
 	public function insertFailedLogin($logEntry)
@@ -254,11 +276,6 @@ class BFStopDBHelper {
 	public function successfulLogin($info)
 	{
 		$this->setFailedLoginHandled($info, true);
-	}
-
-	public function getUserEmailByName($username)
-	{
-		return $this->getUserEmailWhere("username='$username'");
 	}
 
 	public function purgeOldEntries($olderThanWeeks)

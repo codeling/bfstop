@@ -6,31 +6,32 @@ class BFStopNotifier
 	public static $ONE_DAY=1440;
 	private $logger;
 	private $db;
-	private $notifyAddress;
+	private $notifyAddresses;
 
-	function __construct($logger, $db, $config, $emailAddress, $userID)
+	function __construct($logger, $db, $emailAddress, $userID, $userGroup, $groupNotifEnabled)
 	{
 		$this->logger = $logger;
 		$this->db = $db;
-		if($config == 1)
+
+		$this->notifyAddresses = empty($emailAddress)? array() : explode(";",$emailAddress);
+		$userEmail = $this->db->getUserEmailByID($userID);
+		if (!empty($userEmail))
 		{
-			$this->notifyAddress = $emailAddress;
+			$this->notifyAddresses = array_merge($this->notifyAddresses, array($userEmail));
 		}
-		else if ($config == 0)
+		if ($groupNotifEnabled)
 		{
-			$this->notifyAddress = $this->db->getUserEmailByID(
-				$userID);
+			$this->notifyAddresses = array_merge($this->notifyAddresses, $this->db->getUserGroupEmail($userGroup));
 		}
-		else
+		if (count($this->notifyAddresses) == 0)
 		{
-			$this->logger->log('Invalid source for retrieval of '.
-				'email address!', JLog::ERROR);
+			$this->logger->log('No notification address specified!', JLog::INFO);
 		}
 	}
 
-	public function getNotifyAddress()
+	public function getNotifyAddresses()
 	{
-		return $this->notifyAddress;
+		return $this->notifyAddresses;
 	}
 
 	public function getSiteName()
@@ -92,21 +93,23 @@ class BFStopNotifier
 		return $bodys;
 	}
 
-	function sendMail($subject, $body, $emailAddress)
+	function sendMail($subject, $body, $emailAddresses)
 	{
-		if (!isset($emailAddress) || strcmp($emailAddress, '') == 0)
+		if (!is_array($emailAddresses) || count($emailAddresses) == 0)
 		{
-			$this->logger->log('No user selected or no email '.
-				'address specified!', JLog::ERROR);
+			$this->logger->log('Sending email failed: At least one email address is required, none given.', JLog::ERROR);
 			return;
 		}
 		$mail = JFactory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
-		$mail->addRecipient($emailAddress);
+		foreach ($emailAddresses as $recipient)
+		{
+			$mail->addRecipient($recipient);
+		}
 		$sendResult = $mail->Send();
 		$sendSuccess = ($sendResult === true);
-		$this->logger->log('Sent email to '.$emailAddress.
+		$this->logger->log('Sent email to '.implode(", ", $emailAddresses).
 			', subject: '.$subject.'; '.(($sendSuccess)
 				? 'successful'
 				:'not successful: '.
@@ -125,7 +128,7 @@ class BFStopNotifier
 		$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
 			JURI::root());
-		$this->sendMail($subject, $body, $this->notifyAddress);
+		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 
 	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
@@ -140,7 +143,7 @@ class BFStopNotifier
 		$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);
-		$this->sendMail($subject, $body, $this->notifyAddress);
+		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 
 	public function sendUnblockMail($userEmail, $unblockLink)

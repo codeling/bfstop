@@ -68,7 +68,7 @@ class plgSystembfstop extends JPlugin
 				' is already blocked!', JLog::ERROR);
 			return;
 		}
-		$maxBlocksBefore = $this->params->get('maxBlocksBefore');
+		$maxBlocksBefore = (int)$this->params->get('maxBlocksBefore', 0);
 		if ($maxBlocksBefore > 0)
 		{
 			$numberOfPrevBlocks = $this->mydb->
@@ -91,7 +91,7 @@ class plgSystembfstop extends JPlugin
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
-			$this->params->get('notifyBlockedNumber', 5));
+			(int)$this->params->get('notifyBlockedNumber', 5));
 		if ((bool)$this->params->get('notifyBlockedUser', false))
 		{
 			$userEmail = $this->mydb->getUserEmailByName(
@@ -160,9 +160,10 @@ class plgSystembfstop extends JPlugin
 			'logLevel', BFStopLogger::Disabled));
 		$this->mydb  = new BFStopDBHelper($this->logger);
 		$this->notifier = new BFStopNotifier($this->logger, $this->mydb,
-			(int)$this->params->get( 'emailtype' ),
-			$this->params->get('emailaddress'),
-			$this->params->get('userIDs'));
+			$this->params->get('emailaddress', ''),
+			(int)$this->params->get('userID', -1),
+			(int)$this->params->get('userGroup', -1),
+			(bool)$this->params->get('groupNotificationEnabled', false));
 		$this->myapp = JFactory::getApplication();
 	}
 
@@ -337,7 +338,7 @@ class plgSystembfstop extends JPlugin
 				return;
 			}
 			JPlugin::loadLanguage('plg_system_bfstop');
-			if ($this->params->get('useHttpError', false))
+			if ((bool)$this->params->get('useHttpError', false))
 			{
 				header('HTTP/1.0 403 Forbidden');
 			}

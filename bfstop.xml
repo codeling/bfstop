@@ -79,18 +79,51 @@
 					<option value="10080">BLOCK_1WEEK</option>
 					<option value="43200">BLOCK_30DAYS</option>
 				</field>
-				<field name="emailtype" type="list" default="0"
-					label="EMAIL_SOURCE_LABEL"
-					description="EMAIL_SOURCE_DESC">
-					<option value="1">CUSTOMEMAILADDRESS</option>
-					<option value="0">SELECTEDUSERS</option>
-				</field>
+			</fieldset>
+			<fieldset name="notification" label="NOTIFICATION_FIELDSET_LABEL">
 				<field name="emailaddress" type="text" size="40" default=""
 					label="EMAIL_ADDRESS_LABEL"
 					description="EMAIL_ADDRESS_DESC" />
-				<field name="userIDs" type="user" default=""
+				<field name="userID" type="user" default=""
 					label="USERID_LABEL"
 					description="USERID_DESC" />
+				<field name="groupNotificationEnabled" type="list" default="0"
+					label="GROUP_NOTIFICATION_ENABLED_LABEL"
+					description="GROUP_NOTIFICATION_ENABLED_DESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+				<field name="userGroup" type="usergroup" default=""
+					label="USERGROUP_LABEL"
+					description="USERGROUP_DESC" />
+				<field name="notifyBlockedUser" type="list" default="0"
+					label="NOTIFY_BLOCKED_USER_LABEL"
+					description="NOTIFY_BLOCKED_USER_DESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+				<field name="notifyBlockedNumber" type="list" default="5"
+					label="NOTIFY_BLOCKED_NUMBER_LABEL"
+					description="NOTIFY_BLOCKED_NUMBER_DESC">
+					<option value="-1">NOTIFY_UNLIMITED</option>
+					<option value="0">NOTIFY_NEVER</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+				</field>
+				<field name="notifyFailedNumber" type="list" default="0"
+					label="NOTIFY_FAILED_NUMBER_LABEL"
+					description="NOTIFY_FAILED_NUMBER_DESC">
+					<option value="-1">NOTIFY_UNLIMITED</option>
+					<option value="0">NOTIFY_NEVER</option>
+					<option value="1">1</option>
+					<option value="2">2</option>
+					<option value="3">3</option>
+					<option value="4">4</option>
+					<option value="5">5</option>
+				</field>
 			</fieldset>
 			<fieldset name="advanced">
 				<field name="enabledForOrigin" type="list" default="3"
@@ -125,34 +158,6 @@
 				<field name="blockedMessage" type="text" size="40" default=""
 					label="BLOCKED_MESSAGE_LABEL"
 					description="BLOCKED_MESSAGE_DESC" />
-				<field name="notifyBlockedUser" type="list" default="0"
-					label="NOTIFY_BLOCKED_USER_LABEL"
-					description="NOTIFY_BLOCKED_USER_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
-				</field>
-				<field name="notifyBlockedNumber" type="list" default="5"
-					label="NOTIFY_BLOCKED_NUMBER_LABEL"
-					description="NOTIFY_BLOCKED_NUMBER_DESC">
-					<option value="-1">NOTIFY_UNLIMITED</option>
-					<option value="0">NOTIFY_NEVER</option>
-					<option value="1">1</option>
-					<option value="2">2</option>
-					<option value="3">3</option>
-					<option value="4">4</option>
-					<option value="5">5</option>
-				</field>
-				<field name="notifyFailedNumber" type="list" default="0"
-					label="NOTIFY_FAILED_NUMBER_LABEL"
-					description="NOTIFY_FAILED_NUMBER_DESC">
-					<option value="-1">NOTIFY_UNLIMITED</option>
-					<option value="0">NOTIFY_NEVER</option>
-					<option value="1">1</option>
-					<option value="2">2</option>
-					<option value="3">3</option>
-					<option value="4">4</option>
-					<option value="5">5</option>
-				</field>
 				<field name="logLevel" type="list" default="8"
 					label="LOGLEVEL_LABEL"
 					description="LOGLEVEL_DESC">
