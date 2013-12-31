@@ -221,13 +221,21 @@ class BFStopDBHelper {
 		{
 			return;
 		}
-		$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < DATE_SUB('.
+		$deleteDate = 'DATE_SUB('.
 			' NOW(), INTERVAL '.
 			$this->db->quote($olderThanWeeks).
 			' WEEK)';
+		$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
 		$this->db->setQuery($sql);
 		$this->db->query();
 		$this->myCheckDBError();
+
+		$sql = 'DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
+			DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate;
+		$this->db->setQuery($sql);
+		$this->db->query();
+		$this->myCheckDBError();
+
 	}
 
 	public function isIPWhiteListed($ipaddress)
