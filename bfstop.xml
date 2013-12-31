@@ -64,16 +64,18 @@
 				<field name="blockDuration" type="list" default="1440"
 					label="BLOCK_DURATION_LABEL"
 					description="BLOCK_DURATION_DESC">
-					<option    value="0">BLOCK_UNLIMITED</option>
-					<option    value="5">BLOCK_5MINUTES</option>
-					<option   value="10">BLOCK_10MINUTES</option>
-					<option   value="15">BLOCK_15MINUTES</option>
-					<option   value="30">BLOCK_30MINUTES</option>
-					<option   value="60">BLOCK_1HOUR</option>
-					<option  value="120">BLOCK_2HOURS</option>
-					<option  value="240">BLOCK_4HOURS</option>
-					<option  value="480">BLOCK_8HOURS</option>
-					<option value="1440">BLOCK_24HOURS</option>
+					<option     value="0">BLOCK_UNLIMITED</option>
+					<option     value="5">BLOCK_5MINUTES</option>
+					<option    value="10">BLOCK_10MINUTES</option>
+					<option    value="15">BLOCK_15MINUTES</option>
+					<option    value="30">BLOCK_30MINUTES</option>
+					<option    value="60">BLOCK_1HOUR</option>
+					<option   value="120">BLOCK_2HOURS</option>
+					<option   value="240">BLOCK_4HOURS</option>
+					<option   value="480">BLOCK_8HOURS</option>
+					<option  value="1440">BLOCK_24HOURS</option>
+					<option value="10080">BLOCK_1WEEK</option>
+					<option value="43200">BLOCK_30DAYS</option>
 				</field>
 				<field name="emailtype" type="list" default="0"
 					label="EMAIL_SOURCE_LABEL"
