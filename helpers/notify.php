@@ -25,7 +25,7 @@ class BFStopNotifier
 		}
 		if (count($this->notifyAddresses) == 0)
 		{
-			$this->logger->log('No notification address specified!', JLog::INFO);
+			$this->logger->log('No notification address specified!', JLog::DEBUG);
 		}
 	}
 

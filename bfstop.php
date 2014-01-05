@@ -320,7 +320,19 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
-		$this->mydb->purgeOldEntries((int)$this->params->get('deleteOld', 0));
+		$purgeAge = (int)$this->params->get('deleteOld', 0);
+		if ($purgeAge > 0)
+		{
+			$purgeInterval = 86400; // = 24*60*60 => one day
+			$lastPurge = $this->params->get('lastPurge', 0);
+			$now = time();
+			if ($now > ($lastPurge + $purgeInterval))
+			{
+				$this->mydb->purgeOldEntries($purgeAge);
+				$this->params->set('lastPurge', $now);
+				$this->mydb->saveParams($this->params);
+			}
+		}
 		$ipaddress = $this->getIPAddr();
 		if ($this->mydb->isIPWhiteListed($ipaddress))
 		{

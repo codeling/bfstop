@@ -278,15 +278,12 @@ class BFStopDBHelper {
 		$this->setFailedLoginHandled($info, true);
 	}
 
-	public function purgeOldEntries($olderThanWeeks)
+	public function purgeOldEntries($purgeAgeWeeks)
 	{
-		if ($olderThanWeeks == 0)
-		{
-			return;
-		}
+		$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", JLog::INFO);
 		$deleteDate = 'DATE_SUB('.
 			' NOW(), INTERVAL '.
-			$this->db->quote($olderThanWeeks).
+			$this->db->quote($purgeAgeWeeks).
 			' WEEK)';
 		$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
 		$this->db->setQuery($sql);
@@ -309,5 +306,15 @@ class BFStopDBHelper {
 		$this->db->setQuery($sql);
 		$this->db->query();
 		$this->myCheckDBError();
+	}
+
+	public function saveParams($params)
+	{
+		$query = $this->db->getQuery(true);
+		$query->update('#__extensions AS a');
+		$query->set('a.params = '. $this->db->quote((string)$params) );
+		$query->where('a.element = "bfstop"');
+		$this->db->setQuery($query);
+		$this->db->query();
 	}
 }
