@@ -1,3 +1,7 @@
+1.2.0 (2014-01-07)
+  - fix language problems
+  - only do pruning once a day (if enabled)
+
 1.2.0beta1 (2013-12-31)
   - IP subnet range support for whitelisting&blocking
   - Multiple notification recipients (no more awkward choice between which input to consider for email addresses - all inputs where something is specified are taken into consideration; multiple email addresses can be specified separated by a semicolon; and a user group can be chosen to be notified)
