@@ -14,10 +14,12 @@ class BFStopLogger {
 		if ($log_level > self::Disabled)
 		{
 			JLog::addLogger(array(
-				'text_file' => 'plg_system_bfstop.log.php'
+				'text_file' => 'plg_system_bfstop.log.php',
+				'text_entry_format' =>
+					'{DATETIME} {PRIORITY} {MESSAGE}'
 			),
 			$priorities,
-			self::LogCategory);
+			array(self::LogCategory));
 		}
 	}
 
