@@ -1,3 +1,8 @@
+1.3.0beta1 (2014-03-15)
+  - Allow showing IP address in blocked message
+  - Show hint to use reset password functionality
+  - Prevent unrelated entries from showing up in logfile
+
 1.2.0 (2014-01-07)
   - fix language problems
   - only do pruning once a day (if enabled)
