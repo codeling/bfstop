@@ -375,6 +375,11 @@ class plgSystembfstop extends JPlugin
 			}
 			$message = $this->params->get('blockedMessage',
 				JText::_('BLOCKED_IP_MESSAGE'));
+
+			if ((bool)$this->params->get('blockedMsgShowIP', false))
+			{
+				$message .= " ".JText::sprintf('BLOCKED_CLIENT_IP', $ipaddress);
+			}
 			echo $message;
 			$this->myapp->close();
 		}

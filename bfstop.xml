@@ -166,6 +166,13 @@
 				<field name="blockedMessage" type="text" size="40" default=""
 					label="BLOCKED_MESSAGE_LABEL"
 					description="BLOCKED_MESSAGE_DESC" />
+				<field name="blockedMsgShowIP" type="list" default="1"
+					label="BLOCKED_MSG_SHOWIP_LABEL"
+					description="BLOCKED_MSG_SHOWIP_DESC">
+					<option value="0">DISABLED</option>
+					<option value="1">ENABLED</option>
+				</field>
+
 				<field name="logLevel" type="list" default="8"
 					label="LOGLEVEL_LABEL"
 					description="LOGLEVEL_DESC">
