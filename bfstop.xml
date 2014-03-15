@@ -155,6 +155,14 @@
 					<option value="0">DISABLED</option>
 					<option value="1">ENABLED</option>
 				</field>
+				<field name="notifyUsePasswordReminder" type="list" default="1"
+					label="NOTIFY_USE_PASSWORD_REMINDER_LABEL"
+					description="NOTIFY_USE_PASSWORD_REMINDER_DESC">
+					<option value="-1">REMINDER_NOTIFY_ALWAYS</option>
+					<option value="0">DISABLED</option>
+					<option value="1">REMINDER_NOTIFY_1LEFT</option>
+					<option value="2">REMINDER_NOTIFY_2LEFT</option>
+				</field>
 				<field name="blockedMessage" type="text" size="40" default=""
 					label="BLOCKED_MESSAGE_LABEL"
 					description="BLOCKED_MESSAGE_DESC" />

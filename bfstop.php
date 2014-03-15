@@ -54,6 +54,12 @@ class plgSystembfstop extends JPlugin
 		return $linkBase.$link;
 	}
 
+	function getPasswordResetLink()
+	{
+		$link = 'index.php?option=com_users&view=reset';
+		return JRoute::_($link);
+	}
+
 	function block($logEntry, $duration)
 	{
 		$blockEnabled  = (bool)$this->params->get('blockEnabled', true);
@@ -171,10 +177,15 @@ class plgSystembfstop extends JPlugin
 	{
 		// remaining attempts notification only makes sense if we
 		// actually block
+		$notifyRemaining = (bool)$this->params->get('notifyRemainingAttempts',
+			false);
+		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
+			-1);
 		if ( !(bool)$this->params->get('blockEnabled', true) ||
-			!(bool)$this->params->get('notifyRemainingAttempts',
-				false) )
+		     (!$notifyRemaining &&
+		      !($passwordReminder == -1 || $passwordReminder > 0)))
 		{
+			// avoid database access if reminders are disabled anyway
 			return;
 		}
 		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
@@ -190,9 +201,17 @@ class plgSystembfstop extends JPlugin
 				JLog::ERROR);
 			return;
 		}
-		if ($attemptsLeft > 0) {
+		if ((bool)$this->params->get('notifyRemainingAttempts', false) &&
+			$attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
 				"X_ATTEMPTS_LEFT", $attemptsLeft));
+		}
+		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
+		{
+			$resetLink = $this->getPasswordResetLink();
+			$this->myapp->enqueueMessage(JText::sprintf(
+				"PASSWORD_RESET_RECOMMENDED",
+				$resetLink));
 		}
 	}
 
