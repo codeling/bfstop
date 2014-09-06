@@ -176,7 +176,7 @@ class BFStopDBHelper {
 		return (count($entries) > 0);
 	}
 
-	public function blockIP($logEntry, $duration)
+	public function blockIP($logEntry, $duration, $usehtaccess)
 	{
 		$blockEntry = new stdClass();
 		$blockEntry->ipaddress = $logEntry->ipaddress;
@@ -189,6 +189,13 @@ class BFStopDBHelper {
 		}
 		$this->myCheckDBError();
 		$this->setFailedLoginHandled($logEntry, false);
+		if ($usehtaccess)
+		{
+			// open up .htaccess file and deny IP
+			$fp = fopen('.htaccess', 'a');
+			fwrite($fp, "\ndeny from " . $logEntry->ipaddress . "\n");
+			fclose($fp);
+		}
 		return $blockEntry->id;
 	}
 
