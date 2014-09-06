@@ -90,8 +90,6 @@ class BFStopNotifier
 			$logEntry->username  ."\n";
 		$bodys.= str_pad(JText::_('IPADDRESS').":",15).
 			$logEntry->ipaddress ."\n";
-		$bodys.= str_pad(JText::_('ERROR').":",15)    .
-			$logEntry->error     ."\n";
 		$bodys.= str_pad(JText::_('DATETIME').":",15) .
 			$logEntry->logtime   ."\n";
 		$bodys.= str_pad(JText::_('ORIGIN').":",15)   .

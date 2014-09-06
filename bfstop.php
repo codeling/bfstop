@@ -284,7 +284,6 @@ class plgSystembfstop extends JPlugin
 		$logEntry->id        = null;
 		$logEntry->ipaddress = $this->getIPAddr();
 		$logEntry->logtime   = date("Y-m-d H:i:s");
-		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
 		$logEntry->origin    = $this->myapp->getClientId();
 
