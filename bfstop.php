@@ -204,13 +204,13 @@ class plgSystembfstop extends JPlugin
 		if ((bool)$this->params->get('notifyRemainingAttempts', false) &&
 			$attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
-				"X_ATTEMPTS_LEFT", $attemptsLeft));
+				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft));
 		}
 		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
 		{
 			$resetLink = $this->getPasswordResetLink();
 			$this->myapp->enqueueMessage(JText::sprintf(
-				"PASSWORD_RESET_RECOMMENDED",
+				"PLG_SYSTEM_BFSTOP_PASSWORD_RESET_RECOMMENDED",
 				$resetLink));
 		}
 	}
@@ -373,11 +373,11 @@ class plgSystembfstop extends JPlugin
 				header('HTTP/1.0 403 Forbidden');
 			}
 			$message = $this->params->get('blockedMessage',
-				JText::_('BLOCKED_IP_MESSAGE'));
+				JText::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
 
 			if ((bool)$this->params->get('blockedMsgShowIP', false))
 			{
-				$message .= " ".JText::sprintf('BLOCKED_CLIENT_IP', $ipaddress);
+				$message .= " ".JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
 			}
 			echo $message;
 			$this->myapp->close();

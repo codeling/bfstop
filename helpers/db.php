@@ -102,10 +102,10 @@ class BFStopDBHelper {
 		$this->db->setQuery($sql);
 		$entries = $this->db->loadObjectList();
 		$this->myCheckDBError();
-		$result = str_pad(JText::_('USERNAME'), 25)." ".
-				str_pad(JText::_('IPADDRESS') , 15)." ".
-				str_pad(JText::_('DATETIME')  , 20)." ".
-				str_pad(JText::_('ORIGIN')    ,  8)."\n".
+		$result = str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
+				str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
+				str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
+				str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')    ,  8)."\n".
 				str_repeat("-", 97)."\n";
 		foreach ($entries as $entry)
 		{
