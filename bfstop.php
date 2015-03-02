@@ -157,6 +157,19 @@ class plgSystembfstop extends JPlugin
 
 	function getIPAddr()
 	{
+                // source: http://stackoverflow.com/a/2031935
+		foreach (array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR') as $key){
+			if (array_key_exists($key, $_SERVER) === true){
+				foreach (explode(',', $_SERVER[$key]) as $ip){
+					$ip = trim($ip); // just to be safe
+					if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false){
+						return $ip;
+					}
+				}
+			}
+		}
+		$this->logger->log('No proper remote IP address available, falling back to REMOTE_ADDR "'.$_SERVER['REMOTE_ADDR'].
+			'"!', JLog::WARNING);
 		return $_SERVER['REMOTE_ADDR'];
 	}
 	
@@ -204,13 +217,13 @@ class plgSystembfstop extends JPlugin
 		if ((bool)$this->params->get('notifyRemainingAttempts', false) &&
 			$attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
-				"X_ATTEMPTS_LEFT", $attemptsLeft));
+				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft));
 		}
 		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
 		{
 			$resetLink = $this->getPasswordResetLink();
 			$this->myapp->enqueueMessage(JText::sprintf(
-				"PASSWORD_RESET_RECOMMENDED",
+				"PLG_SYSTEM_BFSTOP_PASSWORD_RESET_RECOMMENDED",
 				$resetLink));
 		}
 	}
@@ -268,9 +281,10 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
-		if ($this->mydb->isIPWhiteListed($this->getIPAddr()))
+		$ipAddress = $this->getIPAddr();
+		if ($this->mydb->isIPWhiteListed($ipAddress))
 		{
-			$this->logger->log('Ignoring failed login by whitelisted address '.$this->getIPAddr(), JLog::INFO);
+			$this->logger->log('Ignoring failed login by whitelisted address '.$ipAddress, JLog::INFO);
 			return;
 		}
 		JPlugin::loadLanguage('plg_system_bfstop');
@@ -282,9 +296,8 @@ class plgSystembfstop extends JPlugin
 
 		$logEntry = new stdClass();
 		$logEntry->id        = null;
-		$logEntry->ipaddress = $this->getIPAddr();
+		$logEntry->ipaddress = $ipAddress;
 		$logEntry->logtime   = date("Y-m-d H:i:s");
-		$logEntry->error     = $user['error_message'];
 		$logEntry->username  = $user['username'];
 		$logEntry->origin    = $this->myapp->getClientId();
 
@@ -374,11 +387,11 @@ class plgSystembfstop extends JPlugin
 				header('HTTP/1.0 403 Forbidden');
 			}
 			$message = $this->params->get('blockedMessage',
-				JText::_('BLOCKED_IP_MESSAGE'));
+				JText::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
 
 			if ((bool)$this->params->get('blockedMsgShowIP', false))
 			{
-				$message .= " ".JText::sprintf('BLOCKED_CLIENT_IP', $ipaddress);
+				$message .= " ".JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
 			}
 			echo $message;
 			$this->myapp->close();

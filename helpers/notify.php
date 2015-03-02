@@ -71,7 +71,7 @@ class BFStopNotifier
 
 	function getBlockedBody($logEntry, $interval)
 	{
-		return JText::sprintf('BLOCKED_IP_ADDRESS_BODY',
+		return JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
 			JURI::root(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
@@ -83,18 +83,16 @@ class BFStopNotifier
 
 	function getFailedLoginBody($logEntry)
 	{
-		$bodys = JText::sprintf('FAILED_LOGIN_ATTEMPT',
+		$bodys = JText::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
 			JURI::root()) ."\n";
-		$bodys.= str_pad(JText::_('USERNAME').":",15) .
+		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME').":",15) .
 			$logEntry->username  ."\n";
-		$bodys.= str_pad(JText::_('IPADDRESS').":",15).
+		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":",15).
 			$logEntry->ipaddress ."\n";
-		$bodys.= str_pad(JText::_('ERROR').":",15)    .
-			$logEntry->error     ."\n";
-		$bodys.= str_pad(JText::_('DATETIME').":",15) .
+		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME').":",15) .
 			$logEntry->logtime   ."\n";
-		$bodys.= str_pad(JText::_('ORIGIN').":",15)   .
+		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN').":",15)   .
 			$this->db->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
@@ -131,7 +129,7 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getFailedLoginBody($logEntry);
-		$subject = JText::sprintf("FAILED_LOGIN_ATTEMPT",
+		$subject = JText::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
 			JURI::root());
 		$this->sendMail($subject, $body, $this->notifyAddresses);
@@ -146,7 +144,7 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getBlockedBody($logEntry, $interval);
-		$subject = JText::sprintf('BLOCKED_IP_ADDRESS_SUBJECT',
+		$subject = JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);
 		$this->sendMail($subject, $body, $this->notifyAddresses);
@@ -156,8 +154,8 @@ class BFStopNotifier
 	{
 		$siteName = $this->getSiteName();
 		$this->sendMail(
-			JText::sprintf('BLOCKED_SUBJECT', $siteName),
-			JText::sprintf('BLOCKED_BODY',
+			JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_SUBJECT', $siteName),
+			JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_BODY',
 				$siteName,
 				$unblockLink
 			),

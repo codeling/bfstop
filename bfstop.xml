@@ -2,7 +2,7 @@
 <extension version="2.5" type="plugin" group="system" method="upgrade">
 	<name>plg_system_bfstop</name>
 	<author>Bernhard Froehler</author>
-	<description>PLG_BFSTOP_DESC</description>
+	<description>PLG_SYSTEM_BFSTOP_DESC</description>
 	<creationDate>November 2012</creationDate>
 	<copyright>Copyright (C) 2012-2014 by Bernhard Froehler</copyright>
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
@@ -61,52 +61,52 @@
 			<fieldset name="basic">
 				<field name="blockNumber" type="integer"
 					default="10" first="3" last="25" step="1"
-					label="BLOCK_NUMBER_LABEL"
-					description="BLOCK_NUMBER_DESC" />
+					label="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL"
+					description="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_DESC" />
 				<field name="blockDuration" type="list" default="1440"
-					label="BLOCK_DURATION_LABEL"
-					description="BLOCK_DURATION_DESC">
-					<option     value="0">BLOCK_UNLIMITED</option>
-					<option     value="5">BLOCK_5MINUTES</option>
-					<option    value="10">BLOCK_10MINUTES</option>
-					<option    value="15">BLOCK_15MINUTES</option>
-					<option    value="30">BLOCK_30MINUTES</option>
-					<option    value="60">BLOCK_1HOUR</option>
-					<option   value="120">BLOCK_2HOURS</option>
-					<option   value="240">BLOCK_4HOURS</option>
-					<option   value="480">BLOCK_8HOURS</option>
-					<option  value="1440">BLOCK_24HOURS</option>
-					<option value="10080">BLOCK_1WEEK</option>
-					<option value="43200">BLOCK_30DAYS</option>
+					label="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_LABEL"
+					description="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_DESC">
+					<option     value="0">PLG_SYSTEM_BFSTOP_BLOCK_UNLIMITED</option>
+					<option     value="5">PLG_SYSTEM_BFSTOP_BLOCK_5MINUTES</option>
+					<option    value="10">PLG_SYSTEM_BFSTOP_BLOCK_10MINUTES</option>
+					<option    value="15">PLG_SYSTEM_BFSTOP_BLOCK_15MINUTES</option>
+					<option    value="30">PLG_SYSTEM_BFSTOP_BLOCK_30MINUTES</option>
+					<option    value="60">PLG_SYSTEM_BFSTOP_BLOCK_1HOUR</option>
+					<option   value="120">PLG_SYSTEM_BFSTOP_BLOCK_2HOURS</option>
+					<option   value="240">PLG_SYSTEM_BFSTOP_BLOCK_4HOURS</option>
+					<option   value="480">PLG_SYSTEM_BFSTOP_BLOCK_8HOURS</option>
+					<option  value="1440">PLG_SYSTEM_BFSTOP_BLOCK_24HOURS</option>
+					<option value="10080">PLG_SYSTEM_BFSTOP_BLOCK_1WEEK</option>
+					<option value="43200">PLG_SYSTEM_BFSTOP_BLOCK_30DAYS</option>
 				</field>
 			</fieldset>
-			<fieldset name="notification" label="NOTIFICATION_FIELDSET_LABEL">
+			<fieldset name="notification" label="PLG_SYSTEM_BFSTOP_NOTIFICATION_FIELDSET_LABEL">
 				<field name="emailaddress" type="text" size="40" default=""
-					label="EMAIL_ADDRESS_LABEL"
-					description="EMAIL_ADDRESS_DESC" />
+					label="PLG_SYSTEM_BFSTOP_EMAIL_ADDRESS_LABEL"
+					description="PLG_SYSTEM_BFSTOP_EMAIL_ADDRESS_DESC" />
 				<field name="userID" type="user" default=""
-					label="USERID_LABEL"
-					description="USERID_DESC" />
+					label="PLG_SYSTEM_BFSTOP_USERID_LABEL"
+					description="PLG_SYSTEM_BFSTOP_USERID_DESC" />
 				<field name="groupNotificationEnabled" type="list" default="0"
-					label="GROUP_NOTIFICATION_ENABLED_LABEL"
-					description="GROUP_NOTIFICATION_ENABLED_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_GROUP_NOTIFICATION_ENABLED_LABEL"
+					description="PLG_SYSTEM_BFSTOP_GROUP_NOTIFICATION_ENABLED_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 				<field name="userGroup" type="usergroup" default=""
-					label="USERGROUP_LABEL"
-					description="USERGROUP_DESC" />
+					label="PLG_SYSTEM_BFSTOP_USERGROUP_LABEL"
+					description="PLG_SYSTEM_BFSTOP_USERGROUP_DESC" />
 				<field name="notifyBlockedUser" type="list" default="0"
-					label="NOTIFY_BLOCKED_USER_LABEL"
-					description="NOTIFY_BLOCKED_USER_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_LABEL"
+					description="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 				<field name="notifyBlockedNumber" type="list" default="5"
-					label="NOTIFY_BLOCKED_NUMBER_LABEL"
-					description="NOTIFY_BLOCKED_NUMBER_DESC">
-					<option value="-1">NOTIFY_UNLIMITED</option>
-					<option value="0">NOTIFY_NEVER</option>
+					label="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_NUMBER_LABEL"
+					description="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_NUMBER_DESC">
+					<option value="-1">PLG_SYSTEM_BFSTOP_NOTIFY_UNLIMITED</option>
+					<option value="0">PLG_SYSTEM_BFSTOP_NOTIFY_NEVER</option>
 					<option value="1">1</option>
 					<option value="2">2</option>
 					<option value="3">3</option>
@@ -114,10 +114,10 @@
 					<option value="5">5</option>
 				</field>
 				<field name="notifyFailedNumber" type="list" default="0"
-					label="NOTIFY_FAILED_NUMBER_LABEL"
-					description="NOTIFY_FAILED_NUMBER_DESC">
-					<option value="-1">NOTIFY_UNLIMITED</option>
-					<option value="0">NOTIFY_NEVER</option>
+					label="PLG_SYSTEM_BFSTOP_NOTIFY_FAILED_NUMBER_LABEL"
+					description="PLG_SYSTEM_BFSTOP_NOTIFY_FAILED_NUMBER_DESC">
+					<option value="-1">PLG_SYSTEM_BFSTOP_NOTIFY_UNLIMITED</option>
+					<option value="0">PLG_SYSTEM_BFSTOP_NOTIFY_NEVER</option>
 					<option value="1">1</option>
 					<option value="2">2</option>
 					<option value="3">3</option>
@@ -127,22 +127,22 @@
 			</fieldset>
 			<fieldset name="advanced">
 				<field name="enabledForOrigin" type="list" default="3"
-					label="ENABLED_FOR_ORIGIN_LABEL"
-					description="ENABLED_FOR_ORIGIN_DESC">
-					<option value="1">ENABLED_FOR_FRONTEND</option>
-					<option value="2">ENABLED_FOR_BACKEND</option>
-					<option value="3">ENABLED_FOR_BOTH</option>
+					label="PLG_SYSTEM_BFSTOP_ENABLED_FOR_ORIGIN_LABEL"
+					description="PLG_SYSTEM_BFSTOP_ENABLED_FOR_ORIGIN_DESC">
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED_FOR_FRONTEND</option>
+					<option value="2">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BACKEND</option>
+					<option value="3">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BOTH</option>
 				</field>
 				<field name="blockEnabled" type="list" default="1"
-					label="BLOCK_ENABLED_LABEL"
-					description="BLOCK_ENABLED_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_BLOCK_ENABLED_LABEL"
+					description="PLG_SYSTEM_BFSTOP_BLOCK_ENABLED_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 				<field name="maxBlocksBefore" type="list" default="3"
-					label="MAX_BLOCKS_BEFORE_LABEL"
-					description="MAX_BLOCKS_BEFORE_DESC">
-					<option value="0">MAX_BLOCK_NEVER</option>
+					label="PLG_SYSTEM_BFSTOP_MAX_BLOCKS_BEFORE_LABEL"
+					description="PLG_SYSTEM_BFSTOP_MAX_BLOCKS_BEFORE_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_MAX_BLOCK_NEVER</option>
 					<option value="2">2</option>
 					<option value="3">3</option>
 					<option value="4">4</option>
@@ -150,73 +150,73 @@
 					<option value="5">6</option>
 				</field>
 				<field name="notifyRemainingAttempts" type="list" default="0"
-					label="NOTIFY_REMAINING_ATTEMPTS_LABEL"
-					description="NOTIFY_REMAINING_ATTEMPTS_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_NOTIFY_REMAINING_ATTEMPTS_LABEL"
+					description="PLG_SYSTEM_BFSTOP_NOTIFY_REMAINING_ATTEMPTS_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 				<field name="notifyUsePasswordReminder" type="list" default="1"
-					label="NOTIFY_USE_PASSWORD_REMINDER_LABEL"
-					description="NOTIFY_USE_PASSWORD_REMINDER_DESC">
-					<option value="-1">REMINDER_NOTIFY_ALWAYS</option>
-					<option value="0">DISABLED</option>
-					<option value="1">REMINDER_NOTIFY_1LEFT</option>
-					<option value="2">REMINDER_NOTIFY_2LEFT</option>
+					label="PLG_SYSTEM_BFSTOP_NOTIFY_USE_PASSWORD_REMINDER_LABEL"
+					description="PLG_SYSTEM_BFSTOP_NOTIFY_USE_PASSWORD_REMINDER_DESC">
+					<option value="-1">PLG_SYSTEM_BFSTOP_REMINDER_NOTIFY_ALWAYS</option>
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_REMINDER_NOTIFY_1LEFT</option>
+					<option value="2">PLG_SYSTEM_BFSTOP_REMINDER_NOTIFY_2LEFT</option>
 				</field>
 				<field name="blockedMessage" type="text" size="40" default=""
-					label="BLOCKED_MESSAGE_LABEL"
-					description="BLOCKED_MESSAGE_DESC" />
+					label="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_LABEL"
+					description="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_DESC" />
 				<field name="blockedMsgShowIP" type="list" default="1"
-					label="BLOCKED_MSG_SHOWIP_LABEL"
-					description="BLOCKED_MSG_SHOWIP_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_BLOCKED_MSG_SHOWIP_LABEL"
+					description="PLG_SYSTEM_BFSTOP_BLOCKED_MSG_SHOWIP_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 
 				<field name="logLevel" type="list" default="8"
-					label="LOGLEVEL_LABEL"
-					description="LOGLEVEL_DESC">
-					<option value="0">DISABLED</option>
-					<option value="8">ERROR</option>
-					<option value="16">WARNING</option>
-					<option value="64">INFO</option>
-					<option value="128">DEBUG</option>
+					label="PLG_SYSTEM_BFSTOP_LOGLEVEL_LABEL"
+					description="PLG_SYSTEM_BFSTOP_LOGLEVEL_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="8">PLG_SYSTEM_BFSTOP_ERROR</option>
+					<option value="16">PLG_SYSTEM_BFSTOP_WARNING</option>
+					<option value="64">PLG_SYSTEM_BFSTOP_INFO</option>
+					<option value="128">PLG_SYSTEM_BFSTOP_DEBUG</option>
 				</field>
 				<field name="useHttpError" type="list" default="1"
-					label="USE_HTTP_ERROR_LABEL"
-					description="USE_HTTP_ERROR_DESC">
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_USE_HTTP_ERROR_LABEL"
+					description="PLG_SYSTEM_BFSTOP_USE_HTTP_ERROR_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 				<field name="deleteOld" type="integer" default="0"
 					first="0" last="24" step="1"
-					label="DELETE_OLD_ENTRIES_LABEL"
-					description="DELETE_OLD_ENTRIES_DESC" />
+					label="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_LABEL"
+					description="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_DESC" />
 			</fieldset>
-			<fieldset name="delay" label="DELAY_FIELDSET_LABEL">
+			<fieldset name="delay" label="PLG_SYSTEM_BFSTOP_DELAY_FIELDSET_LABEL">
 				<field name="delayDuration" type="integer"
 					default="0" first="0" last="120" step="5"
-					label="DELAY_DURATION_LABEL"
-					description="DELAY_DURATION_DESC" />
+					label="PLG_SYSTEM_BFSTOP_DELAY_DURATION_LABEL"
+					description="PLG_SYSTEM_BFSTOP_DELAY_DURATION_DESC" />
 				<field name="adaptiveDelay" type="list" default="0"
-					label="ADAPTIVE_DELAY_LABEL"
-                                        description="ADAPTIVE_DELAY_DESC" >
-					<option value="0">DISABLED</option>
-					<option value="1">ENABLED</option>
+					label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_LABEL"
+                                        description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_DESC" >
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
 
 				<field name="adaptiveDelayMax" type="integer" default="0"
 					first="0" last="120" step="5"
-					label="ADAPTIVE_DELAY_MAX_LABEL"
-					description="ADAPTIVE_DELAY_MAX_DESC" />
+					label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_MAX_LABEL"
+					description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_MAX_DESC" />
 				<field name="adaptiveDelayThresholdMin" type="integer" default="50"
 					first="0" last="500" step="25"
-					label="ADAPTIVE_DELAY_THRSH_MIN_LABEL"
-					description="ADAPTIVE_DELAY_THRSH_MIN_DESC" />
+					label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MIN_LABEL"
+					description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MIN_DESC" />
 				<field name="adaptiveDelayThresholdMax" type="integer" default="200"
 					first="100" last="2000" step="100"
-					label="ADAPTIVE_DELAY_THRSH_MAX_LABEL"
-					description="ADAPTIVE_DELAY_THRSH_MAX_DESC" />
+					label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MAX_LABEL"
+					description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MAX_DESC" />
 			</fieldset>
 		</fields>
 	</config>
