@@ -99,7 +99,7 @@ class plgSystembfstop extends JPlugin
 				$duration = 0;
 			}
 		}
-		$usehtaccess = $this->getBoolParam('maxBlocksBefore', false);
+		$usehtaccess = $this->getBoolParam('useHtaccess', false);
 		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
