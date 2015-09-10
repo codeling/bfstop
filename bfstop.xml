@@ -63,6 +63,12 @@
 					default="10" first="3" last="25" step="1"
 					label="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_DESC" />
+				<field name="useHtaccess" type="list" default="0"
+					label="PLG_SYSTEM_BFSTOP_USE_HTACCESS_LABEL"
+					description="PLG_SYSTEM_BFSTOP_USE_HTACCESS_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
+				</field>
 				<field name="blockDuration" type="list" default="1440"
 					label="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_DESC">

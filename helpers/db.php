@@ -105,13 +105,13 @@ class BFStopDBHelper {
 		$result = str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
 				str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
 				str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
-				str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')    ,  8)."\n".
+				str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
 				str_repeat("-", 97)."\n";
 		foreach ($entries as $entry)
 		{
-			$result .= str_pad($entry->username               , 25)." ".
-				str_pad($entry->ipaddress                     , 15)." ".
-				str_pad($entry->logtime                       , 20)." ".
+			$result .= str_pad($entry->username, 25)." ".
+				str_pad($entry->ipaddress      , 15)." ".
+				str_pad($entry->logtime        , 20)." ".
 				str_pad($this->getClientString($entry->origin),  8)."\n";
 		}
 		return $result;
@@ -191,7 +191,9 @@ class BFStopDBHelper {
 		$this->setFailedLoginHandled($logEntry, false);
 		if ($usehtaccess)
 		{
+			$this->logger->log('Blocking '.$logEntry->ipaddress.' through .htaccess', JLog::INFO);
 			// open up .htaccess file and deny IP
+            // TODO: error checking!
 			$fp = fopen('.htaccess', 'a');
 			fwrite($fp, "\ndeny from " . $logEntry->ipaddress . "\n");
 			fclose($fp);

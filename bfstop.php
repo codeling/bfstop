@@ -21,6 +21,15 @@ class plgSystembfstop extends JPlugin
 	private $mydb;
 	private $logger;
 
+	function getBoolParam($paramName, $default)
+	{
+		return (bool)$this->params->get($paramName, $default);
+	}
+	function getIntParam($paramName, $default)
+	{
+		return (int)$this->params->get($paramName, $default);
+	}
+
 	function plgSystembfstop(& $subject, $config) 
 	{
 		parent::__construct($subject, $config);
@@ -43,7 +52,7 @@ class plgSystembfstop extends JPlugin
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
-                $linkBase = JURI::base();
+		$linkBase = JURI::base();
 		// strip off an eventual administrator - tokenunblock is a site view
 		$adminDir = 'administrator/';
 		if (self::endsWith($linkBase, $adminDir))
@@ -62,7 +71,7 @@ class plgSystembfstop extends JPlugin
 
 	function block($logEntry, $duration)
 	{
-		$blockEnabled  = (bool)$this->params->get('blockEnabled', true);
+		$blockEnabled  = $this->getBoolParam('blockEnabled', true);
 		if (!$blockEnabled) {
 			return;
 		}
@@ -74,7 +83,7 @@ class plgSystembfstop extends JPlugin
 				' is already blocked!', JLog::ERROR);
 			return;
 		}
-		$maxBlocksBefore = (int)$this->params->get('maxBlocksBefore', 0);
+		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', 0);
 		if ($maxBlocksBefore > 0)
 		{
 			$numberOfPrevBlocks = $this->mydb->
@@ -90,15 +99,16 @@ class plgSystembfstop extends JPlugin
 				$duration = 0;
 			}
 		}
-		$id = $this->mydb->blockIP($logEntry, $duration);
+		$usehtaccess = $this->getBoolParam('maxBlocksBefore', false);
+		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', JLog::INFO);
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
-			(int)$this->params->get('notifyBlockedNumber', 5));
-		if ((bool)$this->params->get('notifyBlockedUser', false))
+			$this->getIntParam('notifyBlockedNumber', 5));
+		if ($this->getBoolParam('notifyBlockedUser', false))
 		{
 			$userEmail = $this->mydb->getUserEmailByName(
 				$logEntry->username);
@@ -136,7 +146,7 @@ class plgSystembfstop extends JPlugin
 
 	function getBlockInterval()
 	{
-		$blockDuration = (int)$this->params->get('blockDuration',
+		$blockDuration = $this->getIntParam('blockDuration',
 			BFStopNotifier::$ONE_DAY);
 		return $this->getRealDurationFromDBDuration($blockDuration);
 	}
@@ -144,7 +154,7 @@ class plgSystembfstop extends JPlugin
 	function blockIfTooManyAttempts($logEntry)
 	{
 		$interval = $this->getBlockInterval();
-		$maxNumber = (int)$this->params->get('blockNumber', 15);
+		$maxNumber = $this->getIntParam('blockNumber', 15);
 		if ($this->mydb->getNumberOfFailedLogins(
 			$interval,
 			$logEntry->ipaddress,
@@ -157,7 +167,7 @@ class plgSystembfstop extends JPlugin
 
 	function getIPAddr()
 	{
-                // source: http://stackoverflow.com/a/2031935
+				// source: http://stackoverflow.com/a/2031935
 		foreach (array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR') as $key){
 			if (array_key_exists($key, $_SERVER) === true){
 				foreach (explode(',', $_SERVER[$key]) as $ip){
@@ -175,14 +185,14 @@ class plgSystembfstop extends JPlugin
 	
 	private function init()
 	{
-		$this->logger = new BFStopLogger((int)$this->params->get(
+		$this->logger = new BFStopLogger($this->getIntParam(
 			'logLevel', BFStopLogger::Disabled));
 		$this->mydb  = new BFStopDBHelper($this->logger);
 		$this->notifier = new BFStopNotifier($this->logger, $this->mydb,
 			$this->params->get('emailaddress', ''),
-			(int)$this->params->get('userID', -1),
-			(int)$this->params->get('userGroup', -1),
-			(bool)$this->params->get('groupNotificationEnabled', false));
+			$this->getIntParam('userID', -1),
+			$this->getIntParam('userGroup', -1),
+			$this->getBoolParam('groupNotificationEnabled', false));
 		$this->myapp = JFactory::getApplication();
 	}
 
@@ -190,18 +200,18 @@ class plgSystembfstop extends JPlugin
 	{
 		// remaining attempts notification only makes sense if we
 		// actually block
-		$notifyRemaining = (bool)$this->params->get('notifyRemainingAttempts',
+		$notifyRemaining = $this->getBoolParam('notifyRemainingAttempts',
 			false);
-		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
+		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder',
 			-1);
-		if ( !(bool)$this->params->get('blockEnabled', true) ||
-		     (!$notifyRemaining &&
-		      !($passwordReminder == -1 || $passwordReminder > 0)))
+		if ( !$this->getBoolParam('blockEnabled', true) ||
+			 (!$notifyRemaining &&
+			  !($passwordReminder == -1 || $passwordReminder > 0)))
 		{
 			// avoid database access if reminders are disabled anyway
 			return;
 		}
-		$allowedAttempts = (int)$this->params->get('blockNumber', 15);
+		$allowedAttempts = $this->getIntParam('blockNumber', 15);
 		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
 			$this->getBlockInterval(),
 			$logEntry->ipaddress, $logEntry->logtime);
@@ -214,7 +224,7 @@ class plgSystembfstop extends JPlugin
 				JLog::ERROR);
 			return;
 		}
-		if ((bool)$this->params->get('notifyRemainingAttempts', false) &&
+		if ($this->getBoolParam('notifyRemainingAttempts', false) &&
 			$attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
 				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft));
@@ -230,19 +240,19 @@ class plgSystembfstop extends JPlugin
 
 	public function isEnabledForCurrentOrigin()
 	{
-		$enabledFor = (int)$this->params->get('enabledForOrigin', 3);
+		$enabledFor = $this->getIntParam('enabledForOrigin', 3);
 		return ( ($enabledFor & ($this->myapp->getClientId()+1)) != 0);
 	}
 
 	public function determineDelayDuration()
 	{
-		$delayDuration = (int)$this->params->get('delayDuration', 0);
-		$adaptive = (bool)$this->params->get('adaptiveDelay', false);
+		$delayDuration = $this->getIntParam('delayDuration', 0);
+		$adaptive = $this->getBoolParam('adaptiveDelay', false);
 		if ($adaptive)
 		{
-			$maxDelay = (int)$this->params->get('adaptiveDelayMax', 60);
-			$lowThreshold = (int)$this->params->get('adaptiveDelayThresholdMin', 50);
-			$highThreshold = (int)$this->params->get('adaptiveDelayThresholdMax', 1000);
+			$maxDelay = $this->getIntParam('adaptiveDelayMax', 60);
+			$lowThreshold = $this->getIntParam('adaptiveDelayThresholdMin', 50);
+			$highThreshold = $this->getIntParam('adaptiveDelayThresholdMax', 1000);
 			if ($lowThreshold > $highThreshold)
 			{
 				$tmp = $lowThreshold;
@@ -295,11 +305,11 @@ class plgSystembfstop extends JPlugin
 		}
 
 		$logEntry = new stdClass();
-		$logEntry->id        = null;
+		$logEntry->id		= null;
 		$logEntry->ipaddress = $ipAddress;
 		$logEntry->logtime   = date("Y-m-d H:i:s");
 		$logEntry->username  = $user['username'];
-		$logEntry->origin    = $this->myapp->getClientId();
+		$logEntry->origin	= $this->myapp->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.
 			$logEntry->ipaddress, JLog::DEBUG);
@@ -309,7 +319,7 @@ class plgSystembfstop extends JPlugin
 
 		$this->notifyOfRemainingAttempts($logEntry);
 
-		$maxNumber = (int)$this->params->get('notifyFailedNumber', 0);
+		$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry);
 	}
@@ -352,7 +362,7 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
-		$purgeAge = (int)$this->params->get('deleteOld', 0);
+		$purgeAge = $this->getIntParam('deleteOld', 0);
 		if ($purgeAge > 0)
 		{
 			$purgeInterval = 86400; // = 24*60*60 => one day
@@ -382,14 +392,14 @@ class plgSystembfstop extends JPlugin
 				return;
 			}
 			JPlugin::loadLanguage('plg_system_bfstop');
-			if ((bool)$this->params->get('useHttpError', false))
+			if ($this->getBoolParam('useHttpError', false))
 			{
 				header('HTTP/1.0 403 Forbidden');
 			}
 			$message = $this->params->get('blockedMessage',
 				JText::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
 
-			if ((bool)$this->params->get('blockedMsgShowIP', false))
+			if ($this->getBoolParam('blockedMsgShowIP', false))
 			{
 				$message .= " ".JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
 			}
