@@ -1,6 +1,8 @@
 <?php
 defined('_JEXEC') or die;
 
+require_once dirname(__FILE__).'/htaccess.php';
+
 class BFStopDBHelper {
 
 	private $db;
@@ -24,7 +26,7 @@ class BFStopDBHelper {
 		$errNum = $db->getErrorNum();
 		if ($errNum != 0) {
 			$errMsg = $db->getErrorMsg();
-			$logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::ERROR);
+			$this->logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::ERROR);
 		}
 	}
 
@@ -110,8 +112,8 @@ class BFStopDBHelper {
 		foreach ($entries as $entry)
 		{
 			$result .= str_pad($entry->username, 25)." ".
-				str_pad($entry->ipaddress      , 15)." ".
-				str_pad($entry->logtime        , 20)." ".
+				str_pad($entry->ipaddress	  , 15)." ".
+				str_pad($entry->logtime		, 20)." ".
 				str_pad($this->getClientString($entry->origin),  8)."\n";
 		}
 		return $result;
@@ -191,12 +193,9 @@ class BFStopDBHelper {
 		$this->setFailedLoginHandled($logEntry, false);
 		if ($usehtaccess)
 		{
-	        $filename = JPATH_ROOT.'/.htaccess';
-	        $this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$filename, JLog::INFO);
-			// open up .htaccess file and deny IP
-			$fp = fopen($filename, 'a');
-			fwrite($fp, "\ndeny from " . $logEntry->ipaddress . "\n");
-			fclose($fp);
+			$htaccess = new BFStopHtAccess(JPATH_ROOT);
+			$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
+			$htaccess->denyIP($logEntry->ipaddress);
 		}
 		return $blockEntry->id;
 	}
