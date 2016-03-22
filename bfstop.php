@@ -30,7 +30,7 @@ class plgSystembfstop extends JPlugin
 		return (int)$this->params->get($paramName, $default);
 	}
 
-	function plgSystembfstop(& $subject, $config) 
+	function __construct(& $subject, $config) 
 	{
 		parent::__construct($subject, $config);
 	}
