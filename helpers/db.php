@@ -193,7 +193,7 @@ class BFStopDBHelper {
 		$this->setFailedLoginHandled($logEntry, false);
 		if ($usehtaccess)
 		{
-			$htaccess = new BFStopHtAccess(JPATH_ROOT);
+			$htaccess = new BFStopHtAccess(JPATH_ROOT, $this->logger);
 			$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
 			$htaccess->denyIP($logEntry->ipaddress);
 		}

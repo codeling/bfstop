@@ -305,8 +305,11 @@ class BFStopHtAccess
 				// If BEGIN marker found but missing END marker
 				if ($state === false)
 				{
-					 $this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", JLog::ERROR);
-					 return false;
+					if (!is_null($this->logger))
+					{
+						$this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", JLog::ERROR);
+					}
+					return false;
 				}
 			}
 
@@ -322,8 +325,10 @@ class BFStopHtAccess
 
 			return file_put_contents($this->path, $newContent, LOCK_EX);
 		}
-
-		$this->logger->log(".htaccess file is not writable!", JLog::ERROR);
+		if (!is_null($this->logger))
+		{
+			$this->logger->log(".htaccess file is not writable!", JLog::ERROR);
+		}
 		return false;
 	}
 }
