@@ -294,6 +294,11 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		$ipAddress = $this->getIPAddr();
+		if (empty($ipaddress) || $ipaddress === '')
+		{
+			$this->logger->log('Empty ip address!', JLog::ERROR);
+			return;
+		}
 		if ($this->mydb->isIPWhiteListed($ipAddress))
 		{
 			$this->logger->log('Ignoring failed login by whitelisted address '.$ipAddress, JLog::INFO);
