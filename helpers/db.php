@@ -8,7 +8,7 @@ class BFStopDBHelper {
 	private $db;
 	private $logger;
 
-	// 10 years in minutes. for all intents here sufficiently large to stand for "forever":
+	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
 
 	function getClientString($id)
@@ -155,8 +155,7 @@ class BFStopDBHelper {
 		{
 			$this->logger->log($action." because of entry: ".
 				"id=".$entry->id.", ".
-				"ipaddress=".$entry->ipaddress.", ".
-				"crdate=".$entry->crdate,
+				"ipaddress=".$entry->ipaddress,
 				JLog::INFO);
 		}
 		$this->myCheckDBError();
