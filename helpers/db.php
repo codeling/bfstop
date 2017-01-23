@@ -119,63 +119,71 @@ class BFStopDBHelper {
 		return $result;
 	}
 
-	private static $NetMask = '~((1 << (32 - SUBSTR(ipaddress, LOCATE("/", ipaddress)+1, LENGTH(ipaddress)-LOCATE("/", ipaddress))))-1)';
-	private static $SubNetAddress = 'SUBSTR(ipaddress, 1, LOCATE("/", ipaddress)-1)';
-
 	public function ipAddressMatch($ipaddress)
 	{
+		// literal match
 		return
 		"(".
-			// literal match
-			"ipaddress=".$this->db->quote($ipaddress)." OR ".
-			// IPv4 subnet match (only supports CIDR Suffix notation)
+			"ipaddress=".$this->db->quote($ipaddress)." AND ".
+			"LOCATE('/', ipaddress) = 0".
+		")";
+	}
+
+	public function ipSubNetIPv4Match($ipaddress)
+	{
+		$DashPos = 'LOCATE("/", ipaddress)';
+		$IPv4NetMask = '~((1 << (32 - SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')))-1)';
+		$SubNetAddress = 'SUBSTR(ipaddress, 1, LOCATE("/", ipaddress)-1)';
+		return
+		"(".
+			// IPv4 subnet match (CIDR Suffix notation)
 			"(".
-				"LENGTH(ipaddress) <= 18 AND LOCATE('/', ipaddress) != 0 AND ".
-				"(INET_ATON(".$this->db->quote($ipaddress).") & ".self::$NetMask.")".
+				"LOCATE('/', ipaddress) != 0 AND LOCATE('.', ipaddress) != 0 AND ".
+				"(INET_ATON(".$this->db->quote($ipaddress).") & ".$IPv4NetMask.")".
 					" = ".
-				"(INET_ATON(".self::$SubNetAddress.") & ".self::$NetMask.")".
+				"(INET_ATON(".$SubNetAddress.") & ".$IPv4NetMask.")".
 			")".
 			// IPv6 subnet match -> needs mysql >= 5.6.3 for INET6_ATON
 		")";
 	}
 
-	public function isIPBlocked($ipaddress)
+	private function checkForEntries($sql, $action)
 	{
-		$sqlCheck = "SELECT id, ipaddress, crdate, duration FROM #__bfstop_bannedip b WHERE ".
-			$this->ipAddressMatch($ipaddress).
-			" AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= ".
-			$this->db->quote(date("Y-m-d H:i:s")).")".
-			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
-		$this->db->setQuery($sqlCheck);
-		$entries = $this->db->loadObjectList();
-		foreach($entries as $entry)
-		{
-			$this->logger->log("Blocked because of entry: ".
-				"id=".$entry->id.", ".
-				"ipaddress=".$entry->ipaddress.", ".
-				"crdate=".$entry->crdate,
-				JLog::DEBUG);
-		}
-		$this->myCheckDBError();
-		return (count($entries) > 0);
-	}
-
-	public function isIPWhiteListed($ipaddress)
-	{
-		$sql = "SELECT id, ipaddress, crdate from #__bfstop_whitelist WHERE ".
-			$this->ipAddressMatch($ipaddress);
 		$this->db->setQuery($sql);
 		$entries = $this->db->loadObjectList();
 		foreach($entries as $entry)
 		{
-			$this->logger->log("whitelisted because of entry: ".
+			$this->logger->log($action." because of entry: ".
 				"id=".$entry->id.", ".
 				"ipaddress=".$entry->ipaddress.", ".
 				"crdate=".$entry->crdate,
-				JLog::DEBUG);
+				JLog::INFO);
 		}
 		$this->myCheckDBError();
-		return (count($entries) > 0);
+		return count($entries);
+	}
+
+	public function isIPBlocked($ipaddress)
+	{
+		$sqlCheckPattern = "SELECT id, ipaddress, crdate, duration FROM #__bfstop_bannedip b WHERE ".
+			"%s AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= ".
+			$this->db->quote(date("Y-m-d H:i:s")).")".
+			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
+		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
+		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
+		$entryCount = $this->checkForEntries($sqlIPCheck, "Blocked");
+		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Blocked");
+		return ($entryCount > 0);
+	}
+
+	public function isIPWhiteListed($ipaddress)
+	{
+		$sqlCheckPattern = "SELECT id, ipaddress, crdate from #__bfstop_whitelist WHERE %s";
+		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
+		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
+		$entryCount = $this->checkForEntries($sqlIPCheck, "Whitelisted");
+		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Whitelisted");
+		return ($entryCount > 0);
 	}
 
 	public function blockIP($logEntry, $duration, $usehtaccess)
