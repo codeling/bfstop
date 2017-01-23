@@ -167,8 +167,9 @@ class plgSystembfstop extends JPlugin
 
 	function getIPAddr()
 	{
-				// source: http://stackoverflow.com/a/2031935
-		foreach (array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR') as $key){
+		// source: http://stackoverflow.com/a/2031935
+		$keys = array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR');
+		foreach ($keys as $key){
 			if (array_key_exists($key, $_SERVER) === true){
 				foreach (explode(',', $_SERVER[$key]) as $ip){
 					$ip = trim($ip); // just to be safe
@@ -180,6 +181,7 @@ class plgSystembfstop extends JPlugin
 		}
 		$this->logger->log('No proper remote IP address available, falling back to REMOTE_ADDR "'.$_SERVER['REMOTE_ADDR'].
 			'"!', JLog::WARNING);
+		// possibly we should instead stop processing in case no proper IP address can be determined
 		return $_SERVER['REMOTE_ADDR'];
 	}
 	
