@@ -177,7 +177,7 @@ class BFStopDBHelper {
 
 	public function isIPWhiteListed($ipaddress)
 	{
-		$sqlCheckPattern = "SELECT id, ipaddress, crdate from #__bfstop_whitelist WHERE %s";
+		$sqlCheckPattern = "SELECT id, ipaddress from #__bfstop_whitelist WHERE %s";
 		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
 		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
 		$entryCount = $this->checkForEntries($sqlIPCheck, "Whitelisted");

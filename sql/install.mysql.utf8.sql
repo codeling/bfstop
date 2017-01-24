@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	id int(10) NOT NULL auto_increment,
 	username varchar(25) NOT NULL,
 	ipaddress varchar(45) NOT NULL,
-	error varchar(255) NOT NULL,
 	logtime datetime NOT NULL,
 	origin int NOT NULL,
 	handled BOOLEAN NOT NULL DEFAULT 0,
@@ -49,6 +48,6 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 CREATE TABLE IF NOT EXISTS #__bfstop_whitelist (
 	id int(10) NOT NULL auto_increment,
 	ipaddress varchar(45) NOT NULL,
-	crdate datetime NOT NULL,
+	notes varchar(255) NOT NULL DEFAULT '',
 	PRIMARY KEY (id)
 ) DEFAULT CHARSET=utf8;
