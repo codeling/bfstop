@@ -63,13 +63,14 @@ class BFStopHtAccess
 	 */
 	public function checkRequirements()
 	{
-		return array(
+		$result = array(
 			'apacheserver' => 
 				strstr(strtolower(filter_var($_SERVER['SERVER_SOFTWARE'], FILTER_SANITIZE_STRING)), 'apache'),
 			'found'		=> file_exists($this->path),
-			'readable'	 => is_readable($this->path),
+			'readable'	=> is_readable($this->path),
 			'writeable'	=> is_writeable($this->path)
 		);
+		return $result;
 	}
 
 	/**
