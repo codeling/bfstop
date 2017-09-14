@@ -32,7 +32,7 @@ class BFStopDBHelper {
 		$errNum = $db->getErrorNum();
 		if ($errNum != 0) {
 			$errMsg = $db->getErrorMsg();
-			$this->logger->log("Brute Force Stop: Database error (#$errNum) occured: $errMsg", JLog::ERROR);
+			$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::ERROR);
 		}
 	}
 
@@ -48,22 +48,30 @@ class BFStopDBHelper {
 		$table='#__bfstop_failedlogin',
 		$timecol='logtime')
 	{
-		if ($interval <= 0)
+		try
 		{
-			$this->logger->log("Invalid interval $interval");
+			if ($interval <= 0)
+			{
+				$this->logger->log("Invalid interval $interval");
+			}
+			// check if in the last $interval hours, $number incidents have occured already:
+			$sql = "SELECT COUNT(*) FROM ".$table." t ".
+				"WHERE t.".$timecol.
+				" between DATE_SUB(".
+				$this->db->quote($time).
+				", INTERVAL $interval MINUTE) AND ".
+				$this->db->quote($time).
+				" ".$additionalWhere;
+			$this->db->setQuery($sql);
+			$numberOfEvents = ((int)$this->db->loadResult());
+			$this->myCheckDBError();
+			return $numberOfEvents;
 		}
-		// check if in the last $interval hours, $number incidents have occured already:
-		$sql = "SELECT COUNT(*) FROM ".$table." t ".
-			"WHERE t.".$timecol.
-			" between DATE_SUB(".
-			$this->db->quote($time).
-			", INTERVAL $interval MINUTE) AND ".
-			$this->db->quote($time).
-			" ".$additionalWhere;
-		$this->db->setQuery($sql);
-		$numberOfEvents = ((int)$this->db->loadResult());
-		$this->myCheckDBError();
-		return $numberOfEvents;
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return 0;
+		}
 	}
 
 	public function getNumberOfFailedLogins($interval, $ipaddress, $logtime)
@@ -77,15 +85,23 @@ class BFStopDBHelper {
 
 	public function getFailedLoginsInLastHour()
 	{
-		$nowDateTime = date("Y-m-d H:i:s");
-		$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
-			"WHERE logtime > DATE_SUB(".
-				$this->db->quote($nowDateTime).
-			", INTERVAL 1 HOUR)";
-		$this->db->setQuery($sql);
-		$numRows = $this->db->loadResult();
-		$this->myCheckDBError();
-		return $numRows;
+		try
+		{
+			$nowDateTime = date("Y-m-d H:i:s");
+			$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
+				"WHERE logtime > DATE_SUB(".
+					$this->db->quote($nowDateTime).
+				", INTERVAL 1 HOUR)";
+			$this->db->setQuery($sql);
+			$numRows = $this->db->loadResult();
+			$this->myCheckDBError();
+			return $numRows;
+		}
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return 0;
+		}
 	}
 
 	public function getNumberOfPreviousBlocks($ipaddress)
@@ -101,28 +117,36 @@ class BFStopDBHelper {
 
 	public function getFormattedFailedList($ipAddress, $curTime, $interval)
 	{
-		$sql = "SELECT * FROM #__bfstop_failedlogin t where ipaddress=".
-			$this->db->quote($ipAddress).
-			" AND t.logtime".
-			" between DATE_SUB(".$this->db->quote($curTime).
-			", INTERVAL $interval MINUTE) AND ".
-			$this->db->quote($curTime);
-		$this->db->setQuery($sql);
-		$entries = $this->db->loadObjectList();
-		$this->myCheckDBError();
-		$result = str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
-				str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
-				str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
-				str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
-				str_repeat("-", 97)."\n";
-		foreach ($entries as $entry)
+		try
 		{
-			$result .= str_pad($entry->username, 25)." ".
-				str_pad($entry->ipaddress	  , 15)." ".
-				str_pad($entry->logtime		, 20)." ".
-				str_pad($this->getClientString($entry->origin),  8)."\n";
+			$sql = "SELECT * FROM #__bfstop_failedlogin t where ipaddress=".
+				$this->db->quote($ipAddress).
+				" AND t.logtime".
+				" between DATE_SUB(".$this->db->quote($curTime).
+				", INTERVAL $interval MINUTE) AND ".
+				$this->db->quote($curTime);
+			$this->db->setQuery($sql);
+			$entries = $this->db->loadObjectList();
+			$this->myCheckDBError();
+			$result = str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
+					str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
+					str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
+					str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
+					str_repeat("-", 97)."\n";
+			foreach ($entries as $entry)
+			{
+				$result .= str_pad($entry->username, 25)." ".
+					str_pad($entry->ipaddress	  , 15)." ".
+					str_pad($entry->logtime		, 20)." ".
+					str_pad($this->getClientString($entry->origin),  8)."\n";
+			}
+			return $result;
 		}
-		return $result;
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return '';
+		}
 	}
 
 	public function ipAddressMatch($ipaddress)
@@ -155,17 +179,25 @@ class BFStopDBHelper {
 
 	private function checkForEntries($sql, $action)
 	{
-		$this->db->setQuery($sql);
-		$entries = $this->db->loadObjectList();
-		foreach($entries as $entry)
+		try
 		{
-			$this->logger->log($action." because of entry: ".
-				"id=".$entry->id.", ".
-				"ipaddress=".$entry->ipaddress,
-				JLog::INFO);
+			$this->db->setQuery($sql);
+			$entries = $this->db->loadObjectList();
+			foreach($entries as $entry)
+			{
+				$this->logger->log($action." because of entry: ".
+					"id=".$entry->id.", ".
+					"ipaddress=".$entry->ipaddress,
+					JLog::INFO);
+			}
+			$this->myCheckDBError();
+			return count($entries);
 		}
-		$this->myCheckDBError();
-		return count($entries);
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return 0;
+		}
 	}
 
 	public function isIPBlocked($ipaddress)
@@ -193,59 +225,91 @@ class BFStopDBHelper {
 
 	public function blockIP($logEntry, $duration, $usehtaccess)
 	{
-		$blockEntry = new stdClass();
-		$blockEntry->ipaddress = $logEntry->ipaddress;
-		$blockEntry->crdate = date("Y-m-d H:i:s");
-		$blockEntry->duration = $duration;
-		if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
+		try
 		{
-			$this->logger->log('Insert block entry failed!', JLog::ERROR);
-			$blockEntry->id = -1;
+			$blockEntry = new stdClass();
+			$blockEntry->ipaddress = $logEntry->ipaddress;
+			$blockEntry->crdate = date("Y-m-d H:i:s");
+			$blockEntry->duration = $duration;
+			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
+			{
+				$this->logger->log('Insert block entry failed!', JLog::ERROR);
+				$blockEntry->id = -1;
+			}
+			$this->myCheckDBError();
+			$this->setFailedLoginHandled($logEntry, false);
+			if ($usehtaccess)
+			{
+				$htaccess = new BFStopHtAccess(JPATH_ROOT, $this->logger);
+				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
+				$htaccess->denyIP($logEntry->ipaddress);
+			}
+			return $blockEntry->id;
 		}
-		$this->myCheckDBError();
-		$this->setFailedLoginHandled($logEntry, false);
-		if ($usehtaccess)
+		catch (Exception $e)
 		{
-			$htaccess = new BFStopHtAccess(JPATH_ROOT, $this->logger);
-			$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
-			$htaccess->denyIP($logEntry->ipaddress);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return -1;
 		}
-		return $blockEntry->id;
 	}
 
 	public function getNewUnblockToken($id, $token)
 	{
-		$tokenEntry = new stdClass();
-		$tokenEntry->token = $token;
-		$tokenEntry->block_id = $id;
-		$tokenEntry->crdate = date("Y-m-d H:i:s");
-		if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
+		try
 		{
-			// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
-			$this->logger->log('Insert unblock token failed!', JLog::ERROR);
-			$tokenEntry->token = null;
+			$tokenEntry = new stdClass();
+			$tokenEntry->token = $token;
+			$tokenEntry->block_id = $id;
+			$tokenEntry->crdate = date("Y-m-d H:i:s");
+			if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
+			{
+				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
+				$this->logger->log('Insert unblock token failed!', JLog::ERROR);
+				$tokenEntry->token = null;
+			}
+			$this->myCheckDBError();
+			return $tokenEntry->token;
 		}
-		$this->myCheckDBError();
-		return $tokenEntry->token;
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return null;
+		}
 	}
 
 	public function unblockTokenExists($token)
 	{
-		$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
-			$this->db->quote($token);
-		$this->db->setQuery($sql);
-		$result = $this->db->loadResult();
-		$this->myCheckDBError();
-		return $result != null;
+		try
+		{
+			$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
+				$this->db->quote($token);
+			$this->db->setQuery($sql);
+			$result = $this->db->loadResult();
+			$this->myCheckDBError();
+			return $result != null;
+		}
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return false;
+		}
 	}
 
 	private function getUserEmailWhere($where)
 	{
-		$sql = "select email from #__users where $where LIMIT 1";
-		$this->db->setQuery($sql);
-		$emailAddress = $this->db->loadResult();
-		$this->myCheckDBError();
-		return $emailAddress;
+		try
+		{
+			$sql = "select email from #__users where $where LIMIT 1";
+			$this->db->setQuery($sql);
+			$emailAddress = $this->db->loadResult();
+			$this->myCheckDBError();
+			return $emailAddress;
+		}
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return '';
+		}
 	}
 
 	public function getUserEmailByID($uid)
@@ -260,19 +324,27 @@ class BFStopDBHelper {
 
 	public function getUserGroupEmail($gid)
 	{
-		$sql = "SELECT email from #__users u ".
-			"LEFT JOIN #__user_usergroup_map g ".
-			"ON u.id = g.user_id ".
-			"WHERE g.group_id = ".((int)($gid));
-		$this->db->setQuery($sql);
-		$dbrows = $this->db->loadAssocList();
-		$this->myCheckDBError();
-		$emailAddresses = array();
-		foreach($dbrows as $row)
+		try
 		{
-			$emailAddresses[] = $row['email'];
+			$sql = "SELECT email from #__users u ".
+				"LEFT JOIN #__user_usergroup_map g ".
+				"ON u.id = g.user_id ".
+				"WHERE g.group_id = ".((int)($gid));
+			$this->db->setQuery($sql);
+			$dbrows = $this->db->loadAssocList();
+			$this->myCheckDBError();
+			$emailAddresses = array();
+			foreach($dbrows as $row)
+			{
+				$emailAddresses[] = $row['email'];
+			}
+			return $emailAddresses;
 		}
-		return $emailAddresses;
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			return array();
+		}
 	}
 
 	public function insertFailedLogin($logEntry)
@@ -283,15 +355,22 @@ class BFStopDBHelper {
 
 	public function setFailedLoginHandled($info, $restrictOnUsername)
 	{
-		$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
-			' WHERE ipaddress='.$this->db->quote($info->ipaddress).
-			' AND handled=0';
-		if ($restrictOnUsername) {
-			$sql .= ' AND username='.$this->db->quote($info->username);
+		try
+		{
+			$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
+				' WHERE ipaddress='.$this->db->quote($info->ipaddress).
+				' AND handled=0';
+			if ($restrictOnUsername) {
+				$sql .= ' AND username='.$this->db->quote($info->username);
+			}
+			$this->db->setQuery($sql);
+			$this->db->query();
+			$this->myCheckDBError();
 		}
-		$this->db->setQuery($sql);
-		$this->db->query();
-		$this->myCheckDBError();
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+		}
 	}
 
 	public function successfulLogin($info)
@@ -301,41 +380,55 @@ class BFStopDBHelper {
 
 	public function purgeOldEntries($purgeAgeWeeks)
 	{
-		$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", JLog::INFO);
-		$deleteDate = 'DATE_SUB('.
-			' NOW(), INTERVAL '.
-			$this->db->quote($purgeAgeWeeks).
-			' WEEK)';
-		$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
-		$this->db->setQuery($sql);
-		$this->db->query();
-		$this->myCheckDBError();
+		try
+		{
+			$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", JLog::INFO);
+			$deleteDate = 'DATE_SUB('.
+				' NOW(), INTERVAL '.
+				$this->db->quote($purgeAgeWeeks).
+				' WEEK)';
+			$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
+			$this->db->setQuery($sql);
+			$this->db->query();
+			$this->myCheckDBError();
 
-		$sql = 'DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
-			DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate;
-		$this->db->setQuery($sql);
-		$this->db->query();
-		$this->myCheckDBError();
+			$sql = 'DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
+				DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate;
+			$this->db->setQuery($sql);
+			$this->db->query();
+			$this->myCheckDBError();
 
-		$sql = 'DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
-			'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)';
-		$this->db->setQuery($sql);
-		$this->db->query();
-		$this->myCheckDBError();
+			$sql = 'DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
+				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)';
+			$this->db->setQuery($sql);
+			$this->db->query();
+			$this->myCheckDBError();
 
-		$sql = 'DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate;
-		$this->db->setQuery($sql);
-		$this->db->query();
-		$this->myCheckDBError();
+			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate;
+			$this->db->setQuery($sql);
+			$this->db->query();
+			$this->myCheckDBError();
+		}
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+		}
 	}
 
 	public function saveParams($params)
 	{
-		$query = $this->db->getQuery(true);
-		$query->update('#__extensions AS a');
-		$query->set('a.params = '. $this->db->quote((string)$params) );
-		$query->where('a.element = "bfstop"');
-		$this->db->setQuery($query);
-		$this->db->query();
+		try
+		{
+			$query = $this->db->getQuery(true);
+			$query->update('#__extensions AS a');
+			$query->set('a.params = '. $this->db->quote((string)$params) );
+			$query->where('a.element = "bfstop"');
+			$this->db->setQuery($query);
+			$this->db->query();
+		}
+		catch (Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+		}
 	}
 }
