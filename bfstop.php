@@ -29,6 +29,10 @@ class plgSystembfstop extends JPlugin
 	{
 		return (int)$this->params->get($paramName, $default);
 	}
+	function getStringParam($paramName, $default)
+	{
+		return $this->params->get($paramName, $default);
+	}
 
 	function __construct(& $subject, $config) 
 	{
@@ -100,7 +104,13 @@ class plgSystembfstop extends JPlugin
 			}
 		}
 		$usehtaccess = $this->getBoolParam('useHtaccess', false);
-		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess);
+		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
+		if ($htaccessPath === "")
+		{
+			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, JLog::INFO);
+			$htaccessPath = JPATH_ROOT;
+		}
+		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', JLog::INFO);

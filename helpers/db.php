@@ -223,7 +223,7 @@ class BFStopDBHelper {
 		return ($entryCount > 0);
 	}
 
-	public function blockIP($logEntry, $duration, $usehtaccess)
+	public function blockIP($logEntry, $duration, $usehtaccess, $htaccessPath)
 	{
 		try
 		{
@@ -240,7 +240,7 @@ class BFStopDBHelper {
 			$this->setFailedLoginHandled($logEntry, false);
 			if ($usehtaccess)
 			{
-				$htaccess = new BFStopHtAccess(JPATH_ROOT, $this->logger);
+				$htaccess = new BFStopHtAccess($htaccessPath, $this->logger);
 				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
 				$htaccess->denyIP($logEntry->ipaddress);
 			}
