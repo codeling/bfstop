@@ -147,31 +147,20 @@ class plgSystembfstop extends JPlugin
 			: $duration;
 	}
 
-	function getDBDuration($duration)
-	{
-		return ($duration >= BFStopDBHelper::$UNLIMITED_DURATION)
-			? 0
-			: $duration;
-	}
-
-	function getBlockInterval()
-	{
-		$blockDuration = $this->getIntParam('blockDuration',
-			BFStopNotifier::$ONE_DAY);
-		return $this->getRealDurationFromDBDuration($blockDuration);
-	}
-
 	function blockIfTooManyAttempts($logEntry)
 	{
-		$interval = $this->getBlockInterval();
+		$blockInterval = $this->getIntParam('blockDuration',
+			BFStopNotifier::$ONE_DAY);
 		$maxNumber = $this->getIntParam('blockNumber', 15);
+		$checkInterval = $this->getRealDurationFromDBDuration(
+			$this->getIntParam('checkInterval', BFStopNotifier::$ONE_DAY));
 		if ($this->mydb->getNumberOfFailedLogins(
-			$interval,
+			$checkInterval,
 			$logEntry->ipaddress,
 			$logEntry->logtime) < $maxNumber) {
 			return;
 		}
-		$this->block($logEntry, $this->getDBDuration($interval));
+		$this->block($logEntry, $blockInterval);
 	}
 
 
@@ -224,8 +213,10 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		$allowedAttempts = $this->getIntParam('blockNumber', 15);
+		$checkInterval = $this->getRealDurationFromDBDuration(
+			$this->getIntParam('checkInterval', BFStopNotifier::$ONE_DAY));
 		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
-			$this->getBlockInterval(),
+			$checkInterval,
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
 		$this->logger->log("Failed logins: $numberOfFailedLogins; ".

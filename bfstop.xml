@@ -69,9 +69,6 @@
 					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
 					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
-				<field name="htaccessPath" type="text" default=""
-					label="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL"
-					description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL" />
 				<field name="blockDuration" type="list" default="1440"
 					label="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_DESC">
@@ -158,6 +155,22 @@
 					<option value="5">5</option>
 					<option value="5">6</option>
 				</field>
+				<field name="checkInterval" type="list" default="10080"
+					label="PLG_SYSTEM_BFSTOP_CHECK_INTERVAL_LABEL"
+					description="PLG_SYSTEM_BFSTOP_CHECK_INTERVAL_DESC">
+					<option     value="0">PLG_SYSTEM_BFSTOP_BLOCK_UNLIMITED</option>
+					<option     value="5">PLG_SYSTEM_BFSTOP_BLOCK_5MINUTES</option>
+					<option    value="10">PLG_SYSTEM_BFSTOP_BLOCK_10MINUTES</option>
+					<option    value="15">PLG_SYSTEM_BFSTOP_BLOCK_15MINUTES</option>
+					<option    value="30">PLG_SYSTEM_BFSTOP_BLOCK_30MINUTES</option>
+					<option    value="60">PLG_SYSTEM_BFSTOP_BLOCK_1HOUR</option>
+					<option   value="120">PLG_SYSTEM_BFSTOP_BLOCK_2HOURS</option>
+					<option   value="240">PLG_SYSTEM_BFSTOP_BLOCK_4HOURS</option>
+					<option   value="480">PLG_SYSTEM_BFSTOP_BLOCK_8HOURS</option>
+					<option  value="1440">PLG_SYSTEM_BFSTOP_BLOCK_24HOURS</option>
+					<option value="10080">PLG_SYSTEM_BFSTOP_BLOCK_1WEEK</option>
+					<option value="43200">PLG_SYSTEM_BFSTOP_BLOCK_30DAYS</option>
+				</field>
 				<field name="notifyRemainingAttempts" type="list" default="0"
 					label="PLG_SYSTEM_BFSTOP_NOTIFY_REMAINING_ATTEMPTS_LABEL"
 					description="PLG_SYSTEM_BFSTOP_NOTIFY_REMAINING_ATTEMPTS_DESC">
@@ -181,7 +194,6 @@
 					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
 					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
-
 				<field name="logLevel" type="list" default="8"
 					label="PLG_SYSTEM_BFSTOP_LOGLEVEL_LABEL"
 					description="PLG_SYSTEM_BFSTOP_LOGLEVEL_DESC">
@@ -201,6 +213,9 @@
 					first="0" last="24" step="1"
 					label="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_LABEL"
 					description="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_DESC" />
+				<field name="htaccessPath" type="text" default=""
+					label="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL"
+					description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL" />
 			</fieldset>
 			<fieldset name="delay" label="PLG_SYSTEM_BFSTOP_DELAY_FIELDSET_LABEL">
 				<field name="delayDuration" type="integer"
