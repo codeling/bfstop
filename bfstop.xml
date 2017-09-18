@@ -60,7 +60,7 @@
 		<fields name="params">
 			<fieldset name="basic">
 				<field name="blockNumber" type="integer"
-					default="10" first="3" last="25" step="1"
+					default="10" first="2" last="25" step="1"
 					label="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_DESC" />
 				<field name="useHtaccess" type="list" default="0"
