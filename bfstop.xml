@@ -188,7 +188,7 @@
 				<field name="blockedMessage" type="text" size="40" default=""
 					label="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_DESC" />
-				<field name="blockedMsgShowIP" type="list" default="1"
+				<field name="blockedMsgShowIP" type="list" default="0"
 					label="PLG_SYSTEM_BFSTOP_BLOCKED_MSG_SHOWIP_LABEL"
 					description="PLG_SYSTEM_BFSTOP_BLOCKED_MSG_SHOWIP_DESC">
 					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
