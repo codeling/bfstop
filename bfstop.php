@@ -227,8 +227,7 @@ class plgSystembfstop extends JPlugin
 				JLog::ERROR);
 			return;
 		}
-		if ($this->getBoolParam('notifyRemainingAttempts', false) &&
-			$attemptsLeft > 0) {
+		if ($notifyRemaining && $attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
 				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft));
 		}
