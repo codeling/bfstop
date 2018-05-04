@@ -17,28 +17,6 @@
 		<folder>language</folder>
 		<folder>sql</folder>
 	</files>
-	<languages folder="language">
-		<language tag="ca-ES">ca-ES/ca-ES.plg_system_bfstop.ini</language>
-		<language tag="ca-ES">ca-ES/ca-ES.plg_system_bfstop.sys.ini</language>
-		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.ini</language>
-		<language tag="de-DE">de-DE/de-DE.plg_system_bfstop.sys.ini</language>
-		<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.ini</language>
-		<language tag="en-GB">en-GB/en-GB.plg_system_bfstop.sys.ini</language>
-		<language tag="es-ES">es-ES/es-ES.plg_system_bfstop.ini</language>
-		<language tag="es-ES">es-ES/es-ES.plg_system_bfstop.sys.ini</language>
-		<language tag="fr-FR">fr-FR/fr-FR.plg_system_bfstop.ini</language>
-		<language tag="fr-FR">fr-FR/fr-FR.plg_system_bfstop.sys.ini</language>
-		<language tag="it-IT">it-IT/it-IT.plg_system_bfstop.sys.ini</language>
-		<language tag="it-IT">it-IT/it-IT.plg_system_bfstop.ini</language>
-		<language tag="nl-NL">nl-NL/nl-NL.plg_system_bfstop.ini</language>
-		<language tag="nl-NL">nl-NL/nl-NL.plg_system_bfstop.sys.ini</language>
-		<language tag="pt-PT">pt-PT/pt-PT.plg_system_bfstop.ini</language>
-		<language tag="pt-PT">pt-PT/pt-PT.plg_system_bfstop.sys.ini</language>
-		<language tag="pt-BR">pt-BR/pt-BR.plg_system_bfstop.ini</language>
-		<language tag="pt-BR">pt-BR/pt-BR.plg_system_bfstop.sys.ini</language>
-		<language tag="ru-RU">ru-RU/ru-RU.plg_system_bfstop.ini</language>
-		<language tag="ru-RU">ru-RU/ru-RU.plg_system_bfstop.sys.ini</language>
-	</languages>
 	<install>
 		<sql>
 			<file driver="mysql" charset="utf8">sql/install.mysql.utf8.sql</file>

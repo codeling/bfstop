@@ -29,10 +29,13 @@ class BFStopDBHelper {
 	}
 
 	public static function checkDBError($db, $logger) {
-		$errNum = $db->getErrorNum();
-		if ($errNum != 0) {
-			$errMsg = $db->getErrorMsg();
-			$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::ERROR);
+		if (method_exists('db', 'getErrorNum'))
+		{
+			$errNum = $db->getErrorNum();
+			if ($errNum != 0) {
+				$errMsg = $db->getErrorMsg();
+				$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::ERROR);
+			}
 		}
 	}
 
