@@ -1,3 +1,13 @@
+1.4.1 (2017-02-01)
+  - JED checker error fixes
+
+1.4.0 (2017-02-01)
+  - Blocking via .htaccess
+  - New method for determining client IP to support load balancers/proxies
+  - IPv6 fixes (IPv6 subnet masks not yet supported)
+  - mysql compatibility
+  - php 7 compatibility
+
 1.3.0 (2014-03-23)
   - Inclusion guard fixes
 
