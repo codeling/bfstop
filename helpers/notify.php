@@ -2,7 +2,7 @@
 /*
  * @package BFStop Plugin (bfstop) for Joomla! >=2.5
  * @author Bernhard Froehler
- * @copyright (C) 2012-2017 Bernhard Froehler
+ * @copyright (C) 2012-2018 Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
 defined( '_JEXEC' ) or die;
