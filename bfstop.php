@@ -10,10 +10,11 @@ defined('_JEXEC') or die;
 jimport('joomla.event.plugin');
 jimport('joomla.log.log');
 
-require_once dirname(__FILE__).'/helpers/log.php';
-require_once dirname(__FILE__).'/helpers/db.php';
-require_once dirname(__FILE__).'/helpers/notify.php';
-require_once dirname(__FILE__).'/helpers/crypto.php';
+$ds = DIRECTORY_SEPARATOR;
+require_once dirname(__FILE__).$ds.'helpers'.$ds.'log.php';
+require_once dirname(__FILE__).$ds.'helpers'.$ds.'db.php';
+require_once dirname(__FILE__).$ds.'helpers'.$ds.'notify.php';
+require_once dirname(__FILE__).$ds.'helpers'.$ds.'crypto.php';
 
 class plgSystembfstop extends JPlugin
 {
