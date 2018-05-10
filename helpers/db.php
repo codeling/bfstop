@@ -367,7 +367,7 @@ class BFStopDBHelper {
 				$sql .= ' AND username='.$this->db->quote($info->username);
 			}
 			$this->db->setQuery($sql);
-			$this->db->query();
+			$this->db->execute();
 			$this->myCheckDBError();
 		}
 		catch (Exception $e)
@@ -392,24 +392,24 @@ class BFStopDBHelper {
 				' WEEK)';
 			$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
 			$this->db->setQuery($sql);
-			$this->db->query();
+			$this->db->execute();
 			$this->myCheckDBError();
 
 			$sql = 'DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
 				DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate;
 			$this->db->setQuery($sql);
-			$this->db->query();
+			$this->db->execute();
 			$this->myCheckDBError();
 
 			$sql = 'DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
 				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)';
 			$this->db->setQuery($sql);
-			$this->db->query();
+			$this->db->execute();
 			$this->myCheckDBError();
 
 			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate;
 			$this->db->setQuery($sql);
-			$this->db->query();
+			$this->db->execute();
 			$this->myCheckDBError();
 		}
 		catch (Exception $e)
@@ -427,7 +427,7 @@ class BFStopDBHelper {
 			$query->set('a.params = '. $this->db->quote((string)$params) );
 			$query->where('a.element = "bfstop"');
 			$this->db->setQuery($query);
-			$this->db->query();
+			$this->db->execute();
 		}
 		catch (Exception $e)
 		{
