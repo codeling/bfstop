@@ -101,7 +101,6 @@ class BFStopNotifier
 	{
 		if (!is_array($emailAddresses) || count($emailAddresses) == 0)
 		{
-			$this->logger->log('Sending email failed: At least one email address is required, none given.', JLog::ERROR);
 			return;
 		}
 		$mail = JFactory::getMailer();

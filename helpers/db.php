@@ -191,7 +191,7 @@ class BFStopDBHelper {
 				$this->logger->log($action." because of entry: ".
 					"id=".$entry->id.", ".
 					"ipaddress=".$entry->ipaddress,
-					JLog::INFO);
+					JLog::DEBUG);
 			}
 			$this->myCheckDBError();
 			return count($entries);
