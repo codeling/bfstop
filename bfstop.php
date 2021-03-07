@@ -316,7 +316,7 @@ class plgSystembfstop extends JPlugin
 		$logEntry->id		= null;
 		$logEntry->ipaddress = $ipAddress;
 		$logEntry->logtime   = date("Y-m-d H:i:s");
-		$logEntry->username  = $user['username'];
+		$logEntry->username  = mb_strimwidth($user['username'], 0, 150, "...");
 		$logEntry->origin	= $this->myapp->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.
