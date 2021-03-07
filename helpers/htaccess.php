@@ -228,7 +228,7 @@ class BFStopHtAccess
 		return $this->insert($insertion);
 	}
 
-	private static $marker = 'Brute Force Stop Blocks';
+	private static $marker = 'BFStop Blocks';
 
 	/**
 	 * Return array of strings from between BEGIN and END markers from .htaccess.
