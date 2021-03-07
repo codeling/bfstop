@@ -230,14 +230,15 @@ class plgSystembfstop extends JPlugin
 		}
 		if ($notifyRemaining && $attemptsLeft > 0) {
 			$this->myapp->enqueueMessage(JText::sprintf(
-				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft));
+				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft),
+				'warning');
 		}
 		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
 		{
 			$resetLink = $this->getPasswordResetLink();
 			$this->myapp->enqueueMessage(JText::sprintf(
 				"PLG_SYSTEM_BFSTOP_PASSWORD_RESET_RECOMMENDED",
-				$resetLink));
+				$resetLink), 'warning');
 		}
 	}
 
