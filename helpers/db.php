@@ -216,13 +216,13 @@ class BFStopDBHelper {
 		return ($entryCount > 0);
 	}
 
-	public function isIPWhiteListed($ipaddress)
+	public function isIPOnAllowList($ipaddress)
 	{
-		$sqlCheckPattern = "SELECT id, ipaddress from #__bfstop_whitelist WHERE %s";
+		$sqlCheckPattern = "SELECT id, ipaddress from #__bfstop_allowlist WHERE %s";
 		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
 		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
-		$entryCount = $this->checkForEntries($sqlIPCheck, "Whitelisted");
-		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Whitelisted");
+		$entryCount = $this->checkForEntries($sqlIPCheck, "Allowed");
+		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Allowed");
 		return ($entryCount > 0);
 	}
 

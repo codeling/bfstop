@@ -301,9 +301,9 @@ class plgSystembfstop extends JPlugin
 			$this->logger->log('Empty IP address!', JLog::ERROR);
 			return;
 		}
-		if ($this->mydb->isIPWhiteListed($ipAddress))
+		if ($this->mydb->isIPOnAllowList($ipAddress))
 		{
-			$this->logger->log('Ignoring failed login by whitelisted address '.$ipAddress, JLog::INFO);
+			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, JLog::INFO);
 			return;
 		}
 		JPlugin::loadLanguage('plg_system_bfstop');
@@ -385,7 +385,7 @@ class plgSystembfstop extends JPlugin
 			}
 		}
 		$ipaddress = $this->getIPAddr();
-		if ($this->mydb->isIPWhiteListed($ipaddress))
+		if ($this->mydb->isIPOnAllowList($ipaddress))
 		{
 			return;
 		}
