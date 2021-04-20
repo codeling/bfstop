@@ -1,3 +1,13 @@
+1.4.2 (2021-04-20)
+  - Joomla 4 Compatibility
+  - Language: Whitelist -> Allow list (en/de)
+  - Component:
+	- Default sort order descending by date
+	- Warn if plugin is not enabled
+  - Plugin:
+	- Less verbose log output where unnecessary
+	- Fix problems with usernames > 25 characters
+
 1.4.1 (2017-02-01)
   - JED checker error fixes
 
