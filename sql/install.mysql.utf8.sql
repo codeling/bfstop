@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 
 
 -- stores a whitelist of IPs which will never be blocked
-CREATE TABLE IF NOT EXISTS #__bfstop_whitelist (
+CREATE TABLE IF NOT EXISTS #__bfstop_allowlist (
 	id int(10) NOT NULL auto_increment,
 	ipaddress varchar(45) NOT NULL,
 	notes varchar(255) NOT NULL DEFAULT '',
