@@ -72,7 +72,7 @@ class BFStopHtAccess
 	{
 		$result = array(
 			'apacheserver' => 
-				strstr(strtolower(filter_var($_SERVER['SERVER_SOFTWARE'], FILTER_SANITIZE_STRING)), 'apache'),
+				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'])), 'apache'),
 			'found'		=> file_exists($this->path),
 			'readable'	=> is_readable($this->path),
 			'writeable'	=> is_writeable($this->path)
