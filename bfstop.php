@@ -18,9 +18,10 @@ require_once dirname(__FILE__).$ds.'helpers'.$ds.'crypto.php';
 
 class plgSystembfstop extends JPlugin
 {
-	private $myapp;
-	private $mydb;
 	private $logger;
+	private $notifier;
+	private $mydb;
+	private $myapp;
 
 	function getBoolParam($paramName, $default)
 	{
