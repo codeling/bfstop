@@ -110,14 +110,29 @@ class BFStopNotifier
 		{
 			$mail->addRecipient($recipient);
 		}
-		$sendResult = $mail->Send();
-		$sendSuccess = ($sendResult === true);
+		try
+		{
+			$sendResult = $mail->Send();
+		}
+		catch (phpmailerException $e)
+		{
+			$sendResult = $e->errorMessage();
+		}
+		catch (MailDisabledException $e)
+		{
+			$sendResult = $e->getReason();
+		}
+		catch (Exception $e)
+		{
+			$sendResult = $e->getMessage();
+		}
+		$success = ($sendResult === true);
 		$this->logger->log('Sent email to '.implode(", ", $emailAddresses).
-			', subject: '.$subject.'; '.(($sendSuccess)
+			', subject: '.$subject.'; '.($success
 				? 'successful'
-				:'not successful: '.
-				json_encode($mail->ErrorInfo)), JLog::INFO);
-		return $sendSuccess;
+				:'not successful: '.$sendResult
+				), $success ? JLog::INFO : JLog::ERROR);
+		return $sendResult;
 	}
 
 	public function failedLogin($logEntry, $maxNumber)
