@@ -6,7 +6,6 @@
 	<creationDate>November 2012</creationDate>
 	<copyright>Copyright (C) Bernhard Froehler</copyright>
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
-	<homepage>https://github.com/codeling/bfstop</homepage>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
 	<version>1.4.6</version>
@@ -221,4 +220,7 @@
 		</fields>
 	</config>
 	<scriptfile>updatescript.php</scriptfile>
+	<updateservers>
+		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>
+	</updateservers>
 </extension>
