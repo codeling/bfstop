@@ -1,6 +1,6 @@
 <?php
 /*
- * @package BFStop Plugin (bfstop) for Joomla! >=2.5
+ * @package BFStop Plugin (bfstop) for Joomla!
  * @author Bernhard Froehler
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
