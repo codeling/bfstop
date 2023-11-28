@@ -15,6 +15,7 @@ require_once dirname(__FILE__).$ds.'helpers'.$ds.'log.php';
 require_once dirname(__FILE__).$ds.'helpers'.$ds.'db.php';
 require_once dirname(__FILE__).$ds.'helpers'.$ds.'notify.php';
 require_once dirname(__FILE__).$ds.'helpers'.$ds.'crypto.php';
+require_once dirname(__FILE__).$ds.'helpers'.$ds.'ipaddress.php';
 
 class plgSystembfstop extends JPlugin
 {
@@ -166,26 +167,6 @@ class plgSystembfstop extends JPlugin
 	}
 
 
-	function getIPAddr()
-	{
-		// source: http://stackoverflow.com/a/2031935
-		$keys = array('HTTP_CLIENT_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_FORWARDED', 'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_FORWARDED', 'REMOTE_ADDR');
-		foreach ($keys as $key){
-			if (array_key_exists($key, $_SERVER) === true){
-				foreach (explode(',', $_SERVER[$key]) as $ip){
-					$ip = trim($ip); // just to be safe
-					if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false){
-						return $ip;
-					}
-				}
-			}
-		}
-		$this->logger->log('No proper remote IP address available, falling back to REMOTE_ADDR "'.$_SERVER['REMOTE_ADDR'].
-			'"!', JLog::WARNING);
-		// possibly we should instead stop processing in case no proper IP address can be determined
-		return $_SERVER['REMOTE_ADDR'];
-	}
-	
 	private function init()
 	{
 		$this->logger = new BFStopLogger($this->getIntParam(
@@ -296,7 +277,7 @@ class plgSystembfstop extends JPlugin
 		{
 			return;
 		}
-		$ipAddress = $this->getIPAddr();
+		$ipAddress = getIPAddr($this->logger);
 		if (empty($ipAddress) || $ipAddress === '')
 		{
 			$this->logger->log('Empty IP address!', JLog::ERROR);
@@ -342,7 +323,7 @@ class plgSystembfstop extends JPlugin
 			return;
 		}
 		$info = new stdClass();
-		$info->ipaddress = $this->getIPAddr();
+		$info->ipaddress = getIPAddr($this->logger);
 		$info->username  = $user['username'];
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, JLog::DEBUG);
@@ -385,7 +366,7 @@ class plgSystembfstop extends JPlugin
 				$this->mydb->saveParams($this->params);
 			}
 		}
-		$ipaddress = $this->getIPAddr();
+		$ipaddress = getIPAddr($this->logger);
 		if ($this->mydb->isIPOnAllowList($ipaddress))
 		{
 			return;
