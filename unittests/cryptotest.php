@@ -7,7 +7,7 @@
 **/
 require_once('helpers/crypto.php');
 
-class JLog {
+class Log {
 	const DEBUG    = 128;
 	const INFO     =  64;
 	const NOTICE   =  32;
@@ -47,10 +47,10 @@ class BFStopTokenGeneratorTest extends PHPUnit_Framework_TestCase
 			(strtoupper(substr(PHP_OS, 0, 3)) === 'WIN' ||
 			version_compare(phpversion(), '5.3.7') > 0) ) ) {
 			$this->assertEquals(sizeof($testlogger->logMessages), 1);
-			$this->assertEquals($testlogger->logMessages[0]->level, JLog::VERBOSE);
+			$this->assertEquals($testlogger->logMessages[0]->level, Log::VERBOSE);
 		} else {
 			$this->assertEquals(sizeof($testlogger->logMessages), 1);
-			$this->assertEquals($testlogger->logMessages[0]->level, JLog::WARNING);
+			$this->assertEquals($testlogger->logMessages[0]->level, Log::WARNING);
 		}
 	}
 }
