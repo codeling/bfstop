@@ -7,6 +7,10 @@
 **/
 defined( '_JEXEC' ) or die;
 
+use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
+use Joomla\CMS\Log\Log;
+
 require_once dirname(__FILE__).'/htaccess.php';
 
 class BFStopDBHelper {
@@ -24,7 +28,7 @@ class BFStopDBHelper {
 
 	public function __construct($logger)
 	{
-		$this->db = JFactory::getDbo();
+		$this->db = Factory::getDbo();
 		$this->logger = $logger;
 	}
 
@@ -34,7 +38,7 @@ class BFStopDBHelper {
 			$errNum = $db->getErrorNum();
 			if ($errNum != 0) {
 				$errMsg = $db->getErrorMsg();
-				$this->logger->log("Database error (#$errNum) occured: $errMsg", JLog::ERROR);
+				$this->logger->log("Database error (#$errNum) occured: $errMsg", Log::ERROR);
 			}
 		}
 	}
@@ -72,7 +76,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
 		}
 	}
@@ -102,7 +106,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
 		}
 	}
@@ -131,10 +135,10 @@ class BFStopDBHelper {
 			$this->db->setQuery($sql);
 			$entries = $this->db->loadObjectList();
 			$this->myCheckDBError();
-			$result = str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
-					str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
-					str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
-					str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
+			$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
 					str_repeat("-", 97)."\n";
 			foreach ($entries as $entry)
 			{
@@ -147,7 +151,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return '';
 		}
 	}
@@ -191,14 +195,14 @@ class BFStopDBHelper {
 				$this->logger->log($action." because of entry: ".
 					"id=".$entry->id.", ".
 					"ipaddress=".$entry->ipaddress,
-					JLog::DEBUG);
+					Log::DEBUG);
 			}
 			$this->myCheckDBError();
 			return count($entries);
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
 		}
 	}
@@ -236,7 +240,7 @@ class BFStopDBHelper {
 			$blockEntry->duration = $duration;
 			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
 			{
-				$this->logger->log('Insert block entry failed!', JLog::ERROR);
+				$this->logger->log('Insert block entry failed!', Log::ERROR);
 				$blockEntry->id = -1;
 			}
 			$this->myCheckDBError();
@@ -244,14 +248,14 @@ class BFStopDBHelper {
 			if ($usehtaccess)
 			{
 				$htaccess = new BFStopHtAccess($htaccessPath, $this->logger);
-				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), JLog::INFO);
+				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), Log::INFO);
 				$htaccess->denyIP($logEntry->ipaddress);
 			}
 			return $blockEntry->id;
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return -1;
 		}
 	}
@@ -267,7 +271,7 @@ class BFStopDBHelper {
 			if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
 			{
 				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
-				$this->logger->log('Insert unblock token failed!', JLog::ERROR);
+				$this->logger->log('Insert unblock token failed!', Log::ERROR);
 				$tokenEntry->token = null;
 			}
 			$this->myCheckDBError();
@@ -275,7 +279,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return null;
 		}
 	}
@@ -293,7 +297,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return false;
 		}
 	}
@@ -310,7 +314,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return '';
 		}
 	}
@@ -345,7 +349,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return array();
 		}
 	}
@@ -372,7 +376,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
 	}
 
@@ -385,7 +389,7 @@ class BFStopDBHelper {
 	{
 		try
 		{
-			$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", JLog::INFO);
+			$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", Log::INFO);
 			$deleteDate = 'DATE_SUB('.
 				' NOW(), INTERVAL '.
 				$this->db->quote($purgeAgeWeeks).
@@ -414,7 +418,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
 	}
 
@@ -431,7 +435,7 @@ class BFStopDBHelper {
 		}
 		catch (Exception $e)
 		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), JLog::ERROR);
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
 	}
 }

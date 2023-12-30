@@ -7,6 +7,8 @@
 **/
 defined( '_JEXEC' ) or die;
 
+use Joomla\CMS\Log\Log;
+
 /**
  .htaccess management class, based on the work by Jan-Paul Kleemans from
 	 https://github.com/jpkleemans/Brute-Force-Login-Protection
@@ -315,7 +317,7 @@ class BFStopHtAccess
 				{
 					if (!is_null($this->logger))
 					{
-						$this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", JLog::ERROR);
+						$this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", Log::ERROR);
 					}
 					return false;
 				}
@@ -335,7 +337,7 @@ class BFStopHtAccess
 		}
 		if (!is_null($this->logger))
 		{
-			$this->logger->log(".htaccess file is not writable!", JLog::ERROR);
+			$this->logger->log(".htaccess file is not writable!", Log::ERROR);
 		}
 		return false;
 	}

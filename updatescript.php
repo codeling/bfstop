@@ -7,6 +7,8 @@
 **/
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Factory;
+
 class PlgsystembfstopInstallerScript
 {
 	function install($parent) {}
@@ -18,7 +20,7 @@ class PlgsystembfstopInstallerScript
 	{
 		// for version 1.4.2, whitelist was renamed to allowlist, but only for updates;
 		// for new installs, the old name remained, so let's fix this for all installations:
-		$db = JFactory::getDbo();
+		$db = Factory::getDbo();
 		try
 		{
 			$sql = "SELECT COUNT(*) FROM `#__bfstop_whitelist`";

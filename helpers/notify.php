@@ -7,6 +7,10 @@
 **/
 defined( '_JEXEC' ) or die;
 
+use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
+use Joomla\CMS\Log\Log;
+
 class BFStopNotifier
 {
 	public static $ONE_DAY=1440;
@@ -31,7 +35,7 @@ class BFStopNotifier
 		}
 		if (count($this->notifyAddresses) == 0)
 		{
-			$this->logger->log('No notification address specified!', JLog::DEBUG);
+			$this->logger->log('No notification address specified!', Log::DEBUG);
 		}
 	}
 
@@ -42,7 +46,7 @@ class BFStopNotifier
 
 	public function getSiteName()
 	{
-		$config = JFactory::getConfig();
+		$config = Factory::getConfig();
 		$siteName = $config->get('sitename');	// Joomla! 3.x
 		$siteName = (strcmp($siteName,'') == 0)
 			? $config->get('config.sitename')
@@ -71,7 +75,7 @@ class BFStopNotifier
 
 	function getBlockedBody($logEntry, $interval)
 	{
-		return JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
+		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
 			JURI::root(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
@@ -83,16 +87,16 @@ class BFStopNotifier
 
 	function getFailedLoginBody($logEntry)
 	{
-		$bodys = JText::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
+		$bodys = Text::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
 			JURI::root()) ."\n";
-		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_USERNAME').":",15) .
+		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":",15) .
 			$logEntry->username  ."\n";
-		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":",15).
+		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":",15).
 			$logEntry->ipaddress ."\n";
-		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_DATETIME').":",15) .
+		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":",15) .
 			$logEntry->logtime   ."\n";
-		$bodys.= str_pad(JText::_('PLG_SYSTEM_BFSTOP_ORIGIN').":",15)   .
+		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN').":",15)   .
 			$this->db->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
@@ -103,7 +107,7 @@ class BFStopNotifier
 		{
 			return;
 		}
-		$mail = JFactory::getMailer();
+		$mail = Factory::getMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
 		foreach ($emailAddresses as $recipient)
@@ -131,7 +135,7 @@ class BFStopNotifier
 			', subject: '.$subject.'; '.($success
 				? 'successful'
 				:'not successful: '.$sendResult
-				), $success ? JLog::INFO : JLog::ERROR);
+				), $success ? Log::INFO : Log::ERROR);
 		return $sendResult;
 	}
 
@@ -143,7 +147,7 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getFailedLoginBody($logEntry);
-		$subject = JText::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
+		$subject = Text::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
 			JURI::root());
 		$this->sendMail($subject, $body, $this->notifyAddresses);
@@ -158,7 +162,7 @@ class BFStopNotifier
 			return;
 		}
 		$body = $this->getBlockedBody($logEntry, $interval);
-		$subject = JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
+		$subject = Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);
 		$this->sendMail($subject, $body, $this->notifyAddresses);
@@ -168,8 +172,8 @@ class BFStopNotifier
 	{
 		$siteName = $this->getSiteName();
 		$this->sendMail(
-			JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_SUBJECT', $siteName),
-			JText::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_BODY',
+			Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_SUBJECT', $siteName),
+			Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_BODY',
 				$siteName,
 				$unblockLink
 			),

@@ -7,6 +7,8 @@
 **/
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Log\Log;
+
 function getIPAddr($logger)
 {
 	// source: http://stackoverflow.com/a/2031935
@@ -22,7 +24,7 @@ function getIPAddr($logger)
 		}
 	}
 	$logger->log('No proper remote IP address available, falling back to REMOTE_ADDR "'.$_SERVER['REMOTE_ADDR'].
-		'"!', JLog::WARNING);
+		'"!', Log::WARNING);
 	// possibly we should instead stop processing in case no proper IP address can be determined
 	return $_SERVER['REMOTE_ADDR'];
 }
