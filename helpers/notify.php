@@ -10,6 +10,7 @@ defined( '_JEXEC' ) or die;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
+use Joomla\CMS\Uri\Uri;
 
 class BFStopNotifier
 {
@@ -77,7 +78,7 @@ class BFStopNotifier
 	{
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
-			JURI::root(),
+			Uri::root(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
@@ -89,7 +90,7 @@ class BFStopNotifier
 	{
 		$bodys = Text::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
-			JURI::root()) ."\n";
+			Uri::root()) ."\n";
 		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":",15) .
 			$logEntry->username  ."\n";
 		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":",15).
@@ -149,7 +150,7 @@ class BFStopNotifier
 		$body = $this->getFailedLoginBody($logEntry);
 		$subject = Text::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
-			JURI::root());
+			Uri::root());
 		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 

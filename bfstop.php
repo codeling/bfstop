@@ -12,6 +12,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Router\Route;
+use Joomla\CMS\Uri\Uri;
 
 require_once dirname(__FILE__).'/helpers/log.php';
 require_once dirname(__FILE__).'/helpers/db.php';
@@ -61,7 +62,7 @@ class plgSystembfstop extends CMSPlugin
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
-		$linkBase = JURI::base();
+		$linkBase = Uri::base();
 		// strip off an eventual administrator - tokenunblock is a site view
 		$adminDir = 'administrator/';
 		if (self::endsWith($linkBase, $adminDir))
