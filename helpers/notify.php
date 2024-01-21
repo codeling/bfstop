@@ -106,7 +106,8 @@ class BFStopNotifier
 	{
 		if (!is_array($emailAddresses) || count($emailAddresses) == 0)
 		{
-			return;
+			$this->logger->log("sendMail called with invalid argument: $emailAddresses", Log::ERROR);
+			return false;
 		}
 		$mail = Factory::getMailer();
 		$mail->setSubject($subject);
@@ -178,7 +179,8 @@ class BFStopNotifier
 				$siteName,
 				$unblockLink
 			),
-			$userEmail);
+			array($userEmail)
+		);
 	}
 }
 
