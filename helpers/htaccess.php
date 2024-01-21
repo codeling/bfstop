@@ -106,7 +106,6 @@ class BFStopHtAccess
 	 */
 	public function denyIP($IP)
 	{
-		if (!filter_var($IP, FILTER_VALIDATE_IP)) return false;
 		return $this->addLine('deny from ' . $IP);
 	}
 
