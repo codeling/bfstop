@@ -13,12 +13,12 @@ class BFStopTokenGenerator {
 
 	const HexLetter = '0123456789abcdef';
 
-	private function getRandHexLetter() {
+	private static function getRandHexLetter() {
 		$idx = mt_rand(0,15);
 		return substr(self::HexLetter, $idx, 1);
 	}
 
-	private function getRandToken($length) {
+	private static function getRandToken($length) {
 		$token = '';
 		for ($i=0; $i<$length; ++$i) {
 			$token .= self::getRandHexLetter();
@@ -26,7 +26,7 @@ class BFStopTokenGenerator {
 		return $token;
 	}
 
-	public function getToken($logger)
+	public static function getToken($logger)
 	{
 		$length = 64;
 		$strongCrypto = false;
