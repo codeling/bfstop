@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form>
+	<fieldset name="form_block" addrulepath="administrator/components/com_bfstop/models/rules">
+		<field
+			name="id"
+			type="hidden"
+		/>
+		<field
+			name="ipaddress"
+			type="text"
+			label="COM_BFSTOP_HEADING_IPADDRESS"
+			description="COM_BFSTOP_DESC_BLOCK_IPADDRESS"
+			size="40"
+			default="0.0.0.0"
+			validate="iprangeblock"
+		/>
+		<field
+			name="crdate"
+			type="calendar"
+			label="COM_BFSTOP_HEADING_DATE"
+			description="COM_BFSTOP_DESC_BLOCK_CRDATE"
+			format="%Y-%m-%d"
+			default="now"
+		/>
+		<field
+			name="duration"
+			type="list"
+			default="1440"
+			label="COM_BFSTOP_HEADING_DURATION"
+			description="COM_BFSTOP_DESC_DURATION"
+		>
+			<option    value="0">COM_BFSTOP_BLOCK_UNLIMITED</option>
+			<option    value="5">COM_BFSTOP_BLOCK_5MINUTES</option>
+			<option   value="10">COM_BFSTOP_BLOCK_10MINUTES</option>
+			<option   value="15">COM_BFSTOP_BLOCK_15MINUTES</option>
+			<option   value="30">COM_BFSTOP_BLOCK_30MINUTES</option>
+			<option   value="60">COM_BFSTOP_BLOCK_1HOUR</option>
+			<option  value="120">COM_BFSTOP_BLOCK_2HOURS</option>
+			<option  value="240">COM_BFSTOP_BLOCK_4HOURS</option>
+			<option  value="480">COM_BFSTOP_BLOCK_8HOURS</option>
+			<option value="1440">COM_BFSTOP_BLOCK_24HOURS</option>
+		</field>
+	</fieldset>
+</form>

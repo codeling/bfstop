@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="component" version="2.5" method="upgrade">
+	<name>com_bfstop</name>
+	<author>Bernhard Froehler</author>
+	<description>COM_BFSTOP_DESC</description>
+	<creationDate>May 2013</creationDate>
+	<copyright>Copyright (C) by Bernhard Froehler</copyright>
+	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
+	<authorEmail>bfstop@bfroehler.info</authorEmail>
+	<authorUrl>https://github.com/codeling</authorUrl>
+	<version>1.5.0</version>
+	<scriptfile>installscript.php</scriptfile>
+	<install> <!-- Runs on install -->
+<!--
+		<sql>
+			<file driver="mysql" charset="utf8">sql/install.mysql.utf8.sql</file>
+		</sql>
+-->
+	</install>
+	<uninstall> <!-- Runs on uninstall -->
+<!--
+		<sql>
+			<file driver="mysql" charset="utf8">sql/uninstall.mysql.utf8.sql</file>
+		</sql>
+-->
+	</uninstall>
+	<update> <!-- Runs on update; New in 1.6 -->
+<!--
+		<schemas>
+			<schemapath type="mysql">sql/updates/mysql</schemapath>
+		</schemas>
+-->
+	</update>
+	<files folder="site">
+		<filename>controller.php</filename>
+		<filename>bfstop.php</filename>
+		<filename>index.html</filename>
+		<filename>router.php</filename>
+		<folder>models</folder>
+		<folder>views</folder>
+		<folder>language</folder>
+	</files>
+	<administration>
+		<menu>com_bfstop</menu>
+		<submenu>
+			<menu view="blocklist">com_bfstop_blocklist</menu>
+			<menu view="htblocklist">com_bfstop_htaccess_blocklist</menu>
+			<menu view="failedloginlist">com_bfstop_failedloginlist</menu>
+			<menu view="settings">com_bfstop_settings</menu>
+			<menu view="allowlist">com_bfstop_allowlist</menu>
+			<menu view="log">com_bfstop_log</menu>
+		</submenu>
+		<files folder="admin">
+			<filename>access.xml</filename>
+			<filename>bfstop.php</filename>
+			<filename>config.xml</filename>
+			<filename>index.html</filename>
+			<filename>controller.php</filename>
+			<folder>controllers</folder>
+			<folder>helpers</folder>
+			<folder>models</folder>
+			<folder>views</folder>
+			<folder>tables</folder>
+		</files>		
+		<languages folder="admlang">
+			<language tag="ca-ES">ca-ES/ca-ES.com_bfstop.ini</language>
+			<language tag="ca-ES">ca-ES/ca-ES.com_bfstop.sys.ini</language>
+			<language tag="de-DE">de-DE/de-DE.com_bfstop.ini</language>
+			<language tag="de-DE">de-DE/de-DE.com_bfstop.sys.ini</language>
+			<language tag="en-GB">en-GB/en-GB.com_bfstop.ini</language>
+			<language tag="en-GB">en-GB/en-GB.com_bfstop.sys.ini</language>
+			<language tag="es-ES">es-ES/es-ES.com_bfstop.ini</language>
+			<language tag="es-ES">es-ES/es-ES.com_bfstop.sys.ini</language>
+			<language tag="fr-FR">fr-FR/fr-FR.com_bfstop.ini</language>
+			<language tag="fr-FR">fr-FR/fr-FR.com_bfstop.sys.ini</language>
+			<language tag="it-IT">it-IT/it-IT.com_bfstop.ini</language>
+			<language tag="it-IT">it-IT/it-IT.com_bfstop.sys.ini</language>
+			<language tag="nl-NL">nl-NL/nl-NL.com_bfstop.ini</language>
+			<language tag="nl-NL">nl-NL/nl-NL.com_bfstop.sys.ini</language>
+			<language tag="ru-RU">ru-RU/ru-RU.com_bfstop.ini</language>
+			<language tag="ru-RU">ru-RU/ru-RU.com_bfstop.sys.ini</language>
+		</languages>
+	</administration>
+	<updateservers>
+		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>
+	</updateservers>
+</extension>

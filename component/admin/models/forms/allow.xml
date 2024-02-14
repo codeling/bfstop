@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<form>
+	<fieldset name="form_allow" addrulepath="administrator/components/com_bfstop/models/rules">
+		<field
+			name="id"
+			type="hidden"
+		/>
+		<field
+			name="ipaddress"
+			type="text"
+			label="COM_BFSTOP_HEADING_IPADDRESS"
+			description="COM_BFSTOP_DESC_ALLOWLIST_IPADDRESS"
+			size="40"
+			default="0.0.0.0"
+			validate="iprange"
+		/>
+		<field
+			name="notes"
+			type="text"
+			label="COM_BFSTOP_HEADING_NOTES"
+			description="COM_BFSTOP_DESC_ALLOWLIST_NOTES"
+			default=""
+		/>
+	</fieldset>
+</form>
