@@ -8,7 +8,7 @@
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
-	<version>1.4.6</version>
+	<version>1.5.0</version>
 	<files>
 		<filename plugin="bfstop">bfstop.php</filename>
 		<filename>index.html</filename>
