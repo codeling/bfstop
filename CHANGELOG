@@ -1,3 +1,18 @@
+1.5.2 (2024-02-18)
+  - Note: Only component changes, no plugin changes
+  - Fix errors for PHP < 8
+
+1.5.1 (2024-02-14)
+  - Note: Only component changes, no plugin changes
+  - Fix error in admin views discovered after release of 1.5.0
+
+1.5.0 (2024-02-14)
+  - Fix bugs (php 8.x issues, ACL options display)
+  - IP address and subnet validation
+  - Controls for overriding number of shown elements in lists
+  - Joomla 5 compatibility
+  - Hints to go to plugin settings on installation and in settings view
+
 1.4.5/6 (2023-05-15)
   - Fix server errors in backend
   - Fix deprecation warning in server type check
