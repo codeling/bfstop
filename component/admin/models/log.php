@@ -10,9 +10,10 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Model\ListModel;
 
+const HeaderLines = 6;
+
 class BFStopModelLog extends ListModel
 {
-	private const HeaderLines = 6;
 	public function __construct($config = array())
 	{
 		$config['filter_fields'] = array(
@@ -38,9 +39,9 @@ class BFStopModelLog extends ListModel
 		}
 		$lineNumber = 0;
 		while (($line = fgets($logfile)) !== false &&
-			($count === 0 || ($lineNumber < (self::HeaderLines + $start + $count))))
+			($count === 0 || ($lineNumber < (HeaderLines + $start + $count))))
 		{
-			if ($lineNumber >= self::HeaderLines + $start)
+			if ($lineNumber >= HeaderLines + $start)
 			{
 				$logItems = explode(" ", $line);
 				if (count($logItems) < 3)
@@ -83,7 +84,7 @@ class BFStopModelLog extends ListModel
 		{
 			$file = new \SplFileObject($this->getLogFilePath(), 'r');
 			$file->seek(PHP_INT_MAX);
-			return ($file->key()-self::HeaderLines + 1);
+			return ($file->key()-HeaderLines + 1);
 		}
 		catch (RuntimeException $e)
 		{

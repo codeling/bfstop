@@ -19,6 +19,7 @@ if (!$user || !$user->authorise('core.manage', 'com_bfstop'))
 }
 
 require_once(JPATH_ADMINISTRATOR.'/components/com_bfstop/helpers/log.php');
+require_once(JPATH_ADMINISTRATOR.'/components/com_bfstop/helpers/polyfill.php');
 JLoader::register('BFStopToolbarHelper', dirname(__FILE__).'/helpers/toolbar.php');
 $controller = BaseController::getInstance('bfstop');
 $jinput = Factory::getApplication()->input;
