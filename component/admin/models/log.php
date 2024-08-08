@@ -46,7 +46,8 @@ class BFStopModelLog extends ListModel
 				$logItems = explode(" ", $line);
 				if (count($logItems) < 3)
 				{
-					$application->enqueueMessage("Invalid log line: ".$line, 'error');
+					$application = Factory::getApplication();
+					$application->enqueueMessage("Invalid entry in line number ".$lineNumber.": '".$line."' (expected 3 items - date, priority and message but that line only has ".count($logItems).")", 'error');
 				}
 				else
 				{
