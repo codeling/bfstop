@@ -208,7 +208,7 @@
 					description="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_DESC" />
 				<field name="htaccessPath" type="text" default=""
 					label="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL"
-					description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL" />
+					description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_DESC" />
 			</fieldset>
 			<fieldset name="delay" label="PLG_SYSTEM_BFSTOP_DELAY_FIELDSET_LABEL">
 				<field name="delayDuration" type="integer"
@@ -217,7 +217,7 @@
 					description="PLG_SYSTEM_BFSTOP_DELAY_DURATION_DESC" />
 				<field name="adaptiveDelay" type="list" default="0"
 					label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_LABEL"
-                                        description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_DESC" >
+					description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_DESC" >
 					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
 					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 				</field>
