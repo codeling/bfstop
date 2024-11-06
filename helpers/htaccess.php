@@ -25,6 +25,7 @@ class BFStopHtAccess
 
 	private $logger;
 
+	const BlockPrefix = 'Require not ip ';
 
 	/**
 	 * Construct class with given $path.
@@ -90,10 +91,10 @@ class BFStopHtAccess
 	 */
 	public function getDeniedIPs()
 	{
-		$lines = $this->getLines('Require not ip ');
+		$lines = $this->getLines(self::BlockPrefix);
 
 		foreach ($lines as $key => $line) {
-			$lines[$key] = substr($line, 10);
+			$lines[$key] = substr($line, strlen(self::BlockPrefix));
 		}
 
 		return $lines;
@@ -107,7 +108,7 @@ class BFStopHtAccess
 	 */
 	public function denyIP($IP)
 	{
-		return $this->addLine('Require not ip ' . $IP);
+		return $this->addLine(self::BlockPrefix . $IP);
 	}
 
 	/**
@@ -118,7 +119,7 @@ class BFStopHtAccess
 	 */
 	public function undenyIP($IP)
 	{
-		return $this->removeLine('Require not ip ' . $IP);
+		return $this->removeLine(self::BlockPrefix . $IP);
 	}
 
 	/**
