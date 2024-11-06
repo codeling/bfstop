@@ -49,6 +49,7 @@ class BFStopHtAccess
 	private function getHeader()
 	{
 		return array(
+			'<RequireAll>',
 			'Require all granted'
 		);
 	}
@@ -61,6 +62,7 @@ class BFStopHtAccess
 	private function getFooter()
 	{
 		return array(
+			'</RequireAll>'
 		);
 	}
 
