@@ -49,8 +49,7 @@ class BFStopHtAccess
 	private function getHeader()
 	{
 		return array(
-			'order allow,deny',
-			'allow from all'
+			'Require all granted'
 		);
 	}
 
@@ -89,7 +88,7 @@ class BFStopHtAccess
 	 */
 	public function getDeniedIPs()
 	{
-		$lines = $this->getLines('deny from ');
+		$lines = $this->getLines('Require not ip ');
 
 		foreach ($lines as $key => $line) {
 			$lines[$key] = substr($line, 10);
@@ -106,7 +105,7 @@ class BFStopHtAccess
 	 */
 	public function denyIP($IP)
 	{
-		return $this->addLine('deny from ' . $IP);
+		return $this->addLine('Require not ip ' . $IP);
 	}
 
 	/**
@@ -117,7 +116,7 @@ class BFStopHtAccess
 	 */
 	public function undenyIP($IP)
 	{
-		return $this->removeLine('deny from ' . $IP);
+		return $this->removeLine('Require not ip ' . $IP);
 	}
 
 	/**
