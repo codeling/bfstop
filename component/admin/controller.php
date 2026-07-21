@@ -33,7 +33,7 @@ class BFStopController extends BaseController
 		}
 		$this->warnIfAdminUserExists();
 
-		$this->checkWhetherHtAccessWorks();
+		$this->warnIfHtAccessNotWorking();
 		$input->set('view', $view);
 		parent::display($cachable);
 	}
@@ -58,7 +58,7 @@ class BFStopController extends BaseController
 		}
 	}
 
-	function checkWhetherHtAccessWorks()
+	function warnIfHtAccessNotWorking()
 	{
 		$htaccessPath = BFStopParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
 		$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
