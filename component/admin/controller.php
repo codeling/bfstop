@@ -31,14 +31,14 @@ class BFStopController extends BaseController
 		{
 			return;
 		}
-		$this->checkForAdminUser();
+		$this->warnIfAdminUserExists();
 
 		$this->checkWhetherHtAccessWorks();
 		$input->set('view', $view);
 		parent::display($cachable);
 	}
 
-	function checkForAdminUser()
+	function warnIfAdminUserExists()
 	{
 		try
 		{
