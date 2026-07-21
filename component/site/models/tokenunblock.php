@@ -39,7 +39,7 @@ class BFStopModelTokenUnblock extends BaseDatabaseModel {
 		}
 		catch (RuntimeException $e)
 		{
-			$sucess = false;
+			$success = false;
 			$logger->log($e->getMessage(), Log::ERROR);
 		}
 		if (!$success) {
