@@ -54,7 +54,7 @@ class BFStopController extends BaseController
 		catch (Exception $e)
 		{
 			$application = Factory::getApplication();
-			$application->enqueueMessage("Database exception occured: ".$e->getMessage(), 'warning');
+			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
 		}
 	}
 
@@ -133,7 +133,7 @@ class BFStopController extends BaseController
 		catch (Exception $e)
 		{
 			$application = Factory::getApplication();
-			$application->enqueueMessage("Database exception occured: ".$e->getMessage(), 'warning');
+			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
 		}
 	}
 }
