@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension version="2.5" type="plugin" group="system" method="upgrade">
+	<element>plg_system_bfstop</element>
 	<name>plg_system_bfstop</name>
 	<author>Bernhard Froehler</author>
 	<description>PLG_SYSTEM_BFSTOP_DESC</description>
@@ -8,11 +9,12 @@
 	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
-	<version>1.5.2</version>
+	<version>2.0.0</version>
+	<namespace path="src">Codeling\Plugin\System\Bfstop</namespace>
 	<files>
-		<filename plugin="bfstop">bfstop.php</filename>
 		<filename>index.html</filename>
-		<folder>helpers</folder>
+		<folder>services</folder>
+		<folder>src</folder>
 		<folder>language</folder>
 		<folder>sql</folder>
 	</files>
@@ -123,6 +125,27 @@
 					<option value="4">4</option>
 					<option value="5">5</option>
 				</field>
+			</fieldset>
+			<fieldset name="proxy" label="PLG_SYSTEM_BFSTOP_PROXY_FIELDSET_LABEL">
+				<field name="useProxy" type="list" default="0"
+					label="PLG_SYSTEM_BFSTOP_USE_PROXY_LABEL"
+					description="PLG_SYSTEM_BFSTOP_USE_PROXY_DESC">
+					<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+					<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
+				</field>
+				<field name="proxyHeaderSource" type="list" default="HTTP_X_FORWARDED_FOR"
+					label="PLG_SYSTEM_BFSTOP_PROXY_HEADER_SOURCE_LABEL"
+					description="PLG_SYSTEM_BFSTOP_PROXY_HEADER_SOURCE_DESC">
+					<option value="HTTP_X_FORWARDED_FOR">X-Forwarded-For</option>
+					<option value="HTTP_FORWARDED">Forwarded</option>
+					<option value="HTTP_X_FORWARDED">X-Forwarded</option>
+					<option value="HTTP_X_CLUSTER_CLIENT_IP">X-Cluster-Client-Ip</option>
+					<option value="HTTP_FORWARDED_FOR">Forwarded-For</option>
+					<option value="HTTP_CLIENT_IP">Client-Ip</option>
+				</field>
+				<field name="proxyIpAddress" type="text" size="40" default=""
+					label="PLG_SYSTEM_BFSTOP_PROXY_IP_LABEL"
+					description="PLG_SYSTEM_BFSTOP_PROXY_IP_DESC" />
 			</fieldset>
 			<fieldset name="advanced">
 				<field name="enabledForOrigin" type="list" default="3"
