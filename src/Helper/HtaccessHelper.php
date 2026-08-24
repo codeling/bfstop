@@ -5,7 +5,10 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
-defined( '_JEXEC' ) or die;
+
+namespace Codeling\Plugin\System\Bfstop\Helper;
+
+defined('_JEXEC') or die;
 
 use Joomla\CMS\Log\Log;
 
@@ -14,22 +17,22 @@ use Joomla\CMS\Log\Log;
 	 https://github.com/jpkleemans/Brute-Force-Login-Protection
  (licensed under GNU GENERAL PUBLIC LICENSE v2)
 */
-class BFStopHtAccess
+class HtaccessHelper
 {
 	/**
 	 * Path to .htaccess file
-	 * 
+	 *
 	 * @var string
 	 */
 	private $path;
 
 	private $logger;
 
-	const BlockPrefix = 'Require not ip ';
+	public const BlockPrefix = 'Require not ip ';
 
 	/**
 	 * Construct class with given $path.
-	 * 
+	 *
 	 * @param string $dir
 	 */
 	public function __construct($dir, $logger)
@@ -38,13 +41,14 @@ class BFStopHtAccess
 		$this->logger = $logger;
 	}
 
-	public function getFileName() {
+	public function getFileName()
+	{
 		return $this->path;
 	}
 
 	/**
 	 * Get .htaccess lines before custom lines
-	 * 
+	 *
 	 * @var array
 	 */
 	private function getHeader()
@@ -57,7 +61,7 @@ class BFStopHtAccess
 
 	/**
 	 * Get .htaccess lines after custom lines
-	 * 
+	 *
 	 * @var array
 	 */
 	private function getFooter()
@@ -69,13 +73,13 @@ class BFStopHtAccess
 
 	/**
 	 * Check if .htaccess file is found, readable and writeable.
-	 * 
+	 *
 	 * @return array
 	 */
 	public function checkRequirements()
 	{
 		$result = array(
-			'apacheserver' => 
+			'apacheserver' =>
 				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'])), 'apache'),
 			'found'		=> file_exists($this->path),
 			'readable'	=> is_readable($this->path),
@@ -86,14 +90,15 @@ class BFStopHtAccess
 
 	/**
 	 * Return array of denied IP addresses from .htaccess.
-	 * 
+	 *
 	 * @return array
 	 */
 	public function getDeniedIPs()
 	{
 		$lines = $this->getLines(self::BlockPrefix);
 
-		foreach ($lines as $key => $line) {
+		foreach ($lines as $key => $line)
+		{
 			$lines[$key] = substr($line, strlen(self::BlockPrefix));
 		}
 
@@ -102,7 +107,7 @@ class BFStopHtAccess
 
 	/**
 	 * Add 'deny from $IP' to .htaccess.
-	 * 
+	 *
 	 * @param string $IP
 	 * @return boolean
 	 */
@@ -113,7 +118,7 @@ class BFStopHtAccess
 
 	/**
 	 * Remove 'deny from $IP' from .htaccess.
-	 * 
+	 *
 	 * @param string $IP
 	 * @return boolean
 	 */
@@ -124,13 +129,16 @@ class BFStopHtAccess
 
 	/**
 	 * Edit ErrorDocument 403 line in .htaccess.
-	 * 
+	 *
 	 * @param string $message
 	 * @return boolean
 	 */
 	public function edit403Message($message)
 	{
-		if (empty($message)) return $this->remove403Message();
+		if (empty($message))
+		{
+			return $this->remove403Message();
+		}
 
 		$line = 'ErrorDocument 403 "' . $message . '"';
 
@@ -143,7 +151,7 @@ class BFStopHtAccess
 
 	/**
 	 * Remove ErrorDocument 403 line from .htaccess.
-	 * 
+	 *
 	 * @return boolean
 	 */
 	public function remove403Message()
@@ -153,7 +161,7 @@ class BFStopHtAccess
 
 	/**
 	 * Return array of (prefixed) lines from .htaccess.
-	 * 
+	 *
 	 * @param string $prefixes
 	 * @return array
 	 */
@@ -161,26 +169,35 @@ class BFStopHtAccess
 	{
 		$allLines = $this->extract();
 
-		if ($onlyBody) {
+		if ($onlyBody)
+		{
 			$allLines = array_diff($allLines, $this->getHeader(), $this->getFooter());
 		}
 
-		if (!$prefixes) return $allLines;
+		if (!$prefixes)
+		{
+			return $allLines;
+		}
 
-		if (!is_array($prefixes)) {
+		if (!is_array($prefixes))
+		{
 			$prefixes = array($prefixes);
 		}
 
 		$prefixedLines = array();
-		foreach ($allLines as $line) {
-			foreach ($prefixes as $prefix) {
-				if (strpos($line, $prefix) === 0) {
+		foreach ($allLines as $line)
+		{
+			foreach ($prefixes as $prefix)
+			{
+				if (strpos($line, $prefix) === 0)
+				{
 					$prefixedLines[] = $line;
 				}
 			}
 		}
 
-		if ($exceptPrefix) {
+		if ($exceptPrefix)
+		{
 			$prefixedLines = array_diff($allLines, $prefixedLines);
 		}
 
@@ -189,7 +206,7 @@ class BFStopHtAccess
 
 	/**
 	 * Add single line to .htaccess.
-	 * 
+	 *
 	 * @param string $line
 	 * @return boolean
 	 */
@@ -202,7 +219,7 @@ class BFStopHtAccess
 
 	/**
 	 * Remove single line from .htaccess.
-	 * 
+	 *
 	 * @param string $line
 	 * @param string $prefix
 	 * @return boolean
@@ -211,20 +228,28 @@ class BFStopHtAccess
 	{
 		$insertion = $this->getLines();
 
-		if ($prefix !== false) {
+		if ($prefix !== false)
+		{
 			$lineKey = false;
 			$prefixLength = strlen($prefix);
-			foreach ($insertion as $key => $line) {
-				if (substr($line, 0, $prefixLength) === $prefix) {
+			foreach ($insertion as $key => $line)
+			{
+				if (substr($line, 0, $prefixLength) === $prefix)
+				{
 					$lineKey = $key;
 					break;
 				}
 			}
-		} else {
+		}
+		else
+		{
 			$lineKey = array_search($line, $insertion);
 		}
 
-		if ($lineKey === false) return true;
+		if ($lineKey === false)
+		{
+			return true;
+		}
 
 		unset($insertion[$lineKey]);
 
@@ -235,25 +260,33 @@ class BFStopHtAccess
 
 	/**
 	 * Return array of strings from between BEGIN and END markers from .htaccess.
-	 * 
+	 *
 	 * @return array Array of strings from between BEGIN and END markers from .htaccess.
 	 */
 	private function extract()
 	{
 		$result = array();
 
-		if (!file_exists($this->path)) return $result;
+		if (!file_exists($this->path))
+		{
+			return $result;
+		}
 
-		if ($markerdata = explode("\n", implode('', file($this->path)))) {
+		if ($markerdata = explode("\n", implode('', file($this->path))))
+		{
 			$state = false;
-			foreach ($markerdata as $markerline) {
-				if (strpos($markerline, '# END ' . self::$marker) !== false) {
+			foreach ($markerdata as $markerline)
+			{
+				if (strpos($markerline, '# END ' . self::$marker) !== false)
+				{
 					$state = false;
 				}
-				if ($state) {
+				if ($state)
+				{
 					$result[] = $markerline;
 				}
-				if (strpos($markerline, '# BEGIN ' . self::$marker) !== false) {
+				if (strpos($markerline, '# BEGIN ' . self::$marker) !== false)
+				{
 					$state = true;
 				}
 			}
@@ -272,37 +305,51 @@ class BFStopHtAccess
 	 */
 	private function insert($insertion)
 	{
-		if (!file_exists($this->path) || is_writeable($this->path)) {
-			if (!file_exists($this->path)) {
+		if (!file_exists($this->path) || is_writeable($this->path))
+		{
+			if (!file_exists($this->path))
+			{
 				$markerdata = '';
-			} else {
+			}
+			else
+			{
 				$markerdata = explode("\n", implode('', file($this->path)));
 			}
 
 			$newContent = '';
 
 			$foundit = false;
-			if ($markerdata) {
+			if ($markerdata)
+			{
 				$lineCount = count($markerdata);
 
 				$state = true;
-				foreach ($markerdata as $n => $markerline) {
-					if (strpos($markerline, '# BEGIN ' . self::$marker) !== false) {
+				foreach ($markerdata as $n => $markerline)
+				{
+					if (strpos($markerline, '# BEGIN ' . self::$marker) !== false)
+					{
 						$state = false;
 					}
 
-					if ($state) { // Non-BFLP lines
-						if ($n + 1 < $lineCount) {
+					if ($state)
+					{ // Non-BFLP lines
+						if ($n + 1 < $lineCount)
+						{
 							$newContent .= "{$markerline}\n";
-						} else {
+						}
+						else
+						{
 							$newContent .= "{$markerline}";
 						}
 					}
 
-					if (strpos($markerline, '# END ' . self::$marker) !== false) {
+					if (strpos($markerline, '# END ' . self::$marker) !== false)
+					{
 						$newContent .= "# BEGIN ".self::$marker."\n";
-						if (is_array($insertion)) {
-							foreach ($insertion as $insertline) {
+						if (is_array($insertion))
+						{
+							foreach ($insertion as $insertline)
+							{
 								$newContent .= "{$insertline}\n";
 							}
 						}
@@ -324,10 +371,12 @@ class BFStopHtAccess
 				}
 			}
 
-			if (!$foundit) {
+			if (!$foundit)
+			{
 				// insert at the very beginning:
 				$beginContent = "# BEGIN ".self::$marker."\n";
-				foreach ($insertion as $insertline) {
+				foreach ($insertion as $insertline)
+				{
 					$beginContent .= "{$insertline}\n";
 				}
 				$beginContent .= "# END ".self::$marker."\n\n";
@@ -343,4 +392,3 @@ class BFStopHtAccess
 		return false;
 	}
 }
-

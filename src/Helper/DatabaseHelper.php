@@ -5,55 +5,49 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
-defined( '_JEXEC' ) or die;
+
+namespace Codeling\Plugin\System\Bfstop\Helper;
+
+defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 
-require_once dirname(__FILE__).'/htaccess.php';
-
-class BFStopDBHelper {
-
+class DatabaseHelper
+{
 	private $db;
 	private $logger;
 
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
 
-	function getClientString($id)
+	public function getClientString($id)
 	{
-		return ($id == 0) ? 'Frontend': 'Backend';
+		return ($id == 0) ? 'Frontend' : 'Backend';
 	}
 
-	public function __construct($logger)
+	public function __construct(LoggerHelper $logger)
 	{
 		$this->db = Factory::getDbo();
 		$this->logger = $logger;
 	}
 
-	public static function checkDBError($db, $logger) {
-		if (method_exists('db', 'getErrorNum'))
-		{
-			$errNum = $db->getErrorNum();
-			if ($errNum != 0) {
-				$errMsg = $db->getErrorMsg();
-				$this->logger->log("Database error (#$errNum) occured: $errMsg", Log::ERROR);
-			}
-		}
-	}
-
 	public function myCheckDBError()
 	{
-		BFStopDBHelper::checkDBError($this->db, $this->logger);
+		$errNum = $this->db->getErrorNum();
+		if ($errNum != 0)
+		{
+			$this->logger->log("Database error (#$errNum) occured: ".$this->db->getErrorMsg(), Log::ERROR);
+		}
 	}
 
 	public function eventsInInterval(
 		$interval,
 		$time,
 		$additionalWhere,
-		$table='#__bfstop_failedlogin',
-		$timecol='logtime')
+		$table = '#__bfstop_failedlogin',
+		$timecol = 'logtime')
 	{
 		try
 		{
@@ -71,10 +65,9 @@ class BFStopDBHelper {
 				" ".$additionalWhere;
 			$this->db->setQuery($sql);
 			$numberOfEvents = ((int)$this->db->loadResult());
-			$this->myCheckDBError();
 			return $numberOfEvents;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
@@ -98,13 +91,11 @@ class BFStopDBHelper {
 			$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
 				"WHERE logtime > DATE_SUB(".
 					$this->db->quote($nowDateTime).
-				", INTERVAL 1 HOUR)";
+					", INTERVAL 1 HOUR)";
 			$this->db->setQuery($sql);
-			$numRows = $this->db->loadResult();
-			$this->myCheckDBError();
-			return $numRows;
+			return $this->db->loadResult();
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
@@ -134,22 +125,21 @@ class BFStopDBHelper {
 				$this->db->quote($curTime);
 			$this->db->setQuery($sql);
 			$entries = $this->db->loadObjectList();
-			$this->myCheckDBError();
 			$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS') , 15)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME')  , 20)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN')	,  8)."\n".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS'), 15)." ".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME'), 20)." ".
+					str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN'), 8)."\n".
 					str_repeat("-", 97)."\n";
 			foreach ($entries as $entry)
 			{
 				$result .= str_pad($entry->username, 25)." ".
-					str_pad($entry->ipaddress	  , 15)." ".
-					str_pad($entry->logtime		, 20)." ".
-					str_pad($this->getClientString($entry->origin),  8)."\n";
+					str_pad($entry->ipaddress, 15)." ".
+					str_pad($entry->logtime, 20)." ".
+					str_pad($this->getClientString($entry->origin), 8)."\n";
 			}
 			return $result;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return '';
@@ -190,17 +180,16 @@ class BFStopDBHelper {
 		{
 			$this->db->setQuery($sql);
 			$entries = $this->db->loadObjectList();
-			foreach($entries as $entry)
+			foreach ($entries as $entry)
 			{
 				$this->logger->log($action." because of entry: ".
 					"id=".$entry->id.", ".
 					"ipaddress=".$entry->ipaddress,
 					Log::DEBUG);
 			}
-			$this->myCheckDBError();
 			return count($entries);
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return 0;
@@ -234,7 +223,7 @@ class BFStopDBHelper {
 	{
 		try
 		{
-			$blockEntry = new stdClass();
+			$blockEntry = new \stdClass();
 			$blockEntry->ipaddress = $logEntry->ipaddress;
 			$blockEntry->crdate = date("Y-m-d H:i:s");
 			$blockEntry->duration = $duration;
@@ -243,17 +232,16 @@ class BFStopDBHelper {
 				$this->logger->log('Insert block entry failed!', Log::ERROR);
 				$blockEntry->id = -1;
 			}
-			$this->myCheckDBError();
 			$this->setFailedLoginHandled($logEntry, false);
 			if ($usehtaccess)
 			{
-				$htaccess = new BFStopHtAccess($htaccessPath, $this->logger);
+				$htaccess = new HtaccessHelper($htaccessPath, $this->logger);
 				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), Log::INFO);
 				$htaccess->denyIP($logEntry->ipaddress);
 			}
 			return $blockEntry->id;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return -1;
@@ -264,7 +252,7 @@ class BFStopDBHelper {
 	{
 		try
 		{
-			$tokenEntry = new stdClass();
+			$tokenEntry = new \stdClass();
 			$tokenEntry->token = $token;
 			$tokenEntry->block_id = $id;
 			$tokenEntry->crdate = date("Y-m-d H:i:s");
@@ -274,10 +262,9 @@ class BFStopDBHelper {
 				$this->logger->log('Insert unblock token failed!', Log::ERROR);
 				$tokenEntry->token = null;
 			}
-			$this->myCheckDBError();
 			return $tokenEntry->token;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return null;
@@ -292,10 +279,9 @@ class BFStopDBHelper {
 				$this->db->quote($token);
 			$this->db->setQuery($sql);
 			$result = $this->db->loadResult();
-			$this->myCheckDBError();
 			return $result != null;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return false;
@@ -308,11 +294,9 @@ class BFStopDBHelper {
 		{
 			$sql = "select email from #__users where $where LIMIT 1";
 			$this->db->setQuery($sql);
-			$emailAddress = $this->db->loadResult();
-			$this->myCheckDBError();
-			return $emailAddress;
+			return $this->db->loadResult();
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return '';
@@ -326,7 +310,7 @@ class BFStopDBHelper {
 
 	public function getUserEmailByName($username)
 	{
-		return $this->getUserEmailWhere("username='$username'");
+		return $this->getUserEmailWhere("username=".$this->db->quote($username));
 	}
 
 	public function getUserGroupEmail($gid)
@@ -339,15 +323,14 @@ class BFStopDBHelper {
 				"WHERE g.group_id = ".((int)($gid));
 			$this->db->setQuery($sql);
 			$dbrows = $this->db->loadAssocList();
-			$this->myCheckDBError();
 			$emailAddresses = array();
-			foreach($dbrows as $row)
+			foreach ($dbrows as $row)
 			{
 				$emailAddresses[] = $row['email'];
 			}
 			return $emailAddresses;
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return array();
@@ -356,8 +339,7 @@ class BFStopDBHelper {
 
 	public function insertFailedLogin($logEntry)
 	{
-		$logQuery = $this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
-		$this->myCheckDBError();
+		$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
 	}
 
 	public function setFailedLoginHandled($info, $restrictOnUsername)
@@ -367,14 +349,14 @@ class BFStopDBHelper {
 			$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
 				' WHERE ipaddress='.$this->db->quote($info->ipaddress).
 				' AND handled=0';
-			if ($restrictOnUsername) {
+			if ($restrictOnUsername)
+			{
 				$sql .= ' AND username='.$this->db->quote($info->username);
 			}
 			$this->db->setQuery($sql);
 			$this->db->execute();
-			$this->myCheckDBError();
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
@@ -394,29 +376,21 @@ class BFStopDBHelper {
 				' NOW(), INTERVAL '.
 				$this->db->quote($purgeAgeWeeks).
 				' WEEK)';
-			$sql = 'DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate;
-			$this->db->setQuery($sql);
+			$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate);
 			$this->db->execute();
-			$this->myCheckDBError();
 
-			$sql = 'DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
-				DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate;
-			$this->db->setQuery($sql);
+			$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
+				DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate);
 			$this->db->execute();
-			$this->myCheckDBError();
 
-			$sql = 'DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
-				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)';
-			$this->db->setQuery($sql);
+			$this->db->setQuery('DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
+				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)');
 			$this->db->execute();
-			$this->myCheckDBError();
 
-			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate;
-			$this->db->setQuery($sql);
+			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate);
 			$this->db->execute();
-			$this->myCheckDBError();
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
@@ -428,12 +402,12 @@ class BFStopDBHelper {
 		{
 			$query = $this->db->getQuery(true);
 			$query->update('#__extensions AS a');
-			$query->set('a.params = '. $this->db->quote((string)$params) );
-			$query->where('a.element = "bfstop"');
+			$query->set('a.params = '. $this->db->quote((string)$params));
+			$query->where('a.element = '.$this->db->quote('bfstop'));
 			$this->db->setQuery($query);
 			$this->db->execute();
 		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}

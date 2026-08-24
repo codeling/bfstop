@@ -5,26 +5,29 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
-defined( '_JEXEC' ) or die;
+
+namespace Codeling\Plugin\System\Bfstop\Helper;
+
+defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Uri\Uri;
 
-class BFStopNotifier
+class NotifierHelper
 {
-	public static $ONE_DAY=1440;
+	public static $ONE_DAY = 1440;
 	private $logger;
 	private $db;
 	private $notifyAddresses;
 
-	function __construct($logger, $db, $emailAddress, $userID, $userGroup, $groupNotifEnabled)
+	public function __construct(LoggerHelper $logger, DatabaseHelper $db, $emailAddress, $userID, $userGroup, $groupNotifEnabled)
 	{
 		$this->logger = $logger;
 		$this->db = $db;
 
-		$this->notifyAddresses = empty($emailAddress)? array() : explode(";",$emailAddress);
+		$this->notifyAddresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
 		$userEmail = $this->db->getUserEmailByID($userID);
 		if (!empty($userEmail))
 		{
@@ -49,15 +52,15 @@ class BFStopNotifier
 	{
 		$config = Factory::getConfig();
 		$siteName = $config->get('sitename');	// Joomla! 3.x
-		$siteName = (strcmp($siteName,'') == 0)
+		$siteName = (strcmp($siteName, '') == 0)
 			? $config->get('config.sitename')
 			: $siteName;
 		return $siteName;
 	}
 
-	function isNotificationAllowed($logtime, $maxNumber,
-		$table='#__bfstop_failedlogin',
-		$timecol='logtime')
+	public function isNotificationAllowed($logtime, $maxNumber,
+		$table = '#__bfstop_failedlogin',
+		$timecol = 'logtime')
 	{
 		// -1 stands for an unlimited number of notifications
 		if ($maxNumber == -1)
@@ -65,7 +68,7 @@ class BFStopNotifier
 			return true;
 		}
 		// 0 stands for no notifications
-		else if ($maxNumber == 0)
+		elseif ($maxNumber == 0)
 		{
 			return false;
 		}
@@ -74,7 +77,7 @@ class BFStopNotifier
 			<= $maxNumber;
 	}
 
-	function getBlockedBody($logEntry, $interval)
+	public function getBlockedBody($logEntry, $interval)
 	{
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
@@ -86,27 +89,27 @@ class BFStopNotifier
 		);
 	}
 
-	function getFailedLoginBody($logEntry)
+	public function getFailedLoginBody($logEntry)
 	{
 		$bodys = Text::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
-			Uri::root()) ."\n";
-		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":",15) .
-			$logEntry->username  ."\n";
-		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":",15).
-			$logEntry->ipaddress ."\n";
-		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":",15) .
-			$logEntry->logtime   ."\n";
-		$bodys.= str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN').":",15)   .
+			Uri::root())."\n";
+		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":", 15).
+			$logEntry->username."\n";
+		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":", 15).
+			$logEntry->ipaddress."\n";
+		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":", 15).
+			$logEntry->logtime."\n";
+		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN').":", 15).
 			$this->db->getClientString($logEntry->origin)."\n";
 		return $bodys;
 	}
 
-	function sendMail($subject, $body, $emailAddresses)
+	public function sendMail($subject, $body, $emailAddresses)
 	{
 		if (!is_array($emailAddresses) || count($emailAddresses) == 0)
 		{
-			$this->logger->log("sendMail called with invalid argument: $emailAddresses", Log::ERROR);
+			$this->logger->log("sendMail called with invalid argument: ".print_r($emailAddresses, true), Log::ERROR);
 			return false;
 		}
 		$mail = Factory::getMailer();
@@ -120,15 +123,7 @@ class BFStopNotifier
 		{
 			$sendResult = $mail->Send();
 		}
-		catch (phpmailerException $e)
-		{
-			$sendResult = $e->errorMessage();
-		}
-		catch (MailDisabledException $e)
-		{
-			$sendResult = $e->getReason();
-		}
-		catch (Exception $e)
+		catch (\Exception $e)
 		{
 			$sendResult = $e->getMessage();
 		}
@@ -136,15 +131,14 @@ class BFStopNotifier
 		$this->logger->log('Sent email to '.implode(", ", $emailAddresses).
 			', subject: '.$subject.'; '.($success
 				? 'successful'
-				:'not successful: '.$sendResult
+				: 'not successful: '.$sendResult
 				), $success ? Log::INFO : Log::ERROR);
 		return $sendResult;
 	}
 
 	public function failedLogin($logEntry, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed($logEntry->logtime,
-			$maxNumber))
+		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber))
 		{
 			return;
 		}
@@ -183,4 +177,3 @@ class BFStopNotifier
 		);
 	}
 }
-

@@ -5,17 +5,20 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
+
+namespace Codeling\Plugin\System\Bfstop\Helper;
+
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Log\Log;
 
-class BFStopLogger {
-
+class LoggerHelper
+{
 	private $log_level;
-	const LogCategory = 'bfstop';
-	const Disabled = -1;
+	public const LogCategory = 'bfstop';
+	public const Disabled = -1;
 
-	function __construct($log_level)
+	public function __construct($log_level)
 	{
 		$this->log_level = $log_level;
 		$priorities = Log::ALL;
@@ -31,13 +34,15 @@ class BFStopLogger {
 		}
 	}
 
-	function isEnabled($priority = Log::ERROR) {
+	public function isEnabled($priority = Log::ERROR)
+	{
 		return $priority <= $this->log_level;
 	}
 
-	function log($msg, $priority)
+	public function log($msg, $priority)
 	{
-		if ($this->isEnabled($priority)) {
+		if ($this->isEnabled($priority))
+		{
 			Log::add($msg, $priority, self::LogCategory);
 		}
 	}
