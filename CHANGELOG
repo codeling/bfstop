@@ -4,8 +4,8 @@
   - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6)
   - Modernize token generation to use random_bytes()/random_int()
   - Consolidate all configuration into the component's Settings view
-    (Components -> Brute Force Stop -> Settings); the plugin manifest no
-    longer has an Options tab in the Plugin Manager
+    (Components -> Brute Force Stop -> Settings); the plugin's Options tab
+    and description now just point there instead of holding real settings
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

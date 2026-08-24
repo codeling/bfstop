@@ -51,6 +51,15 @@
 			<schemapath type="mysql">sql/updates</schemapath>
 		</schemas>
 	</update>
+	<config>
+		<fields name="params">
+			<fieldset name="basic">
+				<field name="settingsMoved" type="note"
+					label="PLG_SYSTEM_BFSTOP_SETTINGS_MOVED_LABEL"
+					description="PLG_SYSTEM_BFSTOP_SETTINGS_MOVED_DESC" />
+			</fieldset>
+		</fields>
+	</config>
 	<scriptfile>updatescript.php</scriptfile>
 	<updateservers>
 		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>
