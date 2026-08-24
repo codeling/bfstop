@@ -8,15 +8,17 @@
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Installer\InstallerAdapter;
 
 class PlgsystembfstopInstallerScript
 {
-	function install($parent) {}
-	function uninstall($parent) {}
-	function preflight($type, $parent) {}
-	function postflight($type, $parent) {}
+	public function __construct(InstallerAdapter $adapter) {}
+	public function install(InstallerAdapter $adapter) {}
+	public function uninstall(InstallerAdapter $adapter) {}
+	public function preflight($type, InstallerAdapter $adapter) {}
+	public function postflight($type, InstallerAdapter $adapter) {}
 
-	function update($parent)
+	public function update(InstallerAdapter $adapter)
 	{
 		// for version 1.4.2, whitelist was renamed to allowlist, but only for updates;
 		// for new installs, the old name remained, so let's fix this for all installations:

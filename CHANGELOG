@@ -1,3 +1,9 @@
+2.0.0 (2026-08-24)
+  - Migrate to Joomla 5/6: PSR-4 namespaced classes (Codeling\Plugin\System\Bfstop),
+    service provider, SubscriberInterface event handling
+  - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6)
+  - Modernize token generation to use random_bytes()/random_int()
+
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes
   - Fix errors for PHP < 8
