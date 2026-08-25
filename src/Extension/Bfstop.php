@@ -134,6 +134,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 		}
 		$usehtaccess = $this->getBoolParam('useHtaccess', false);
+		if ($usehtaccess && $this->getStringParam('blockMode', 'full') === 'loginonly')
+		{
+			// .htaccess denies at the web server level, before Joomla (and
+			// this plugin) ever sees the request - there's no way to scope
+			// that to "login attempts only", so skip it entirely rather
+			// than silently defeat the "Login Only" mode the admin chose
+			$this->logger->log('Login-only block mode is active, not adding '.
+				$logEntry->ipaddress.' to .htaccess', Log::INFO);
+			$usehtaccess = false;
+		}
 		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
 		if ($htaccessPath === "")
 		{
@@ -469,6 +479,28 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $result;
 	}
 
+	/**
+	 * Detects a request that actually submits login credentials, for
+	 * "Login Only" block mode (issue #187): Joomla routes credential
+	 * submission through com_users on both the frontend (task=user.login)
+	 * and the backend (task=login, e.g. the entry_url Joomla itself builds
+	 * for the admin login form) - merely viewing the login form (no task,
+	 * or a display task) doesn't match, so it stays reachable.
+	 */
+	private function isLoginAttemptRequest()
+	{
+		$input = $this->getApplication()->input;
+		$option = $input->getCmd('option', '');
+		$task = $input->getCmd('task', '');
+		$result = (strcmp($option, 'com_users') == 0 &&
+			(strcmp($task, 'user.login') == 0 || strcmp($task, 'login') == 0));
+		if ($result)
+		{
+			$this->logger->log('Detected a login-attempt request (task='.$task.')', Log::DEBUG);
+		}
+		return $result;
+	}
+
 	public function onAfterInitialise($event)
 	{
 		$this->init();
@@ -507,6 +539,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 			if ($this->isPasswordRecoveryRequest())
 			{
+				return;
+			}
+			if ($this->getStringParam('blockMode', 'full') === 'loginonly' &&
+				!$this->isLoginAttemptRequest())
+			{
+				// let the blocked IP keep browsing normally; only an
+				// actual login attempt gets rejected below
 				return;
 			}
 			if ($this->getBoolParam('useHttpError', false))
