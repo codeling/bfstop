@@ -189,7 +189,65 @@ class DatabaseHelper
 					" = ".
 				"(INET_ATON(".$SubNetAddress.") & ".$IPv4NetMask.")".
 			")".
-			// IPv6 subnet match -> needs mysql >= 5.6.3 for INET6_ATON
+		")";
+	}
+
+	// splits a stored INET6_ATON() value into its high/low 8-byte halves and
+	// widens each to a plain BIGINT UNSIGNED, since MySQL's bitwise operators
+	// only work on 64-bit integers, not on 16-byte VARBINARY values directly
+	// (see issue #142/#117 - a 128-bit mask can't be applied in one step)
+	private function inet6HalfAsUnsigned($ipExpr, $startByte)
+	{
+		return 'CAST(CONV(HEX(SUBSTR(INET6_ATON('.$ipExpr.'), '.$startByte.', 8)), 16, 10) AS UNSIGNED)';
+	}
+
+	public function ipSubNetIPv6Match($ipaddress)
+	{
+		$ipQuoted = $this->db->quote($ipaddress);
+		$DashPos = 'LOCATE("/", ipaddress)';
+		$SubNetAddress = 'SUBSTR(ipaddress, 1, '.$DashPos.'-1)';
+		$BitsText = 'SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')';
+		// signed, not unsigned: bits-64 goes negative for a /0..'/63 prefix,
+		// and an UNSIGNED subtraction underflowing below 0 raises "BIGINT
+		// UNSIGNED out of range" in strict mode (this is the #117 crash).
+		$RawBits = 'CAST('.$BitsText.' AS SIGNED)';
+		// clamped to [0,128] before any further arithmetic, so a row with a
+		// corrupted prefix length (e.g. hand-edited in the DB) can never
+		// blow up the '-64'/shift math below into an out-of-range error -
+		// see #134, which hit this exact class of bug in the analogous
+		// IPv4 query. The BitsValid guard further down keeps such a
+		// clamped-but-bogus row from silently matching as a wildcard.
+		$Bits = 'GREATEST(LEAST('.$RawBits.', 128), 0)';
+
+		// the 128-bit prefix length is applied as two independent 64-bit
+		// masks, one per half of the address
+		$HiBits = 'LEAST('.$Bits.', 64)';
+		$LoBits = 'GREATEST('.$Bits.' - 64, 0)';
+		$HiMask = '(0xFFFFFFFFFFFFFFFF << (64 - '.$HiBits.'))';
+		$LoMask = '(0xFFFFFFFFFFFFFFFF << (64 - '.$LoBits.'))';
+
+		// rejects a corrupted prefix length outright (rather than letting
+		// the clamp above silently turn it into a "/0" wildcard match) -
+		// the digit-count-limited REGEXP is itself overflow-safe, so this
+		// check never needs the clamped value to decide validity
+		$BitsValid = $BitsText." REGEXP '^[0-9]{1,3}$' AND ".$RawBits." BETWEEN 0 AND 128";
+
+		return
+		"(".
+			// IPv6 subnet match (CIDR Suffix notation)
+			"(".
+				"LOCATE('/', ipaddress) != 0 AND LOCATE(':', ipaddress) != 0 AND ".
+				$BitsValid." AND ".
+				"INET6_ATON(".$ipQuoted.") IS NOT NULL AND LENGTH(INET6_ATON(".$ipQuoted.")) = 16 AND ".
+				"INET6_ATON(".$SubNetAddress.") IS NOT NULL AND LENGTH(INET6_ATON(".$SubNetAddress.")) = 16 AND ".
+				"(".$this->inet6HalfAsUnsigned($ipQuoted, 1)." & ".$HiMask.")".
+					" = ".
+				"(".$this->inet6HalfAsUnsigned($SubNetAddress, 1)." & ".$HiMask.")".
+					" AND ".
+				"(".$this->inet6HalfAsUnsigned($ipQuoted, 9)." & ".$LoMask.")".
+					" = ".
+				"(".$this->inet6HalfAsUnsigned($SubNetAddress, 9)." & ".$LoMask.")".
+			")".
 		")";
 	}
 
@@ -223,8 +281,10 @@ class DatabaseHelper
 			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
 		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
 		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
+		$sqlSubNetIPv6Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv6Match($ipaddress));
 		$entryCount = $this->checkForEntries($sqlIPCheck, "Blocked");
 		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Blocked");
+		$entryCount += $this->checkForEntries($sqlSubNetIPv6Check, "Blocked");
 		return ($entryCount > 0);
 	}
 
@@ -233,8 +293,10 @@ class DatabaseHelper
 		$sqlCheckPattern = "SELECT id, ipaddress from #__bfstop_allowlist WHERE %s";
 		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
 		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
+		$sqlSubNetIPv6Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv6Match($ipaddress));
 		$entryCount = $this->checkForEntries($sqlIPCheck, "Allowed");
 		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Allowed");
+		$entryCount += $this->checkForEntries($sqlSubNetIPv6Check, "Allowed");
 		return ($entryCount > 0);
 	}
 
