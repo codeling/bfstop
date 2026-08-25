@@ -104,19 +104,33 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', 0);
-		if ($maxBlocksBefore > 0)
+		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
+		if ($maxBlocksBefore > 0 || $progressiveEnabled)
 		{
 			$numberOfPrevBlocks = $this->mydb->
 				getNumberOfPreviousBlocks($logEntry->ipaddress);
 			$this->logger->log('Number of previous blocks for IP='.
 				$logEntry->ipaddress.': '.$numberOfPrevBlocks,
 				Log::DEBUG);
-			if ($numberOfPrevBlocks >= $maxBlocksBefore)
+			if ($maxBlocksBefore > 0 && $numberOfPrevBlocks >= $maxBlocksBefore)
 			{
 				$this->logger->log('Number of previous blocks '.
 					'exceeds configured maximum, blocking '.
 					'permanently!', Log::INFO);
 				$duration = 0;
+			}
+			elseif ($progressiveEnabled && $duration > 0 && $numberOfPrevBlocks > 0)
+			{
+				// doubles the block duration per repeat offense, capped at
+				// 2^6=64x, mirroring OWASP's doubling-lockout-duration
+				// recommendation
+				$multiplier = 2 ** min($numberOfPrevBlocks, 6);
+				$newDuration = $duration * $multiplier;
+				$this->logger->log('Progressive block duration: '.
+					$numberOfPrevBlocks.' previous block(s), scaling '.
+					'duration '.$duration.' by '.$multiplier.'x to '.
+					$newDuration, Log::INFO);
+				$duration = $newDuration;
 			}
 		}
 		$usehtaccess = $this->getBoolParam('useHtaccess', false);
