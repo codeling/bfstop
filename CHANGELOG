@@ -6,6 +6,27 @@
   - Consolidate all configuration into the component's Settings view
     (Components -> Brute Force Stop -> Settings); the plugin's Options tab
     and description now just point there instead of holding real settings
+  - Adaptive allowance of failed attempts (#76): failed logins for a
+    username are now also throttled across all source IPs combined, not
+    just per IP, so a distributed attack spreading attempts against one
+    account across many IPs can no longer evade the per-IP threshold; a
+    new per-attempt risk score (known IP/username pairs, common usernames,
+    missing User-Agent, optional GeoIP country and reverse-DNS signals)
+    adjusts the delay and allowed-attempts threshold; optional progressive
+    (exponential) block duration for repeat offenders; password reset/
+    username reminder now stay reachable even for a blocked IP
+  - Local GeoIP lookup (issue #169): "Information for IP Address" in the
+    component now shows real country/region/city/coordinates again via a
+    locally-configured MaxMind .mmdb database, instead of the discontinued
+    freegeoip.net API it used to call
+  - Not implemented (documented as future work): CAPTCHA/challenge-based
+    responses and IP-reputation/hosting-vs-residential classification were
+    both considered but require either login-page changes or an
+    additional external database dependency; a real risk-based
+    step-up-authentication flow (e.g. requiring Joomla's built-in
+    two-factor auth when risk is high) would need to hook earlier in the
+    login pipeline than this plugin currently does and is left for a
+    separate, larger initiative
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes
