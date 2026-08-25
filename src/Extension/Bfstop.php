@@ -395,6 +395,32 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $result;
 	}
 
+	/**
+	 * Password reset / username reminder must stay reachable even for a
+	 * blocked IP - otherwise a legitimate user who got blocked (and is told
+	 * by this very plugin to use password reset, see
+	 * notifyOfRemainingAttempts()) would have no way to actually act on
+	 * that advice, turning the block itself into a denial-of-service
+	 * against them (see OWASP Authentication Cheat Sheet guidance on
+	 * lockouts).
+	 */
+	private function isPasswordRecoveryRequest()
+	{
+		$input = $this->getApplication()->input;
+		$option = $input->getCmd('option', '');
+		$view = $input->getCmd('view', '');
+		$result = (strcmp($option, 'com_users') == 0 &&
+			(strcmp($view, 'reset') == 0 || strcmp($view, 'remind') == 0));
+		if ($result)
+		{
+			$this->logger->log('Allowing blocked IP through to the '.
+				'password recovery view ('.$view.'), so a blocked '.
+				'legitimate user can still recover their account',
+				Log::INFO);
+		}
+		return $result;
+	}
+
 	public function onAfterInitialise($event)
 	{
 		$this->init();
@@ -428,6 +454,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					$this->getApplication()->getClientId()),
 				Log::INFO);
 			if ($this->isUnblockRequest())
+			{
+				return;
+			}
+			if ($this->isPasswordRecoveryRequest())
 			{
 				return;
 			}
