@@ -379,6 +379,59 @@ class DatabaseHelper
 	public function successfulLogin($info)
 	{
 		$this->setFailedLoginHandled($info, true);
+		$this->recordKnownIpUsername($info->ipaddress, $info->username);
+	}
+
+	public function isKnownIpUsername($ipaddress, $username)
+	{
+		try
+		{
+			$sql = "SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
+				"ipaddress = ".$this->db->quote($ipaddress).
+				" AND username = ".$this->db->quote($username);
+			$this->db->setQuery($sql);
+			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
+	private function recordKnownIpUsername($ipaddress, $username)
+	{
+		try
+		{
+			$now = date("Y-m-d H:i:s");
+			$sql = "SELECT id FROM #__bfstop_knownip WHERE ".
+				"ipaddress = ".$this->db->quote($ipaddress).
+				" AND username = ".$this->db->quote($username);
+			$this->db->setQuery($sql);
+			$id = $this->db->loadResult();
+			if ($id)
+			{
+				$query = $this->db->getQuery(true);
+				$query->update('#__bfstop_knownip')
+					->set('last_success = '.$this->db->quote($now))
+					->where('id = '.((int) $id));
+				$this->db->setQuery($query);
+				$this->db->execute();
+			}
+			else
+			{
+				$entry = new \stdClass();
+				$entry->ipaddress = $ipaddress;
+				$entry->username = $username;
+				$entry->first_success = $now;
+				$entry->last_success = $now;
+				$this->db->insertObject('#__bfstop_knownip', $entry, 'id');
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
 	}
 
 	public function purgeOldEntries($purgeAgeWeeks)

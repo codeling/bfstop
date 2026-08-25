@@ -51,3 +51,21 @@ CREATE TABLE IF NOT EXISTS #__bfstop_allowlist (
 	notes varchar(255) NOT NULL DEFAULT '',
 	PRIMARY KEY (id)
 ) DEFAULT CHARSET=utf8;
+
+
+-- records (ipaddress, username) pairs that have had at least one successful
+-- login, as a risk signal (issue #76): a failed login for a username from an
+-- IP that has previously logged that same user in successfully is treated as
+-- less risky. Deliberately scoped to the (ipaddress, username) pair, not the
+-- IP alone, so that logging in as one (e.g. self-registered) user cannot
+-- lower the risk score for attempts against a different username from the
+-- same IP.
+CREATE TABLE IF NOT EXISTS #__bfstop_knownip (
+	id int(10) NOT NULL auto_increment,
+	ipaddress varchar(45) NOT NULL,
+	username varchar(150) NOT NULL,
+	first_success datetime NOT NULL,
+	last_success datetime NOT NULL,
+	PRIMARY KEY (id),
+	UNIQUE KEY ip_username (ipaddress, username)
+) DEFAULT CHARSET=utf8;

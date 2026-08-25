@@ -14,6 +14,7 @@ use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
+use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -163,10 +164,27 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			: $duration;
 	}
 
-	private function blockIfTooManyAttempts($logEntry)
+	/**
+	 * The number of failed attempts allowed from a single IP before it gets
+	 * blocked, adjusted by the per-attempt risk score (issue #76): a
+	 * trusted-looking attempt (negative score) gets a higher threshold, a
+	 * suspicious-looking one (positive score) a lower one. Floored at
+	 * riskMinBlockNumber so an extreme score can never reduce this to
+	 * 0-or-below and effectively instant-block a legitimate user.
+	 */
+	private function determineEffectiveBlockNumber($riskScore)
+	{
+		$blockNumber = $this->getIntParam('blockNumber', 15);
+		$reductionPerPoint = $this->getIntParam('riskBlockNumberReductionPerPoint', 1);
+		$minBlockNumber = $this->getIntParam('riskMinBlockNumber', 2);
+		$effective = (int) round($blockNumber - $riskScore * $reductionPerPoint);
+		return max($minBlockNumber, $effective);
+	}
+
+	private function blockIfTooManyAttempts($logEntry, $riskScore = 0)
 	{
 		$blockInterval = $this->getIntParam('blockDuration', NotifierHelper::$ONE_DAY);
-		$maxNumber = $this->getIntParam('blockNumber', 15);
+		$maxNumber = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
 			$this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY));
 		if ($this->mydb->getNumberOfFailedLogins(
@@ -226,7 +244,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->getBoolParam('groupNotificationEnabled', false));
 	}
 
-	private function notifyOfRemainingAttempts($logEntry)
+	private function notifyOfRemainingAttempts($logEntry, $riskScore = 0)
 	{
 		// remaining attempts notification only makes sense if we
 		// actually block
@@ -239,7 +257,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// avoid database access if reminders are disabled anyway
 			return;
 		}
-		$allowedAttempts = $this->getIntParam('blockNumber', 15);
+		$allowedAttempts = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
 			$this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY));
 		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
@@ -277,7 +295,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return (($enabledFor & ($this->getApplication()->getClientId() + 1)) != 0);
 	}
 
-	private function determineDelayDuration()
+	/**
+	 * The global-attack-volume-based delay (unchanged), plus an additional
+	 * delay proportional to the per-attempt risk score (issue #76) - the two
+	 * are independent, orthogonal mechanisms; only a positive (suspicious)
+	 * score adds delay, a trust bonus never reduces it below the base.
+	 */
+	private function determineDelayDuration($riskScore = 0)
+	{
+		$baseDelay = $this->determineBaseDelayDuration();
+		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', 2);
+		return $baseDelay + max(0, $riskScore) * $riskDelaySecondsPerPoint;
+	}
+
+	private function determineBaseDelayDuration()
 	{
 		$delayDuration = $this->getIntParam('delayDuration', 0);
 		$adaptive = $this->getBoolParam('adaptiveDelay', false);
@@ -335,17 +366,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, Log::INFO);
 			return;
 		}
-		$delayDuration = $this->determineDelayDuration();
+		$username = mb_strimwidth($user['username'], 0, 150, "...");
+		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
+
+		$delayDuration = $this->determineDelayDuration($riskScore);
 		if ($delayDuration != 0)
 		{
-			sleep($delayDuration);
+			sleep((int) round($delayDuration));
 		}
 
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
 		$logEntry->ipaddress = $ipAddress;
 		$logEntry->logtime = date("Y-m-d H:i:s");
-		$logEntry->username = mb_strimwidth($user['username'], 0, 150, "...");
+		$logEntry->username = $username;
 		$logEntry->origin = $this->getApplication()->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.
@@ -354,11 +388,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// insert into log:
 		$this->mydb->insertFailedLogin($logEntry);
 
-		$this->notifyOfRemainingAttempts($logEntry);
+		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
 
 		$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
-		$this->blockIfTooManyAttempts($logEntry);
+		$this->blockIfTooManyAttempts($logEntry, $riskScore);
 		$this->accountThrottleIfNeeded($logEntry);
 	}
 
