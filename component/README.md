@@ -29,3 +29,15 @@ component's Settings view is now the single place to configure BFStop
 (enabling/disabling the plugin itself still happens in the Plugin Manager,
 as with any Joomla plugin).
 
+This version also adds adaptive, risk-based allowance of failed login
+attempts (issue #76): failed logins are now throttled per account across
+all source IPs combined (not just per IP), and an optional per-attempt
+risk score (known IP/username pairs, common usernames, missing
+User-Agent, GeoIP country, reverse-DNS) adjusts delay and block
+thresholds - see the plugin's CHANGELOG for the full list, and the
+new "Account-level Throttle", "GeoIP Database", and "Adaptive Risk
+Scoring" fieldsets in the Settings view. The "Information for IP
+Address" view (issue #169) also works again, using the same local
+GeoIP database instead of the discontinued freegeoip.net API it used
+to depend on.
+
