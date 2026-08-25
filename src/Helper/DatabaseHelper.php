@@ -178,13 +178,35 @@ class DatabaseHelper
 	public function ipSubNetIPv4Match($ipaddress)
 	{
 		$DashPos = 'LOCATE("/", ipaddress)';
-		$IPv4NetMask = '~((1 << (32 - SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')))-1)';
 		$SubNetAddress = 'SUBSTR(ipaddress, 1, LOCATE("/", ipaddress)-1)';
+		$BitsText = 'SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')';
+		// the original mask expression used $BitsText directly as a
+		// string in "32 - SUBSTR(...)"; MySQL/MariaDB then coerces that
+		// implicitly to a DOUBLE, and if a stored row has a corrupted
+		// prefix length (huge or malformed - e.g. hand-edited in the DB,
+		// or an old bug that let one in), "32 - <huge>" produces a DOUBLE
+		// whose magnitude overflows BIGINT UNSIGNED once the shift
+		// operator converts it, raising "BIGINT UNSIGNED value is out of
+		// range" for every query against the whole table (#134).
+		$RawBits = 'CAST('.$BitsText.' AS SIGNED)';
+		// clamped to [0,32] before any further arithmetic, so a corrupted
+		// row can never blow up the mask math into an out-of-range error -
+		// same fix as ipSubNetIPv6Match() below (#142). The BitsValid
+		// guard further down keeps such a clamped-but-bogus row from
+		// silently matching as a wildcard.
+		$Bits = 'GREATEST(LEAST('.$RawBits.', 32), 0)';
+		$IPv4NetMask = '~((1 << (32 - '.$Bits.'))-1)';
+		// rejects a corrupted prefix length outright (rather than letting
+		// the clamp above silently turn it into a "/0" wildcard match) -
+		// the digit-count-limited REGEXP is itself overflow-safe, so this
+		// check never needs the clamped value to decide validity
+		$BitsValid = $BitsText." REGEXP '^[0-9]{1,2}$' AND ".$RawBits." BETWEEN 0 AND 32";
 		return
 		"(".
 			// IPv4 subnet match (CIDR Suffix notation)
 			"(".
 				"LOCATE('/', ipaddress) != 0 AND LOCATE('.', ipaddress) != 0 AND ".
+				$BitsValid." AND ".
 				"(INET_ATON(".$this->db->quote($ipaddress).") & ".$IPv4NetMask.")".
 					" = ".
 				"(INET_ATON(".$SubNetAddress.") & ".$IPv4NetMask.")".
