@@ -109,6 +109,12 @@
 				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
 				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 			</field>
+			<field name="blockMode" type="list" default="full"
+				label="COM_BFSTOP_SETTINGS_BLOCK_MODE_LABEL"
+				description="COM_BFSTOP_SETTINGS_BLOCK_MODE_DESC">
+				<option value="full">COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL</option>
+				<option value="loginonly">COM_BFSTOP_SETTINGS_BLOCK_MODE_LOGINONLY</option>
+			</field>
 			<field name="progressiveBlockDuration" type="list" default="0"
 				label="COM_BFSTOP_SETTINGS_PROGRESSIVE_BLOCK_DURATION_LABEL"
 				description="COM_BFSTOP_SETTINGS_PROGRESSIVE_BLOCK_DURATION_DESC">
