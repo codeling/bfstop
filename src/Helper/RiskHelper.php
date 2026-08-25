@@ -111,6 +111,42 @@ class RiskHelper
 		return self::getIntParam($params, 'riskGeoPoints', 3);
 	}
 
+	/**
+	 * Off by default: a synchronous gethostbyaddr() DNS lookup is exactly
+	 * the latency/DoS-amplification concern raised in issue #103, so this
+	 * is opt-in and result-cached (see DatabaseHelper::getCachedHostname())
+	 * to bound how often the real lookup actually happens.
+	 */
+	private static function reverseDnsScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress)
+	{
+		if (!self::getBoolParam($params, 'riskReverseDnsEnabled', false))
+		{
+			return 0;
+		}
+		try
+		{
+			$hostname = $db->getCachedHostname($ipaddress);
+			if ($hostname === false)
+			{
+				// not cached (or expired) - do the real lookup once and cache it.
+				// gethostbyaddr() returns the IP itself, unchanged, on failure -
+				// it does not return false/null - so that has to be checked for.
+				$resolved = @gethostbyaddr($ipaddress);
+				$hostname = ($resolved === false || $resolved === $ipaddress) ? null : $resolved;
+				$db->cacheHostname($ipaddress, $hostname);
+			}
+			if ($hostname === null)
+			{
+				return self::getIntParam($params, 'riskReverseDnsPoints', 2);
+			}
+		}
+		catch (\Exception $e)
+		{
+			$logger->log('RiskHelper: reverse DNS lookup failed: '.$e->getMessage(), Log::WARNING);
+		}
+		return 0;
+	}
+
 	public static function computeScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress, $username)
 	{
 		$score = 0;
@@ -118,6 +154,7 @@ class RiskHelper
 		$score += self::commonUsernameScore($params, $username);
 		$score += self::userAgentScore($params);
 		$score += self::geoScore($logger, $params, $ipaddress);
+		$score += self::reverseDnsScore($db, $logger, $params, $ipaddress);
 		return $score;
 	}
 }

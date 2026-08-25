@@ -69,3 +69,15 @@ CREATE TABLE IF NOT EXISTS #__bfstop_knownip (
 	PRIMARY KEY (id),
 	UNIQUE KEY ip_username (ipaddress, username)
 ) DEFAULT CHARSET=utf8;
+
+
+-- caches reverse-DNS (PTR) lookup results per IP address (issue #103), so
+-- the risk-scoring reverse-DNS signal only ever performs the actual (slow)
+-- DNS lookup at most once per IP per DatabaseHelper::$DNS_CACHE_TTL_DAYS
+-- window, rather than once per failed login attempt.
+CREATE TABLE IF NOT EXISTS #__bfstop_dnscache (
+	ipaddress varchar(45) NOT NULL,
+	hostname varchar(255) DEFAULT NULL,
+	checked_at datetime NOT NULL,
+	PRIMARY KEY (ipaddress)
+) DEFAULT CHARSET=utf8;

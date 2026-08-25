@@ -12,3 +12,5 @@ DROP TABLE IF EXISTS `#__bfstop_allowlist`;
 
 DROP TABLE IF EXISTS `#__bfstop_knownip`;
 
+DROP TABLE IF EXISTS `#__bfstop_dnscache`;
+

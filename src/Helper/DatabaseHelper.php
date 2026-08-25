@@ -22,6 +22,11 @@ class DatabaseHelper
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
 
+	// how long a reverse-DNS lookup result is trusted before being redone -
+	// keeps the (potentially slow) gethostbyaddr() call to at most once per
+	// IP per TTL window, see issue #103
+	public static $DNS_CACHE_TTL_DAYS = 7;
+
 	public function getClientString($id)
 	{
 		return ($id == 0) ? 'Frontend' : 'Backend';
@@ -399,6 +404,75 @@ class DatabaseHelper
 		}
 	}
 
+	/**
+	 * Returns false if there is no (unexpired) cached entry for this IP - the
+	 * caller should do a live lookup and cache it via cacheHostname().
+	 * Returns null if the cache confirms this IP has no PTR record, or the
+	 * cached hostname string otherwise. false/null/string are deliberately
+	 * distinct: null must not be confused with "not cached".
+	 */
+	public function getCachedHostname($ipaddress)
+	{
+		try
+		{
+			$sql = "SELECT hostname, checked_at FROM #__bfstop_dnscache WHERE ".
+				"ipaddress = ".$this->db->quote($ipaddress);
+			$this->db->setQuery($sql);
+			$row = $this->db->loadAssoc();
+			if ($row === null)
+			{
+				return false;
+			}
+			$checkedAt = strtotime($row['checked_at']);
+			if ($checkedAt === false ||
+				(time() - $checkedAt) > (self::$DNS_CACHE_TTL_DAYS * 86400))
+			{
+				return false;
+			}
+			return $row['hostname'];
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
+	public function cacheHostname($ipaddress, $hostname)
+	{
+		try
+		{
+			$now = date("Y-m-d H:i:s");
+			$sql = "SELECT ipaddress FROM #__bfstop_dnscache WHERE ".
+				"ipaddress = ".$this->db->quote($ipaddress);
+			$this->db->setQuery($sql);
+			$exists = $this->db->loadResult();
+			$hostnameSql = ($hostname === null) ? 'NULL' : $this->db->quote($hostname);
+			if ($exists)
+			{
+				$query = $this->db->getQuery(true);
+				$query->update('#__bfstop_dnscache')
+					->set('hostname = '.$hostnameSql)
+					->set('checked_at = '.$this->db->quote($now))
+					->where('ipaddress = '.$this->db->quote($ipaddress));
+				$this->db->setQuery($query);
+				$this->db->execute();
+			}
+			else
+			{
+				$entry = new \stdClass();
+				$entry->ipaddress = $ipaddress;
+				$entry->hostname = $hostname;
+				$entry->checked_at = $now;
+				$this->db->insertObject('#__bfstop_dnscache', $entry);
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
 	private function recordKnownIpUsername($ipaddress, $username)
 	{
 		try
@@ -455,6 +529,14 @@ class DatabaseHelper
 			$this->db->execute();
 
 			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate);
+			$this->db->execute();
+
+			// dnscache entries are already treated as expired by
+			// getCachedHostname() past DNS_CACHE_TTL_DAYS regardless of the
+			// admin-configured purge age above - this just reclaims the
+			// storage for rows nothing will ever read as valid again.
+			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
+				'DATE_SUB(NOW(), INTERVAL '.self::$DNS_CACHE_TTL_DAYS.' DAY)');
 			$this->db->execute();
 		}
 		catch (\Exception $e)
