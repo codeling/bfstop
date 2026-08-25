@@ -43,6 +43,13 @@ class HtblockController extends FormController
 
 	public function save($key = null, $urlVar = null)
 	{
+		// this fully overrides FormController::save(), so it doesn't
+		// inherit the base class's automatic allowSave()/core.create check
+		if (!Factory::getApplication()->getIdentity()->authorise('core.create', 'com_bfstop'))
+		{
+			$this->returnToFormWithMessage('', Text::_('COM_BFSTOP_NOT_AUTHORISED'));
+			return false;
+		}
 		$logger = LogHelper::getLogger();
 		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
 		$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;

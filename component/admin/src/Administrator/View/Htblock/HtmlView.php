@@ -18,10 +18,16 @@ use Joomla\CMS\Uri\Uri;
 
 class HtmlView extends BaseHtmlView
 {
+	protected $canSave;
+
 	public function display($tpl = null)
 	{
 		$this->form = $this->get('Form');
 		$this->item = $this->get('Item');
+
+		$user = Factory::getApplication()->getIdentity();
+		$this->canSave = $user && $user->authorise('core.create', 'com_bfstop');
+
 		$this->addToolbar();
 		$document = Factory::getDocument();
 		$document->addStyleSheet(Uri::base(true).
@@ -34,7 +40,10 @@ class HtmlView extends BaseHtmlView
 		$input = Factory::getApplication()->input;
 		$input->set('hidemainmenu', true);
 		ToolbarHelper::title(Text::_('COM_BFSTOP_BLOCK_NEW'));
-		ToolbarHelper::save('htblock.save');
+		if ($this->canSave)
+		{
+			ToolbarHelper::save('htblock.save');
+		}
 		ToolbarHelper::cancel('htblock.cancel', 'JTOOLBAR_CANCEL');
 	}
 }

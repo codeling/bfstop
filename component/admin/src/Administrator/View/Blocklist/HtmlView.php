@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Blocklist;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -74,13 +75,23 @@ class HtmlView extends BaseHtmlView
 
 	protected function addToolBar()
 	{
+		$user = Factory::getApplication()->getIdentity();
 		ToolbarHelper::title(Text::_('COM_BFSTOP_HEADING_BLOCKLIST'), 'bfstop');
 		ToolbarHelper::divider();
-		// batch unblock would require rewrite of unblock method to check
-		// for selected lines
-		ToolbarHelper::custom('blocklist.unblock', 'unpublish.png', 'unpublish_f2.png', 'COM_BFSTOP_UNBLOCK', true);
-		ToolbarHelper::editList('block.edit');
-		ToolbarHelper::addNew('block.add');
+		if ($user->authorise('core.delete', 'com_bfstop'))
+		{
+			// batch unblock would require rewrite of unblock method to check
+			// for selected lines
+			ToolbarHelper::custom('blocklist.unblock', 'unpublish.png', 'unpublish_f2.png', 'COM_BFSTOP_UNBLOCK', true);
+		}
+		if ($user->authorise('core.edit', 'com_bfstop'))
+		{
+			ToolbarHelper::editList('block.edit');
+		}
+		if ($user->authorise('core.create', 'com_bfstop'))
+		{
+			ToolbarHelper::addNew('block.add');
+		}
 		BfstopToolbarHelper::addOptions();
 	}
 }
