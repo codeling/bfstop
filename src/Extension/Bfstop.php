@@ -179,6 +179,42 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->block($logEntry, $blockInterval);
 	}
 
+	/**
+	 * Account-level throttle: once a username has accumulated enough failed
+	 * attempts *from any source IP combined* within the configured window,
+	 * every further failed attempt for that username gets an extra forced
+	 * delay. Unlike blockIfTooManyAttempts() (which is scoped to a single
+	 * IP), this catches an attacker who distributes attempts against one
+	 * target account across many different IPs - a distributed attack no
+	 * per-IP threshold can ever detect on its own. The account itself is
+	 * never locked - only wrong attempts get progressively expensive, so a
+	 * correct password still logs the real owner in immediately.
+	 */
+	private function accountThrottleIfNeeded($logEntry)
+	{
+		if (!$this->getBoolParam('accountThrottleEnabled', true))
+		{
+			return;
+		}
+		$checkInterval = $this->getIntParam('accountCheckInterval', 60);
+		$accountBlockNumber = $this->getIntParam('accountBlockNumber', 20);
+		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLoginsForUsername(
+			$checkInterval, $logEntry->username, $logEntry->logtime);
+		if ($numberOfFailedLogins < $accountBlockNumber)
+		{
+			return;
+		}
+		$throttleDelay = $this->getIntParam('accountThrottleDelay', 5);
+		if ($throttleDelay > 0)
+		{
+			$this->logger->log('Account-level throttle triggered for username \''.
+				$logEntry->username.'\' ('.$numberOfFailedLogins.
+				' failed attempts across all IPs within '.$checkInterval.
+				' minutes), adding '.$throttleDelay.'s delay', Log::INFO);
+			sleep($throttleDelay);
+		}
+	}
+
 	private function init()
 	{
 		$this->logger = new LoggerHelper($this->getIntParam('logLevel', LoggerHelper::Disabled));
@@ -323,6 +359,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry);
+		$this->accountThrottleIfNeeded($logEntry);
 	}
 
 	public function onUserLogin($event)

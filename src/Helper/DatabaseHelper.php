@@ -83,6 +83,20 @@ class DatabaseHelper
 			'logtime');
 	}
 
+	public function getNumberOfFailedLoginsForUsername($interval, $username, $logtime)
+	{
+		// deliberately not filtered by ipaddress - this aggregates failed
+		// attempts against this username across every source IP, so that a
+		// distributed attack spreading attempts across many IPs against one
+		// account is still caught (see issue #76 / OWASP guidance on
+		// account-scoped lockout counters)
+		return $this->eventsInInterval($interval, $logtime,
+			'AND username = '.$this->db->quote($username).
+			' AND handled = 0',
+			'#__bfstop_failedlogin',
+			'logtime');
+	}
+
 	public function getFailedLoginsInLastHour()
 	{
 		try
