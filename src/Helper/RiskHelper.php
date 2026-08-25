@@ -84,12 +84,40 @@ class RiskHelper
 		return 0;
 	}
 
+	/**
+	 * Off by default (unlike the signals above): needs a GeoLite2-Country
+	 * (or City) database configured via geoDbPath (shared with the IP-info
+	 * display, issue #169) and at least one "home country" configured to be
+	 * able to do anything at all.
+	 */
+	private static function geoScore(LoggerHelper $logger, Registry $params, $ipaddress)
+	{
+		if (!self::getBoolParam($params, 'riskGeoEnabled', false))
+		{
+			return 0;
+		}
+		$dbPath = (string) $params->get('geoDbPath', '');
+		$countryCode = GeoHelper::getCountryCode($logger, $dbPath, $ipaddress);
+		if ($countryCode === null)
+		{
+			return 0;
+		}
+		$homeCountries = (string) $params->get('riskGeoHomeCountries', '');
+		$homeList = array_filter(array_map('trim', explode(',', strtoupper($homeCountries))));
+		if (empty($homeList) || in_array(strtoupper($countryCode), $homeList, true))
+		{
+			return 0;
+		}
+		return self::getIntParam($params, 'riskGeoPoints', 3);
+	}
+
 	public static function computeScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress, $username)
 	{
 		$score = 0;
 		$score += self::knownIpScore($db, $logger, $params, $ipaddress, $username);
 		$score += self::commonUsernameScore($params, $username);
 		$score += self::userAgentScore($params);
+		$score += self::geoScore($logger, $params, $ipaddress);
 		return $score;
 	}
 }
