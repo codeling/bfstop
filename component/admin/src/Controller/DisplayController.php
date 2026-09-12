@@ -90,7 +90,7 @@ class DisplayController extends BaseController
 			if (array_key_exists($header, $_SERVER) && $_SERVER[$header] !== '')
 			{
 				$application = Factory::getApplication();
-				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_PROXY_NOT_CONFIGURED'), 'warning');
+				$application->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_PROXY_NOT_CONFIGURED', Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
 				return;
 			}
 		}
