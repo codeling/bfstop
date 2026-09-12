@@ -15,7 +15,23 @@ use Joomla\CMS\Router\Route;
 class PlgsystembfstopInstallerScript
 {
 	public function __construct(InstallerAdapter $adapter) {}
-	public function install(InstallerAdapter $adapter) {}
+
+	public function install(InstallerAdapter $adapter)
+	{
+		// plugins install disabled by default, but bfstop only does anything
+		// useful while running, and all its settings now live in the
+		// component - so there's nothing left to configure before enabling it.
+		$db = Factory::getDbo();
+		$query = $db->getQuery(true)
+			->update($db->quoteName('#__extensions'))
+			->set($db->quoteName('enabled') . ' = 1')
+			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
+		$db->setQuery($query);
+		$db->execute();
+	}
+
 	public function uninstall(InstallerAdapter $adapter) {}
 	public function preflight($type, InstallerAdapter $adapter) {}
 
