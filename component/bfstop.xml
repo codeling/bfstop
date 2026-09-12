@@ -10,7 +10,7 @@
 	<authorEmail>bfstop@bfroehler.info</authorEmail>
 	<authorUrl>https://github.com/codeling</authorUrl>
 	<version>2.0.0</version>
-	<namespace path="site/src">Codeling\Component\Bfstop</namespace>
+	<namespace path="src">Codeling\Component\Bfstop</namespace>
 	<scriptfile>installscript.php</scriptfile>
 	<install> <!-- Runs on install -->
 <!--
@@ -50,7 +50,6 @@
 			<menu view="allowlist">com_bfstop_allowlist</menu>
 			<menu view="log">com_bfstop_log</menu>
 		</submenu>
-		<namespace path="admin/src">Codeling\Component\Bfstop</namespace>
 		<files folder="admin">
 			<filename>access.xml</filename>
 			<filename>config.xml</filename>

@@ -29,7 +29,11 @@ class HtmlView extends BaseHtmlView
 	{
 		// the form field labels/descriptions are reused verbatim from the
 		// plugin's own language file; that file isn't auto-loaded for us.
-		Factory::getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		// the strings live in the .sys.ini, not the plain .ini - see
+		// InstallerAdapter::doLoadLanguage() for the same load pattern.
+		$language = Factory::getLanguage();
+		$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
+			|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS . '/system/bfstop');
 
 		$this->form = $this->get('Form');
 		$this->item = $this->get('Item');
