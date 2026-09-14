@@ -49,7 +49,7 @@ class SettingsController extends FormController
 		return parent::save($key, $urlVar);
 	}
 
-	protected function allowSave()
+	protected function allowSave($data = array(), $key = 'id')
 	{
 		$user = Factory::getApplication()->getIdentity();
 		return $user && $user->authorise('core.admin', 'com_bfstop');
