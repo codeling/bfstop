@@ -31,15 +31,14 @@ class DisplayController extends BaseController
 		{
 			return;
 		}
-		$this->checkForAdminUser();
-
-		$this->checkWhetherHtAccessWorks();
+		$this->warnIfAdminUserExists();
+		$this->warnIfHtAccessNotWorking();
 		$this->checkWhetherProxyConfigured();
 		$input->set('view', $view);
 		parent::display($cachable);
 	}
 
-	function checkForAdminUser()
+	function warnIfAdminUserExists()
 	{
 		try
 		{
@@ -55,11 +54,11 @@ class DisplayController extends BaseController
 		catch (\Exception $e)
 		{
 			$application = Factory::getApplication();
-			$application->enqueueMessage("Database exception occured: ".$e->getMessage(), 'warning');
+			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
 		}
 	}
 
-	function checkWhetherHtAccessWorks()
+	function warnIfHtAccessNotWorking()
 	{
 		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
 		$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
@@ -139,7 +138,7 @@ class DisplayController extends BaseController
 		catch (\Exception $e)
 		{
 			$application = Factory::getApplication();
-			$application->enqueueMessage("Database exception occured: ".$e->getMessage(), 'warning');
+			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
 		}
 	}
 }
