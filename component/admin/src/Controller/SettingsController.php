@@ -30,7 +30,7 @@ class SettingsController extends FormController
 		$this->view_list = 'settings';
 	}
 
-	public function getModel($name = 'settings', $prefix = 'bfstopmodel', $config = array())
+	public function getModel($name = 'settings', $prefix = '', $config = array())
 	{
 		$config['ignore_request'] = true;
 		$model = parent::getModel($name, $prefix, $config);

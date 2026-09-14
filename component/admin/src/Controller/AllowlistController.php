@@ -19,7 +19,7 @@ use Joomla\Utilities\ArrayHelper;
 
 class AllowlistController extends AdminController
 {
-	public function getModel($name = 'allowlist', $prefix = 'bfstopmodel', $config = [])
+	public function getModel($name = 'allowlist', $prefix = '', $config = [])
 	{
 		$model = parent::getModel($name, $prefix, array('ignore_request' => true));
 		return $model;

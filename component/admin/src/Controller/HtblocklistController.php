@@ -18,7 +18,7 @@ use Joomla\CMS\Router\Route;
 
 class HtblocklistController extends AdminController
 {
-	public function getModel($name = 'htblocklist', $prefix = 'bfstopmodel', $config = [])
+	public function getModel($name = 'htblocklist', $prefix = '', $config = [])
 	{
 		$model = parent::getModel($name, $prefix, array('ignore_request' => true));
 		return $model;

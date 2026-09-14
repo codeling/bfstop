@@ -18,7 +18,7 @@ use Joomla\CMS\Router\Route;
 
 class BlocklistController extends AdminController
 {
-	public function getModel($name = 'blocklist', $prefix = 'bfstopmodel', $config = [])
+	public function getModel($name = 'blocklist', $prefix = '', $config = [])
 	{
 		$model = parent::getModel($name, $prefix, array('ignore_request' => true));
 		return $model;
