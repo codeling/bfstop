@@ -2,16 +2,18 @@
 <form>
 	<fields name="params">
 		<fieldset name="basic">
+			<field name="blockMode" type="list" default="full"
+				label="COM_BFSTOP_SETTINGS_BLOCK_MODE_LABEL"
+				description="COM_BFSTOP_SETTINGS_BLOCK_MODE_DESC">
+				<option value="off">COM_BFSTOP_SETTINGS_BLOCK_MODE_OFF</option>
+				<option value="loginonly">COM_BFSTOP_SETTINGS_BLOCK_MODE_LOGINONLY</option>
+				<option value="full">COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL</option>
+				<option value="htaccess">COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS</option>
+			</field>
 			<field name="blockNumber" type="integer"
 				default="10" first="2" last="25" step="1"
 				label="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL"
 				description="PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_DESC" />
-			<field name="useHtaccess" type="list" default="0"
-				label="PLG_SYSTEM_BFSTOP_USE_HTACCESS_LABEL"
-				description="PLG_SYSTEM_BFSTOP_USE_HTACCESS_DESC">
-				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
-				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
-			</field>
 			<field name="blockDuration" type="list" default="1440"
 				label="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_LABEL"
 				description="PLG_SYSTEM_BFSTOP_BLOCK_DURATION_DESC">
@@ -103,18 +105,6 @@
 				<option value="2">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BACKEND</option>
 				<option value="3">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BOTH</option>
 			</field>
-			<field name="blockEnabled" type="list" default="1"
-				label="PLG_SYSTEM_BFSTOP_BLOCK_ENABLED_LABEL"
-				description="PLG_SYSTEM_BFSTOP_BLOCK_ENABLED_DESC">
-				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
-				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
-			</field>
-			<field name="blockMode" type="list" default="full"
-				label="COM_BFSTOP_SETTINGS_BLOCK_MODE_LABEL"
-				description="COM_BFSTOP_SETTINGS_BLOCK_MODE_DESC">
-				<option value="full">COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL</option>
-				<option value="loginonly">COM_BFSTOP_SETTINGS_BLOCK_MODE_LOGINONLY</option>
-			</field>
 			<field name="progressiveBlockDuration" type="list" default="0"
 				label="COM_BFSTOP_SETTINGS_PROGRESSIVE_BLOCK_DURATION_LABEL"
 				description="COM_BFSTOP_SETTINGS_PROGRESSIVE_BLOCK_DURATION_DESC">
@@ -189,7 +179,7 @@
 				first="0" last="24" step="1"
 				label="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_LABEL"
 				description="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_DESC" />
-			<field name="htaccessPath" type="text" default=""
+			<field name="htaccessPath" type="text" default="" showon="blockMode:htaccess"
 				label="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL"
 				description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_DESC" />
 		</fieldset>
