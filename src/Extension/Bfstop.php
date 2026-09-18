@@ -90,8 +90,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function block($logEntry, $duration)
 	{
-		$blockEnabled = $this->getBoolParam('blockEnabled', true);
-		if (!$blockEnabled)
+		if ($this->getStringParam('blockMode', 'full') === 'off')
 		{
 			return;
 		}
@@ -133,17 +132,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$duration = $newDuration;
 			}
 		}
-		$usehtaccess = $this->getBoolParam('useHtaccess', false);
-		if ($usehtaccess && $this->getStringParam('blockMode', 'full') === 'loginonly')
-		{
-			// .htaccess denies at the web server level, before Joomla (and
-			// this plugin) ever sees the request - there's no way to scope
-			// that to "login attempts only", so skip it entirely rather
-			// than silently defeat the "Login Only" mode the admin chose
-			$this->logger->log('Login-only block mode is active, not adding '.
-				$logEntry->ipaddress.' to .htaccess', Log::INFO);
-			$usehtaccess = false;
-		}
+		$usehtaccess = $this->getStringParam('blockMode', 'full') === 'htaccess';
 		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
 		if ($htaccessPath === "")
 		{
@@ -274,7 +263,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// actually block
 		$notifyRemaining = $this->getBoolParam('notifyRemainingAttempts', false);
 		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder', -1);
-		if (!$this->getBoolParam('blockEnabled', true) ||
+		if ($this->getStringParam('blockMode', 'full') === 'off' ||
 			(!$notifyRemaining &&
 			  !($passwordReminder == -1 || $passwordReminder > 0)))
 		{

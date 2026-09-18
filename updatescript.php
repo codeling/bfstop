@@ -64,7 +64,52 @@ class PlgsystembfstopInstallerScript
 		}
 		catch (Exception $e)
 		{
-			// if table doesn't exist, there's nothing we need to do 
+			// if table doesn't exist, there's nothing we need to do
+//			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
+		}
+
+		// for 2.0.0, the previously separate blockEnabled/useHtaccess switches
+		// and the (never released) two-value blockMode were unified into a
+		// single four-value blockMode setting (#187); every real install still
+		// has the old pre-2.0 config, so migrate it once into the equivalent
+		// unified value
+		try
+		{
+			$query = $db->getQuery(true)
+				->select($db->quoteName('params'))
+				->from($db->quoteName('#__extensions'))
+				->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+				->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+				->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
+			$db->setQuery($query);
+			$params = json_decode((string) $db->loadResult(), true);
+
+			if (is_array($params) && !array_key_exists('blockMode', $params))
+			{
+				$newMode = 'full';
+				if (array_key_exists('blockEnabled', $params) && (string) $params['blockEnabled'] === '0')
+				{
+					$newMode = 'off';
+				}
+				elseif (array_key_exists('useHtaccess', $params) && (string) $params['useHtaccess'] === '1')
+				{
+					$newMode = 'htaccess';
+				}
+				$params['blockMode'] = $newMode;
+
+				$query = $db->getQuery(true)
+					->update($db->quoteName('#__extensions'))
+					->set($db->quoteName('params') . ' = ' . $db->quote(json_encode($params)))
+					->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+					->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+					->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
+				$db->setQuery($query);
+				$db->execute();
+			}
+		}
+		catch (Exception $e)
+		{
+			// if the extension row can't be found/updated, there's nothing we can do
 //			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
 		}
 	}
