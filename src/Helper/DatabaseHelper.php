@@ -273,7 +273,7 @@ class DatabaseHelper
 		")";
 	}
 
-	private function checkForEntries($sql, $action)
+	private function loadMatchingEntries($sql, $action)
 	{
 		try
 		{
@@ -286,28 +286,73 @@ class DatabaseHelper
 					"ipaddress=".$entry->ipaddress,
 					Log::DEBUG);
 			}
-			return count($entries);
+			return $entries;
 		}
 		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return 0;
+			return array();
 		}
 	}
 
-	public function isIPBlocked($ipaddress)
+	private function checkForEntries($sql, $action)
+	{
+		return count($this->loadMatchingEntries($sql, $action));
+	}
+
+	/**
+	 * IDs of all currently active blocks matching the given IP address,
+	 * whether as single address or as part of a blocked IPv4/IPv6 subnet.
+	 */
+	public function getActiveBlockIds($ipaddress)
 	{
 		$sqlCheckPattern = "SELECT id, ipaddress, crdate, duration FROM #__bfstop_bannedip b WHERE ".
 			"%s AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= ".
 			$this->db->quote(date("Y-m-d H:i:s")).")".
 			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
-		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
-		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
-		$sqlSubNetIPv6Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv6Match($ipaddress));
-		$entryCount = $this->checkForEntries($sqlIPCheck, "Blocked");
-		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Blocked");
-		$entryCount += $this->checkForEntries($sqlSubNetIPv6Check, "Blocked");
-		return ($entryCount > 0);
+		$ids = array();
+		foreach (array(
+				$this->ipAddressMatch($ipaddress),
+				$this->ipSubNetIPv4Match($ipaddress),
+				$this->ipSubNetIPv6Match($ipaddress)) as $matchExpr)
+		{
+			foreach ($this->loadMatchingEntries(sprintf($sqlCheckPattern, $matchExpr), "Blocked") as $entry)
+			{
+				$ids[] = (int)$entry->id;
+			}
+		}
+		return array_values(array_unique($ids));
+	}
+
+	public function isIPBlocked($ipaddress)
+	{
+		return (count($this->getActiveBlockIds($ipaddress)) > 0);
+	}
+
+	/**
+	 * Count a rejected request against the given blocks and remember when it
+	 * happened (issue #219), so that stale blocks can be identified.
+	 */
+	public function recordBlockedAttempt($blockIds)
+	{
+		if (count($blockIds) === 0)
+		{
+			return;
+		}
+		try
+		{
+			$query = $this->db->getQuery(true)
+				->update($this->db->quoteName('#__bfstop_bannedip'))
+				->set($this->db->quoteName('attempts').' = '.$this->db->quoteName('attempts').' + 1')
+				->set($this->db->quoteName('last_attempt').' = '.$this->db->quote(date("Y-m-d H:i:s")))
+				->where($this->db->quoteName('id').' IN ('.implode(',', array_map('intval', $blockIds)).')');
+			$this->db->setQuery($query);
+			$this->db->execute();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
 	}
 
 	public function isIPOnAllowList($ipaddress)

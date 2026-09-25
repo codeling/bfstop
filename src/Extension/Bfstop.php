@@ -515,7 +515,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		if ($this->mydb->isIPBlocked($ipaddress))
+		$blockIds = $this->mydb->getActiveBlockIds($ipaddress);
+		if (count($blockIds) > 0)
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".
 				"trying to access ".
@@ -537,6 +538,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				// actual login attempt gets rejected below
 				return;
 			}
+			$this->mydb->recordBlockedAttempt($blockIds);
 			if ($this->getBoolParam('useHttpError', false))
 			{
 				header('HTTP/1.0 403 Forbidden');

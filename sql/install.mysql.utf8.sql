@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 	ipaddress varchar(45) NOT NULL,
 	crdate datetime NOT NULL,
 	duration int NOT NULL,
+-- number of requests rejected because of this block, and the time of the
+-- latest one (issue #219); NULL = no attempt since the block started
+	attempts int unsigned NOT NULL DEFAULT 0,
+	last_attempt datetime NULL DEFAULT NULL,
 	PRIMARY KEY (id)
 ) DEFAULT CHARSET=utf8;
 
