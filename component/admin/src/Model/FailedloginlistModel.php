@@ -45,4 +45,26 @@ class FailedloginlistModel extends ListModel
 	{
 		parent::populateState('l.logtime', 'DESC');
 	}
+
+	/**
+	 * Delete all failed login entries older than the given number of days.
+	 * Only touches the failed login table; blocks, unblock tokens etc. are
+	 * left alone (those are handled by the plugin's automatic purge).
+	 *
+	 * @return int the number of deleted entries
+	 */
+	public function purgeOlderThan(int $days)
+	{
+		// logtime is written with PHP's date() by the plugin, so compute the
+		// cutoff with the same clock instead of the database's NOW()
+		$cutoff = date('Y-m-d H:i:s', time() - $days * 86400);
+		$db = Factory::getDbo();
+		$query = $db->getQuery(true);
+		$query->delete($db->quoteName('#__bfstop_failedlogin'))
+			->where($db->quoteName('logtime').' < :cutoff')
+			->bind(':cutoff', $cutoff);
+		$db->setQuery($query);
+		$db->execute();
+		return $db->getAffectedRows();
+	}
 }
