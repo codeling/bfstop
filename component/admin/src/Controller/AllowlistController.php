@@ -27,6 +27,7 @@ class AllowlistController extends AdminController
 
 	public function remove()
 	{
+		$this->checkToken();
 		// this bypasses AdminModel's standard delete() flow (and its
 		// built-in core.delete check), so the check has to happen here
 		if (!Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop'))

@@ -26,6 +26,7 @@ class BlocklistController extends AdminController
 
 	function unblock()
 	{
+		$this->checkToken();
 		// custom action, not AdminModel's standard delete() flow, so it
 		// doesn't get the built-in core.delete check for free
 		if (!Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop'))

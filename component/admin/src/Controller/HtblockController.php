@@ -43,6 +43,7 @@ class HtblockController extends FormController
 
 	public function save($key = null, $urlVar = null)
 	{
+		$this->checkToken();
 		// this fully overrides FormController::save(), so it doesn't
 		// inherit the base class's automatic allowSave()/core.create check
 		if (!Factory::getApplication()->getIdentity()->authorise('core.create', 'com_bfstop'))
