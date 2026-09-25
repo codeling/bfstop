@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Blocklist;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -25,6 +26,9 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->get('State');
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
+		// with .htaccess blocking, blocked requests never reach Joomla,
+		// so attempts can't be counted
+		$this->attemptsTracked = ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess';
 		$this->addToolBar();
 		parent::display($tpl);
 	}

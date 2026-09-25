@@ -53,6 +53,20 @@ use Joomla\CMS\Language\Text;
 	</th>
 	<th>
 		<?php echo HTMLHelper::_('grid.sort',
+			'COM_BFSTOP_HEADING_ATTEMPTS',
+			'b.attempts',
+			$this->sortDirection,
+			$this->sortColumn); ?>
+	</th>
+	<th>
+		<?php echo HTMLHelper::_('grid.sort',
+			'COM_BFSTOP_HEADING_LAST_ATTEMPT',
+			'b.last_attempt',
+			$this->sortDirection,
+			$this->sortColumn); ?>
+	</th>
+	<th>
+		<?php echo HTMLHelper::_('grid.sort',
 			'COM_BFSTOP_HEADING_STATE',
 			'unblocked',
 			$this->sortDirection,

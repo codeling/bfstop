@@ -24,6 +24,8 @@ class BlocklistModel extends ListModel
 			'b.ipaddress',
 			'b.crdate',
 			'b.duration',
+			'b.attempts',
+			'b.last_attempt',
 			'unblocked'
 		);
 		parent::__construct($config);
@@ -33,7 +35,7 @@ class BlocklistModel extends ListModel
 	{
 		$db = Factory::getDbo();
 		$query = $db->getQuery(true);
-		$query->select('b.id, b.ipaddress, b.crdate, b.duration, u.crdate as unblocked');
+		$query->select('b.id, b.ipaddress, b.crdate, b.duration, b.attempts, b.last_attempt, u.crdate as unblocked');
 		$query->from('#__bfstop_bannedip b left join #__bfstop_unblock u on b.id=u.block_id');
 		$ordering  = $this->getState('list.ordering', 'b.id');
 		$ordering  = (strcmp($ordering, '') == 0) ? 'b.id' : $ordering;

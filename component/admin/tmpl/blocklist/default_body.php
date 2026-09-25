@@ -19,6 +19,8 @@ foreach ($this->items as $i => $item): ?>
 	<td><?php if (str_contains($item->ipaddress, "/")) { $rng = IpRangeHelper::cidrToRange($item->ipaddress); echo($this->escape($rng[0]."-".$rng[1]." (".IpRangeHelper::formatCount(IpRangeHelper::numOfAddresses($item->ipaddress)).")")); } ?></td>
 	<td><?php echo $item->crdate; ?></td>
 	<td><?php echo $this->convertDurationToReadable($item->duration); ?></td>
+	<td><?php echo (int)$item->attempts; ?></td>
+	<td><?php echo ($item->last_attempt === null) ? '&ndash;' : $item->last_attempt; ?></td>
 	<td><?php echo $this->getBlockedState($item); ?></td>
 </tr>
 <?php endforeach;
