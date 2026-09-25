@@ -642,9 +642,12 @@ class DatabaseHelper
 		try
 		{
 			$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", Log::INFO);
-			$deleteDate = 'DATE_SUB('.
-				' NOW(), INTERVAL '.
-				$this->db->quote($purgeAgeWeeks).
+			// all timestamps are written with PHP's date(), so compare against
+			// the same clock instead of the database's NOW(), which may use a
+			// different time zone
+			$now = $this->db->quote(date("Y-m-d H:i:s"));
+			$deleteDate = 'DATE_SUB('.$now.
+				', INTERVAL '.((int) $purgeAgeWeeks).
 				' WEEK)';
 			$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate);
 			$this->db->execute();
@@ -665,7 +668,7 @@ class DatabaseHelper
 			// admin-configured purge age above - this just reclaims the
 			// storage for rows nothing will ever read as valid again.
 			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
-				'DATE_SUB(NOW(), INTERVAL '.self::$DNS_CACHE_TTL_DAYS.' DAY)');
+				'DATE_SUB('.$now.', INTERVAL '.self::$DNS_CACHE_TTL_DAYS.' DAY)');
 			$this->db->execute();
 		}
 		catch (\Exception $e)
