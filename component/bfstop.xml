@@ -46,6 +46,7 @@
 			<menu view="blocklist">com_bfstop_blocklist</menu>
 			<menu view="htblocklist">com_bfstop_htaccess_blocklist</menu>
 			<menu view="failedloginlist">com_bfstop_failedloginlist</menu>
+			<menu view="usernamestats">com_bfstop_usernamestats</menu>
 			<menu view="settings">com_bfstop_settings</menu>
 			<menu view="allowlist">com_bfstop_allowlist</menu>
 			<menu view="log">com_bfstop_log</menu>
