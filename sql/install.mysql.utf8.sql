@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	logtime datetime NOT NULL,
 	origin int NOT NULL,
 	handled BOOLEAN NOT NULL DEFAULT 0,
-	PRIMARY KEY  (id)
+	PRIMARY KEY  (id),
+	KEY username_logtime (username, logtime)
 ) DEFAULT CHARSET=utf8;
 
 
@@ -84,4 +85,20 @@ CREATE TABLE IF NOT EXISTS #__bfstop_dnscache (
 	hostname varchar(255) DEFAULT NULL,
 	checked_at datetime NOT NULL,
 	PRIMARY KEY (ipaddress)
+) DEFAULT CHARSET=utf8;
+
+
+-- per-username failed login statistics (issue #136): how often each
+-- username was used in a failed login, and when first/last. Deliberately
+-- not pruned by the automatic purge of old failed login entries, so the
+-- "highscore" of attacked usernames covers the whole history; entries are
+-- only removed when an admin deletes usernames not seen for a given time.
+CREATE TABLE IF NOT EXISTS #__bfstop_username_stats (
+	username varchar(150) NOT NULL,
+	attempts int unsigned NOT NULL DEFAULT 0,
+	first_attempt datetime NOT NULL,
+	last_attempt datetime NOT NULL,
+	PRIMARY KEY (username),
+	KEY attempts (attempts),
+	KEY last_attempt (last_attempt)
 ) DEFAULT CHARSET=utf8;

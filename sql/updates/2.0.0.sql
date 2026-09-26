@@ -25,3 +25,24 @@ CREATE TABLE IF NOT EXISTS `#__bfstop_dnscache` (
 	checked_at datetime NOT NULL,
 	PRIMARY KEY (ipaddress)
 ) DEFAULT CHARSET=utf8;
+
+
+-- per-username failed login statistics (issue #136)
+CREATE TABLE IF NOT EXISTS `#__bfstop_username_stats` (
+	username varchar(150) NOT NULL,
+	attempts int unsigned NOT NULL DEFAULT 0,
+	first_attempt datetime NOT NULL,
+	last_attempt datetime NOT NULL,
+	PRIMARY KEY (username),
+	KEY attempts (attempts),
+	KEY last_attempt (last_attempt)
+) DEFAULT CHARSET=utf8;
+
+-- seed the statistics from the failed login entries still retained
+INSERT INTO `#__bfstop_username_stats` (username, attempts, first_attempt, last_attempt)
+	SELECT username, COUNT(*), MIN(logtime), MAX(logtime)
+	FROM `#__bfstop_failedlogin` GROUP BY username
+	ON DUPLICATE KEY UPDATE attempts=attempts;
+
+-- speeds up the per-username (account-level) throttle query
+ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime);

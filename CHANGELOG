@@ -19,6 +19,11 @@
     component now shows real country/region/city/coordinates again via a
     locally-configured MaxMind .mmdb database, instead of the discontinued
     freegeoip.net API it used to call
+  - Username statistics (#136): the number of failed logins per username,
+    with first and last attempt, is now kept in a separate table which is
+    not affected by the automatic purge of old failed login entries; it is
+    seeded from the retained failed login entries on update, and shown as
+    a "highscore" of attacked usernames in the component
   - Not implemented (documented as future work): CAPTCHA/challenge-based
     responses and IP-reputation/hosting-vs-residential classification were
     both considered but require either login-page changes or an
