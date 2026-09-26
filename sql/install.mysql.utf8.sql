@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	handled BOOLEAN NOT NULL DEFAULT 0,
 	PRIMARY KEY  (id),
 	KEY username_logtime (username, logtime)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 	attempts int unsigned NOT NULL DEFAULT 0,
 	last_attempt datetime NULL DEFAULT NULL,
 	PRIMARY KEY (id)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- stores a new entry if an IP address was unblocked, the
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock (
 	source int(10) NOT NULL,
 	crdate datetime NOT NULL,
 	PRIMARY KEY (block_id)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- stores randomized tokens for unblocking an IP via an email
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 	block_id int(10) NOT NULL,
 	crdate datetime NOT NULL,
 	PRIMARY KEY (token)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- stores a whitelist of IPs which will never be blocked
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_allowlist (
 	ipaddress varchar(45) NOT NULL,
 	notes varchar(255) NOT NULL DEFAULT '',
 	PRIMARY KEY (id)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- records (ipaddress, username) pairs that have had at least one successful
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_knownip (
 	last_success datetime NOT NULL,
 	PRIMARY KEY (id),
 	UNIQUE KEY ip_username (ipaddress, username)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- caches reverse-DNS (PTR) lookup results per IP address (issue #103), so
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS #__bfstop_dnscache (
 	hostname varchar(255) DEFAULT NULL,
 	checked_at datetime NOT NULL,
 	PRIMARY KEY (ipaddress)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
 -- per-username failed login statistics (issue #136): how often each
@@ -101,4 +101,4 @@ CREATE TABLE IF NOT EXISTS #__bfstop_username_stats (
 	PRIMARY KEY (username),
 	KEY attempts (attempts),
 	KEY last_attempt (last_attempt)
-) DEFAULT CHARSET=utf8;
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;

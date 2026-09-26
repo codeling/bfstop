@@ -24,6 +24,9 @@
     not affected by the automatic purge of old failed login entries; it is
     seeded from the retained failed login entries on update, and shown as
     a "highscore" of attacked usernames in the component
+  - All BFStop tables now use the utf8mb4 character set (like Joomla's own
+    tables), so failed logins for usernames containing 4-byte characters
+    (e.g. emoji) are recorded too, instead of failing to be stored
   - Not implemented (documented as future work): CAPTCHA/challenge-based
     responses and IP-reputation/hosting-vs-residential classification were
     both considered but require either login-page changes or an

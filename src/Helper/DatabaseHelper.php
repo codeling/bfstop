@@ -487,7 +487,14 @@ class DatabaseHelper
 
 	public function insertFailedLogin($logEntry)
 	{
-		$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		try
+		{
+			$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
 		$this->recordUsernameAttempt($logEntry->username, $logEntry->logtime);
 	}
 
