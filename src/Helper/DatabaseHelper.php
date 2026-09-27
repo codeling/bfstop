@@ -32,6 +32,27 @@ class DatabaseHelper
 		return ($id == 0) ? 'Frontend' : 'Backend';
 	}
 
+	// $time (as written by date("Y-m-d H:i:s")) moved back by $minutes;
+	// computed in PHP so that no database-specific date arithmetic (like
+	// MySQL's DATE_SUB) is needed, see issue #206
+	private static function minutesBefore($time, $minutes)
+	{
+		return date("Y-m-d H:i:s", strtotime($time) - ((int)$minutes) * 60);
+	}
+
+	// SQL expression for $dateExpr + $minutesExpr minutes, for the cases
+	// where the number of minutes comes from a column and can therefore not
+	// be computed in PHP. Neither DATE_ADD nor Joomla's
+	// DatabaseQuery::dateAdd() work on PostgreSQL for this (issue #206)
+	private function addMinutesSql($dateExpr, $minutesExpr)
+	{
+		if ($this->db->getServerType() === 'postgresql')
+		{
+			return '('.$dateExpr.' + '.$minutesExpr." * INTERVAL '1 minute')";
+		}
+		return 'DATE_ADD('.$dateExpr.', INTERVAL '.$minutesExpr.' MINUTE)';
+	}
+
 	public function __construct(LoggerHelper $logger)
 	{
 		$this->db = Factory::getDbo();
@@ -63,9 +84,9 @@ class DatabaseHelper
 			// check if in the last $interval hours, $number incidents have occured already:
 			$sql = "SELECT COUNT(*) FROM ".$table." t ".
 				"WHERE t.".$timecol.
-				" between DATE_SUB(".
-				$this->db->quote($time).
-				", INTERVAL $interval MINUTE) AND ".
+				" between ".
+				$this->db->quote(self::minutesBefore($time, $interval)).
+				" AND ".
 				$this->db->quote($time).
 				" ".$additionalWhere;
 			$this->db->setQuery($sql);
@@ -108,9 +129,8 @@ class DatabaseHelper
 		{
 			$nowDateTime = date("Y-m-d H:i:s");
 			$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
-				"WHERE logtime > DATE_SUB(".
-					$this->db->quote($nowDateTime).
-					", INTERVAL 1 HOUR)";
+				"WHERE logtime > ".
+					$this->db->quote(self::minutesBefore($nowDateTime, 60));
 			$this->db->setQuery($sql);
 			return $this->db->loadResult();
 		}
@@ -139,8 +159,8 @@ class DatabaseHelper
 			$sql = "SELECT * FROM #__bfstop_failedlogin t where ipaddress=".
 				$this->db->quote($ipAddress).
 				" AND t.logtime".
-				" between DATE_SUB(".$this->db->quote($curTime).
-				", INTERVAL $interval MINUTE) AND ".
+				" between ".$this->db->quote(self::minutesBefore($curTime, $interval)).
+				" AND ".
 				$this->db->quote($curTime);
 			$this->db->setQuery($sql);
 			$entries = $this->db->loadObjectList();
@@ -165,126 +185,39 @@ class DatabaseHelper
 		}
 	}
 
-	public function ipAddressMatch($ipaddress)
-	{
-		// literal match
-		return
-		"(".
-			"ipaddress=".$this->db->quote($ipaddress)." AND ".
-			"LOCATE('/', ipaddress) = 0".
-		")";
-	}
-
-	public function ipSubNetIPv4Match($ipaddress)
-	{
-		$DashPos = 'LOCATE("/", ipaddress)';
-		$SubNetAddress = 'SUBSTR(ipaddress, 1, LOCATE("/", ipaddress)-1)';
-		$BitsText = 'SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')';
-		// the original mask expression used $BitsText directly as a
-		// string in "32 - SUBSTR(...)"; MySQL/MariaDB then coerces that
-		// implicitly to a DOUBLE, and if a stored row has a corrupted
-		// prefix length (huge or malformed - e.g. hand-edited in the DB,
-		// or an old bug that let one in), "32 - <huge>" produces a DOUBLE
-		// whose magnitude overflows BIGINT UNSIGNED once the shift
-		// operator converts it, raising "BIGINT UNSIGNED value is out of
-		// range" for every query against the whole table (#134).
-		$RawBits = 'CAST('.$BitsText.' AS SIGNED)';
-		// clamped to [0,32] before any further arithmetic, so a corrupted
-		// row can never blow up the mask math into an out-of-range error -
-		// same fix as ipSubNetIPv6Match() below (#142). The BitsValid
-		// guard further down keeps such a clamped-but-bogus row from
-		// silently matching as a wildcard.
-		$Bits = 'GREATEST(LEAST('.$RawBits.', 32), 0)';
-		$IPv4NetMask = '~((1 << (32 - '.$Bits.'))-1)';
-		// rejects a corrupted prefix length outright (rather than letting
-		// the clamp above silently turn it into a "/0" wildcard match) -
-		// the digit-count-limited REGEXP is itself overflow-safe, so this
-		// check never needs the clamped value to decide validity
-		$BitsValid = $BitsText." REGEXP '^[0-9]{1,2}$' AND ".$RawBits." BETWEEN 0 AND 32";
-		return
-		"(".
-			// IPv4 subnet match (CIDR Suffix notation)
-			"(".
-				"LOCATE('/', ipaddress) != 0 AND LOCATE('.', ipaddress) != 0 AND ".
-				$BitsValid." AND ".
-				"(INET_ATON(".$this->db->quote($ipaddress).") & ".$IPv4NetMask.")".
-					" = ".
-				"(INET_ATON(".$SubNetAddress.") & ".$IPv4NetMask.")".
-			")".
-		")";
-	}
-
-	// splits a stored INET6_ATON() value into its high/low 8-byte halves and
-	// widens each to a plain BIGINT UNSIGNED, since MySQL's bitwise operators
-	// only work on 64-bit integers, not on 16-byte VARBINARY values directly
-	// (see issue #142/#117 - a 128-bit mask can't be applied in one step)
-	private function inet6HalfAsUnsigned($ipExpr, $startByte)
-	{
-		return 'CAST(CONV(HEX(SUBSTR(INET6_ATON('.$ipExpr.'), '.$startByte.', 8)), 16, 10) AS UNSIGNED)';
-	}
-
-	public function ipSubNetIPv6Match($ipaddress)
-	{
-		$ipQuoted = $this->db->quote($ipaddress);
-		$DashPos = 'LOCATE("/", ipaddress)';
-		$SubNetAddress = 'SUBSTR(ipaddress, 1, '.$DashPos.'-1)';
-		$BitsText = 'SUBSTR(ipaddress, '.$DashPos.'+1, LENGTH(ipaddress)-'.$DashPos.')';
-		// signed, not unsigned: bits-64 goes negative for a /0..'/63 prefix,
-		// and an UNSIGNED subtraction underflowing below 0 raises "BIGINT
-		// UNSIGNED out of range" in strict mode (this is the #117 crash).
-		$RawBits = 'CAST('.$BitsText.' AS SIGNED)';
-		// clamped to [0,128] before any further arithmetic, so a row with a
-		// corrupted prefix length (e.g. hand-edited in the DB) can never
-		// blow up the '-64'/shift math below into an out-of-range error -
-		// see #134, which hit this exact class of bug in the analogous
-		// IPv4 query. The BitsValid guard further down keeps such a
-		// clamped-but-bogus row from silently matching as a wildcard.
-		$Bits = 'GREATEST(LEAST('.$RawBits.', 128), 0)';
-
-		// the 128-bit prefix length is applied as two independent 64-bit
-		// masks, one per half of the address
-		$HiBits = 'LEAST('.$Bits.', 64)';
-		$LoBits = 'GREATEST('.$Bits.' - 64, 0)';
-		$HiMask = '(0xFFFFFFFFFFFFFFFF << (64 - '.$HiBits.'))';
-		$LoMask = '(0xFFFFFFFFFFFFFFFF << (64 - '.$LoBits.'))';
-
-		// rejects a corrupted prefix length outright (rather than letting
-		// the clamp above silently turn it into a "/0" wildcard match) -
-		// the digit-count-limited REGEXP is itself overflow-safe, so this
-		// check never needs the clamped value to decide validity
-		$BitsValid = $BitsText." REGEXP '^[0-9]{1,3}$' AND ".$RawBits." BETWEEN 0 AND 128";
-
-		return
-		"(".
-			// IPv6 subnet match (CIDR Suffix notation)
-			"(".
-				"LOCATE('/', ipaddress) != 0 AND LOCATE(':', ipaddress) != 0 AND ".
-				$BitsValid." AND ".
-				"INET6_ATON(".$ipQuoted.") IS NOT NULL AND LENGTH(INET6_ATON(".$ipQuoted.")) = 16 AND ".
-				"INET6_ATON(".$SubNetAddress.") IS NOT NULL AND LENGTH(INET6_ATON(".$SubNetAddress.")) = 16 AND ".
-				"(".$this->inet6HalfAsUnsigned($ipQuoted, 1)." & ".$HiMask.")".
-					" = ".
-				"(".$this->inet6HalfAsUnsigned($SubNetAddress, 1)." & ".$HiMask.")".
-					" AND ".
-				"(".$this->inet6HalfAsUnsigned($ipQuoted, 9)." & ".$LoMask.")".
-					" = ".
-				"(".$this->inet6HalfAsUnsigned($SubNetAddress, 9)." & ".$LoMask.")".
-			")".
-		")";
-	}
-
-	private function loadMatchingEntries($sql, $action)
+	/**
+	 * Loads the rows of $table (aliased t, needs id and ipaddress columns)
+	 * which match the given IP address, either literally or as part of a
+	 * stored IPv4/IPv6 subnet (CIDR notation). Only the literal match is done
+	 * in SQL; subnet entries are matched in PHP (IpHelper::isInSubnet), which
+	 * works the same on every database - the previous SQL implementation
+	 * relied on MySQL-only functions (INET_ATON, INET6_ATON, LOCATE, REGEXP,
+	 * ...), see issue #206, and was the source of #117, #134 and #142.
+	 */
+	private function loadMatchingEntries($ipaddress, $table, $additionalWhere, $action)
 	{
 		try
 		{
+			// LOWER: IPv6 addresses may be stored in upper case; MySQL's
+			// default collations compare case-insensitively, PostgreSQL doesn't
+			$sql = "SELECT t.id, t.ipaddress FROM ".$table." t WHERE ".
+				"((t.ipaddress NOT LIKE '%/%' AND LOWER(t.ipaddress) = LOWER(".$this->db->quote($ipaddress)."))".
+				" OR t.ipaddress LIKE '%/%')".
+				$additionalWhere;
 			$this->db->setQuery($sql);
-			$entries = $this->db->loadObjectList();
-			foreach ($entries as $entry)
+			$entries = array();
+			foreach ($this->db->loadObjectList() as $entry)
 			{
+				if (strpos($entry->ipaddress, '/') !== false &&
+					!IpHelper::isInSubnet($ipaddress, $entry->ipaddress))
+				{
+					continue;
+				}
 				$this->logger->log($action." because of entry: ".
 					"id=".$entry->id.", ".
 					"ipaddress=".$entry->ipaddress,
 					Log::DEBUG);
+				$entries[] = $entry;
 			}
 			return $entries;
 		}
@@ -295,33 +228,22 @@ class DatabaseHelper
 		}
 	}
 
-	private function checkForEntries($sql, $action)
-	{
-		return count($this->loadMatchingEntries($sql, $action));
-	}
-
 	/**
 	 * IDs of all currently active blocks matching the given IP address,
 	 * whether as single address or as part of a blocked IPv4/IPv6 subnet.
 	 */
 	public function getActiveBlockIds($ipaddress)
 	{
-		$sqlCheckPattern = "SELECT id, ipaddress, crdate, duration FROM #__bfstop_bannedip b WHERE ".
-			"%s AND (b.duration=0 OR DATE_ADD(b.crdate, INTERVAL b.duration MINUTE) >= ".
+		$activeWhere = " AND (t.duration=0 OR ".
+			$this->addMinutesSql('t.crdate', 't.duration')." >= ".
 			$this->db->quote(date("Y-m-d H:i:s")).")".
-			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE b.id = u.block_id)";
+			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE t.id = u.block_id)";
 		$ids = array();
-		foreach (array(
-				$this->ipAddressMatch($ipaddress),
-				$this->ipSubNetIPv4Match($ipaddress),
-				$this->ipSubNetIPv6Match($ipaddress)) as $matchExpr)
+		foreach ($this->loadMatchingEntries($ipaddress, '#__bfstop_bannedip', $activeWhere, "Blocked") as $entry)
 		{
-			foreach ($this->loadMatchingEntries(sprintf($sqlCheckPattern, $matchExpr), "Blocked") as $entry)
-			{
-				$ids[] = (int)$entry->id;
-			}
+			$ids[] = (int)$entry->id;
 		}
-		return array_values(array_unique($ids));
+		return $ids;
 	}
 
 	public function isIPBlocked($ipaddress)
@@ -357,14 +279,7 @@ class DatabaseHelper
 
 	public function isIPOnAllowList($ipaddress)
 	{
-		$sqlCheckPattern = "SELECT id, ipaddress from #__bfstop_allowlist WHERE %s";
-		$sqlIPCheck = sprintf($sqlCheckPattern, $this->ipAddressMatch($ipaddress));
-		$sqlSubNetIPv4Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv4Match($ipaddress));
-		$sqlSubNetIPv6Check = sprintf($sqlCheckPattern, $this->ipSubNetIPv6Match($ipaddress));
-		$entryCount = $this->checkForEntries($sqlIPCheck, "Allowed");
-		$entryCount += $this->checkForEntries($sqlSubNetIPv4Check, "Allowed");
-		$entryCount += $this->checkForEntries($sqlSubNetIPv6Check, "Allowed");
-		return ($entryCount > 0);
+		return count($this->loadMatchingEntries($ipaddress, '#__bfstop_allowlist', '', "Allowed")) > 0;
 	}
 
 	public function blockIP($logEntry, $duration, $usehtaccess, $htaccessPath)
@@ -487,7 +402,14 @@ class DatabaseHelper
 
 	public function insertFailedLogin($logEntry)
 	{
-		$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		try
+		{
+			$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
 	}
 
 	public function setFailedLoginHandled($info, $restrictOnUsername)
@@ -645,15 +567,14 @@ class DatabaseHelper
 			// all timestamps are written with PHP's date(), so compare against
 			// the same clock instead of the database's NOW(), which may use a
 			// different time zone
-			$now = $this->db->quote(date("Y-m-d H:i:s"));
-			$deleteDate = 'DATE_SUB('.$now.
-				', INTERVAL '.((int) $purgeAgeWeeks).
-				' WEEK)';
+			$now = date("Y-m-d H:i:s");
+			$deleteDate = $this->db->quote(self::minutesBefore($now,
+				((int) $purgeAgeWeeks) * 7 * 24 * 60));
 			$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate);
 			$this->db->execute();
 
-			$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND
-				DATE_ADD(crdate, INTERVAL duration MINUTE) < '.$deleteDate);
+			$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND '.
+				$this->addMinutesSql('crdate', 'duration').' < '.$deleteDate);
 			$this->db->execute();
 
 			$this->db->setQuery('DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
@@ -668,7 +589,7 @@ class DatabaseHelper
 			// admin-configured purge age above - this just reclaims the
 			// storage for rows nothing will ever read as valid again.
 			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
-				'DATE_SUB('.$now.', INTERVAL '.self::$DNS_CACHE_TTL_DAYS.' DAY)');
+				$this->db->quote(self::minutesBefore($now, self::$DNS_CACHE_TTL_DAYS * 24 * 60)));
 			$this->db->execute();
 		}
 		catch (\Exception $e)
@@ -682,9 +603,11 @@ class DatabaseHelper
 		try
 		{
 			$query = $this->db->getQuery(true);
-			$query->update('#__extensions AS a');
-			$query->set('a.params = '. $this->db->quote((string)$params));
-			$query->where('a.element = '.$this->db->quote('bfstop'));
+			// no table alias here: PostgreSQL doesn't allow qualified column
+			// names in the SET clause (issue #206)
+			$query->update($this->db->quoteName('#__extensions'));
+			$query->set($this->db->quoteName('params').' = '. $this->db->quote((string)$params));
+			$query->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
 			$this->db->setQuery($query);
 			$this->db->execute();
 		}

@@ -1,0 +1,1 @@
+-- PostgreSQL support starts with version 2.0.0, see install.postgresql.utf8.sql
