@@ -5,19 +5,14 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
-// run with: phpunit unittests/subnettest.php
+namespace Codeling\Bfstop\Tests\Unit;
+
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use PHPUnit\Framework\TestCase;
 
-if (!defined('_JEXEC'))
+class IpHelperTest extends TestCase
 {
-	define('_JEXEC', 1);
-}
-require_once(__DIR__.'/../src/Helper/IpHelper.php');
-
-class IpHelperSubnetTest extends TestCase
-{
-	public function testIPv4()
+	public function testIPv4Subnets()
 	{
 		$this->assertTrue(IpHelper::isInSubnet('198.51.100.200', '198.51.100.0/24'));
 		$this->assertFalse(IpHelper::isInSubnet('198.51.101.1', '198.51.100.0/24'));
@@ -30,7 +25,7 @@ class IpHelperSubnetTest extends TestCase
 		$this->assertTrue(IpHelper::isInSubnet('198.51.100.7', '198.51.100.99/24'));
 	}
 
-	public function testIPv6()
+	public function testIPv6Subnets()
 	{
 		$this->assertTrue(IpHelper::isInSubnet('2001:db8:ab:1::5', '2001:DB8:AB::/48'));
 		$this->assertFalse(IpHelper::isInSubnet('2001:db8:ac::1', '2001:db8:ab::/48'));
