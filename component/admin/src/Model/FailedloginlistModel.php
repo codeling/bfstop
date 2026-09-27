@@ -33,6 +33,12 @@ class FailedloginlistModel extends ListModel
 		$query = $db->getQuery(true);
 		$query->select('l.id, l.username, l.ipaddress, l.logtime, l.origin');
 		$query->from('#__bfstop_failedlogin l');
+		$username = (string) $this->getState('filter.username', '');
+		if ($username !== '')
+		{
+			$query->where('l.username = :username')
+				->bind(':username', $username);
+		}
 		$ordering  = $this->getState('list.ordering', 'l.id');
 		$ordering  = (strcmp($ordering, '') == 0) ? 'b.id' : $ordering;
 		$direction = $this->getState('list.direction', 'ASC');
@@ -44,6 +50,10 @@ class FailedloginlistModel extends ListModel
 	protected function populateState($ordering = null, $direction = null)
 	{
 		parent::populateState('l.logtime', 'DESC');
+		// set when coming from the username statistics view; deliberately not
+		// persisted in the user state, so the full list shows otherwise
+		$this->setState('filter.username',
+			Factory::getApplication()->input->getString('filter_username', ''));
 	}
 
 	/**

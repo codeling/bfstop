@@ -18,8 +18,17 @@ $settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
 		? Text::sprintf('COM_BFSTOP_FAILEDLOGIN_AUTOPURGE_ENABLED', $this->autoPurgeWeeks, $settingsUrl)
 		: Text::sprintf('COM_BFSTOP_FAILEDLOGIN_AUTOPURGE_DISABLED', $settingsUrl); ?>
 </div>
+<?php if ($this->filterUsername !== ''): ?>
+<div class="alert alert-secondary">
+	<?php echo Text::sprintf('COM_BFSTOP_FAILEDLOGIN_FILTERED_BY_USERNAME', $this->escape($this->filterUsername)); ?>
+	<a href="<?php echo Route::_('index.php?option=com_bfstop&view=failedloginlist'); ?>"><?php echo Text::_('COM_BFSTOP_FAILEDLOGIN_FILTER_CLEAR'); ?></a>
+</div>
+<?php endif; ?>
 <form method="post" name="adminForm" id="adminForm">
 	<input type="hidden" name="task" value="" />
+	<?php if ($this->filterUsername !== ''): ?>
+	<input type="hidden" name="filter_username" value="<?php echo $this->escape($this->filterUsername); ?>" />
+	<?php endif; ?>
 	<?php echo HTMLHelper::_('form.token'); ?>
 	<input type="hidden" name="filter_order" value="<?php echo $this->sortColumn; ?>" />
 	<input type="hidden" name="filter_order_Dir" value="<?php echo $this->sortDirection; ?>" />
