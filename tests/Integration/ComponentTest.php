@@ -13,6 +13,7 @@ use Codeling\Component\Bfstop\Administrator\Model\AllowlistModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlockModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\FailedloginlistModel;
+use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Joomla\CMS\Factory;
@@ -85,6 +86,20 @@ class ComponentTest extends IntegrationTestCase
 		$this->insert('#__bfstop_failedlogin', array('ipaddress' => '192.0.2.1', 'logtime' => self::minutesAgo(0), 'username' => 'new', 'origin' => 0));
 		$this->assertSame(1, $this->model(FailedloginlistModel::class)->purgeOlderThan(30));
 		$this->assertSame('new', $this->queryValue('SELECT username FROM #__bfstop_failedlogin'));
+	}
+
+	public function testUsernameStatistics()
+	{
+		$this->insert('#__bfstop_username_stats', array('username' => 'Admin', 'attempts' => 12,
+			'first_attempt' => self::minutesAgo(3 * 24 * 60), 'last_attempt' => self::minutesAgo(60)));
+		$this->insert('#__bfstop_username_stats', array('username' => 'old', 'attempts' => 3,
+			'first_attempt' => self::minutesAgo(40 * 24 * 60), 'last_attempt' => self::minutesAgo(31 * 24 * 60)));
+
+		$this->assertSame(2, $this->listCount(UsernamestatsModel::class));
+		$model = $this->model(UsernamestatsModel::class);
+		$this->assertSame(12, $model->getMaxAttempts());
+		$this->assertSame(1, $model->purgeNotSeenFor(30));
+		$this->assertSame('Admin', $this->queryValue('SELECT username FROM #__bfstop_username_stats'));
 	}
 
 	public function testUnblockViaEmailToken()

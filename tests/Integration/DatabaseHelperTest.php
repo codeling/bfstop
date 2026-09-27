@@ -64,6 +64,28 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame(1, $this->helper->getNumberOfFailedLoginsForUsername(60, 'bob', $now), 'other IP not handled');
 	}
 
+	public function testUsernameStatistics()
+	{
+		$this->failedLogin('203.0.113.5', 'bob', 30);
+		$this->failedLogin('203.0.113.6', 'bob', 20);
+		$this->failedLogin('203.0.113.5', 'bob', 10);
+		$this->failedLogin('203.0.113.5', 'eve', 5);
+
+		$this->db->setQuery('SELECT username, attempts, first_attempt, last_attempt FROM #__bfstop_username_stats ORDER BY username');
+		$rows = $this->db->loadObjectList();
+		$this->assertCount(2, $rows);
+		$this->assertSame(array('bob', 3), array($rows[0]->username, (int) $rows[0]->attempts));
+		$this->assertSame(self::minutesAgo(30), substr($rows[0]->first_attempt, 0, 19));
+		$this->assertSame(self::minutesAgo(10), substr($rows[0]->last_attempt, 0, 19));
+		$this->assertSame(array('eve', 1), array($rows[1]->username, (int) $rows[1]->attempts));
+
+		// not removed by the automatic purge, unlike the failed logins themselves
+		$this->insert('#__bfstop_username_stats', array('username' => 'old', 'attempts' => 7,
+			'first_attempt' => self::minutesAgo(90 * 24 * 60), 'last_attempt' => self::minutesAgo(80 * 24 * 60)));
+		$this->helper->purgeOldEntries(1);
+		$this->assertSame(3, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_username_stats'));
+	}
+
 	public function testActiveBlocks()
 	{
 		$exact = $this->block('203.0.113.5', 0, 60);

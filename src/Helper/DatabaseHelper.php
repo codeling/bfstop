@@ -410,6 +410,39 @@ class DatabaseHelper
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 		}
+		$this->recordUsernameAttempt($logEntry->username, $logEntry->logtime);
+	}
+
+	/**
+	 * Count a failed login for the given username in the per-username
+	 * statistics (issue #136). Unlike the failed login entries themselves,
+	 * these statistics are not removed by the automatic purge.
+	 */
+	private function recordUsernameAttempt($username, $logtime)
+	{
+		try
+		{
+			$time = $this->db->quote($logtime);
+			$sql = 'INSERT INTO #__bfstop_username_stats'.
+				' (username, attempts, first_attempt, last_attempt) VALUES ('.
+				$this->db->quote($username).', 1, '.$time.', '.$time.')';
+			// upsert: ON DUPLICATE KEY UPDATE is MySQL-only (issue #206)
+			if ($this->db->getServerType() === 'postgresql')
+			{
+				$sql .= ' ON CONFLICT (username) DO UPDATE SET'.
+					' attempts=#__bfstop_username_stats.attempts+1, last_attempt='.$time;
+			}
+			else
+			{
+				$sql .= ' ON DUPLICATE KEY UPDATE attempts=attempts+1, last_attempt='.$time;
+			}
+			$this->db->setQuery($sql);
+			$this->db->execute();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
 	}
 
 	public function setFailedLoginHandled($info, $restrictOnUsername)

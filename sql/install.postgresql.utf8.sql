@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_failedlogin" (
   "handled" smallint NOT NULL DEFAULT 0,
   PRIMARY KEY ("id")
 );
+CREATE INDEX IF NOT EXISTS "#__bfstop_failedlogin_username_logtime" ON "#__bfstop_failedlogin" ("username", "logtime");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_bannedip" (
@@ -72,3 +73,14 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_dnscache" (
   "checked_at" timestamp without time zone NOT NULL,
   PRIMARY KEY ("ipaddress")
 );
+
+
+CREATE TABLE IF NOT EXISTS "#__bfstop_username_stats" (
+  "username" varchar(150) NOT NULL,
+  "attempts" integer NOT NULL DEFAULT 0,
+  "first_attempt" timestamp without time zone NOT NULL,
+  "last_attempt" timestamp without time zone NOT NULL,
+  PRIMARY KEY ("username")
+);
+CREATE INDEX IF NOT EXISTS "#__bfstop_username_stats_attempts" ON "#__bfstop_username_stats" ("attempts");
+CREATE INDEX IF NOT EXISTS "#__bfstop_username_stats_last_attempt" ON "#__bfstop_username_stats" ("last_attempt");
