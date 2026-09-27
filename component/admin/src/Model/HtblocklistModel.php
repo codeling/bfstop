@@ -92,11 +92,11 @@ class HtblocklistModel extends ListModel
 	{
 		if (UnblockHelper::unblockHtaccess($ids, $logger))
 		{
-			return Text::_("UNBLOCK_SUCCESS");
+			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
 		}
 		else
 		{
-			return Text::_("UNBLOCK_FAILED");
+			return Text::_("COM_BFSTOP_UNBLOCK_FAILED");
 		}
 	}
 

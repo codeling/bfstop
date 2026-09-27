@@ -80,16 +80,16 @@ class SettingsController extends FormController
 		}
 		else
 		{
-			$subject = Text::sprintf('TEST_MAIL_SUBJECT', $notifier->getSiteName());
-			$body = Text::sprintf('TEST_MAIL_BODY', $notifier->getSiteName());
+			$subject = Text::sprintf('COM_BFSTOP_TEST_MAIL_SUBJECT', $notifier->getSiteName());
+			$body = Text::sprintf('COM_BFSTOP_TEST_MAIL_BODY', $notifier->getSiteName());
 			$result = $notifier->sendMail($subject, $body, $notifier->getNotifyAddresses());
 		}
 		$success = ($result === true);
 		// redirect back to settings view:
 		$this->setRedirect(Route::_('index.php?option=com_bfstop&view=settings', false),
 			$success
-				? Text::_('TEST_NOTIFICATION_SUCCESS')
-				: Text::sprintf('TEST_NOTIFICATION_FAILED', $result),
+				? Text::_('COM_BFSTOP_TEST_NOTIFICATION_SUCCESS')
+				: Text::sprintf('COM_BFSTOP_TEST_NOTIFICATION_FAILED', $result),
 			$result
 				? 'notice'
 				: 'error'

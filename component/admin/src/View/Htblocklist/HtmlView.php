@@ -33,13 +33,13 @@ class HtmlView extends BaseHtmlView
 	{
 		if ($item->unblocked != null)
 		{
-			return Text::sprintf('UNBLOCKED_STATE', $item->unblocked);
+			return Text::sprintf('COM_BFSTOP_UNBLOCKED_STATE', $item->unblocked);
 		}
 		else
 		{
 			if ($item->duration == 0)
 			{
-				return Text::_('BLOCKED_PERMANENTLY');
+				return Text::_('COM_BFSTOP_BLOCKED_PERMANENTLY');
 			}
 			else
 			{
@@ -47,8 +47,8 @@ class HtmlView extends BaseHtmlView
 				$blockedUntil += $item->duration * 60;
 				$strDate = date('Y-m-d H:i:s', $blockedUntil);
 				return ($blockedUntil < time())
-					? Text::sprintf('BLOCK_EXPIRED_AT', $strDate)
-					: Text::sprintf('BLOCKED_UNTIL', $strDate);
+					? Text::sprintf('COM_BFSTOP_BLOCK_EXPIRED_AT', $strDate)
+					: Text::sprintf('COM_BFSTOP_BLOCKED_UNTIL', $strDate);
 			}
 		}
 	}
