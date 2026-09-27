@@ -14,3 +14,4 @@ DROP TABLE IF EXISTS `#__bfstop_knownip`;
 
 DROP TABLE IF EXISTS `#__bfstop_dnscache`;
 
+DROP TABLE IF EXISTS `#__bfstop_username_stats`;
