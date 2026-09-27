@@ -18,7 +18,7 @@ jobs:
       matrix:
         php: ['8.1', '8.4']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
@@ -54,7 +54,7 @@ jobs:
         run: |
           echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
           echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # the component is tested together with the plugin: use its branch of
       # the same name if there is one (for changes spanning both), else main
@@ -67,7 +67,7 @@ jobs:
           else
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: codeling/com_bfstop
           ref: ${{ steps.com.outputs.ref }}
