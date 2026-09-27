@@ -43,7 +43,9 @@ class DisplayController extends BaseController
 		try
 		{
 			$db = Factory::getDbo();
-			$query = "SELECT COUNT(*) FROM #__users u WHERE u.username='admin'";
+			// LOWER: also catch "Admin" etc. on PostgreSQL, which (unlike
+			// MySQL's default collations) compares case-sensitively
+			$query = "SELECT COUNT(*) FROM #__users u WHERE LOWER(u.username)='admin'";
 			$db->setQuery($query);
 			if ($db->loadResult() > 0)
 			{

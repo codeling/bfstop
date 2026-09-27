@@ -23,9 +23,10 @@ class TokenunblockModel extends BaseDatabaseModel
 		// prune old tokens:
 		try
 		{
+			// cutoff computed in PHP, as DATE_ADD is MySQL-only (issue bfstop#206)
 			$this->_db->setQuery('DELETE FROM #__bfstop_unblock_token '.
-				'WHERE DATE_ADD(crdate, INTERVAL '.self::TokenValidDays.' DAY) < '.
-				$this->_db->quote(date('Y-m-d H:i:s')));
+				'WHERE crdate < '.
+				$this->_db->quote(date('Y-m-d H:i:s', time() - self::TokenValidDays * 86400)));
 			$this->_db->execute();
 			// get token:
 			$this->_db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
