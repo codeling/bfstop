@@ -26,6 +26,7 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->get('State');
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
+		$this->filterUsername = (string) $state->get('filter.username', '');
 		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', 0);
 		$this->canPurge   = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
