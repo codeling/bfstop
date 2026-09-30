@@ -1,6 +1,7 @@
 # Tests
 
-- `Unit/`: tests needing nothing but PHP and [PHPUnit](https://phpunit.de) 11.
+- `Unit/`: tests needing nothing but PHP and [PHPUnit](https://phpunit.de) 11
+  (the component's IP range tests only run if `COM_BFSTOP_ROOT` is set).
 - `Integration/`: tests against a real Joomla site with bfstop installed. They
   run every database query of the plugin (and of the component, if
   `COM_BFSTOP_ROOT` is set) on the site's database, and let the plugin react
@@ -10,6 +11,10 @@
 The classes under test are always loaded from this checkout (and the
 component checkout), not from the copies installed into the Joomla site, so
 the site only needs to be set up again when the database schema changes.
+
+- `lint/`: checks of the language files (`check-language.php`) and of the
+  release zip built by `deploy.sh zip` (`check-zip.php`); both scripts are
+  kept identical in the com_bfstop repository.
 
 GitHub Actions runs everything on each push and pull request, on Joomla 5 and
 6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`.

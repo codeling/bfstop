@@ -21,6 +21,8 @@ use PHPUnit\Framework\TestCase;
 class RecordingLogger extends LoggerHelper
 {
 	public $errors = array();
+	/** everything logged, as array('message' => ..., 'priority' => ...) */
+	public $messages = array();
 
 	public function __construct()
 	{
@@ -32,8 +34,21 @@ class RecordingLogger extends LoggerHelper
 		return true;
 	}
 
+	public function hasMessage($priority, $substring = '')
+	{
+		foreach ($this->messages as $m)
+		{
+			if ($m['priority'] === $priority && ($substring === '' || str_contains($m['message'], $substring)))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public function log($msg, $priority)
 	{
+		$this->messages[] = array('message' => $msg, 'priority' => $priority);
 		if ($priority <= Log::ERROR)
 		{
 			$this->errors[] = $msg;

@@ -7,7 +7,9 @@
 **/
 // Simulates the start of a site request from the IP address given as first
 // argument, as far as the plugin is concerned: prints the plugin's block
-// message if it rejects the request, "NOT BLOCKED" otherwise.
+// message if it rejects the request, "NOT BLOCKED" otherwise. An optional
+// second argument gives the request parameters as a query string (e.g.
+// "option=com_users&task=user.login").
 // Used by PluginEventsTest; needs the same environment as the tests.
 
 use Joomla\CMS\Factory;
@@ -18,6 +20,11 @@ require dirname(__DIR__, 2).'/bootstrap.php';
 
 $_SERVER['REMOTE_ADDR'] = $argv[1];
 $app = Factory::getApplication();
+parse_str($argv[2] ?? '', $params);
+foreach ($params as $name => $value)
+{
+	$app->input->set($name, $value);
+}
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
 $app->getDispatcher()->dispatch('onAfterInitialise', new Event('onAfterInitialise', array()));
 echo "NOT BLOCKED\n";
