@@ -1,0 +1,97 @@
+name: CI
+
+# The tests live in the plugin repository (https://github.com/codeling/bfstop,
+# see tests/README.md there); they cover plugin and component together.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    name: Syntax check (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.1', '8.4']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - name: Check PHP syntax
+        run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
+
+  integration:
+    name: Joomla ${{ matrix.joomla }}, ${{ matrix.db }}, PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { joomla: 5.4.8, php: '8.2', db: 'mysql:8.0' }
+          - { joomla: 5.4.8, php: '8.2', db: 'postgres:12' }
+          - { joomla: 6.1.3, php: '8.4', db: 'mariadb:11.4' }
+          - { joomla: 6.1.3, php: '8.4', db: 'postgres:17' }
+    env:
+      JOOMLA_VERSION: ${{ matrix.joomla }}
+      DB_HOST: 127.0.0.1
+      DB_NAME: joomla
+      DB_PASS: bfstop-test
+    steps:
+      - name: Set paths
+        run: |
+          {
+            echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla"
+            echo "COM_BFSTOP_ROOT=$GITHUB_WORKSPACE"
+            echo "PLUGIN_ROOT=$RUNNER_TEMP/bfstop"
+          } >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+
+      # use the plugin's branch of the same name if there is one (for changes
+      # spanning both), else main
+      - name: Determine bfstop branch
+        id: plugin
+        run: |
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          if git ls-remote --exit-code --heads https://github.com/codeling/bfstop.git "$branch" > /dev/null; then
+            echo "ref=$branch" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=main" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        with:
+          repository: codeling/bfstop
+          ref: ${{ steps.plugin.outputs.ref }}
+          path: bfstop
+      - name: Move bfstop checkout out of the component's
+        run: mv bfstop "$PLUGIN_ROOT"
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, pdo_mysql, pgsql, pdo_pgsql, zip, mbstring, intl, gd
+          tools: phpunit:11
+          coverage: none
+
+      - name: Start database (${{ matrix.db }})
+        env:
+          DB_IMAGE: ${{ matrix.db }}
+        run: '"$PLUGIN_ROOT"/tests/ci/start-database.sh'
+
+      - name: Install Joomla, bfstop and com_bfstop
+        run: '"$PLUGIN_ROOT"/tests/ci/install-joomla.sh'
+
+      - name: Tests
+        run: phpunit -c "$PLUGIN_ROOT"/tests/phpunit.xml.dist
+
+      - name: Plugin log
+        if: failure()
+        run: cat "$JOOMLA_ROOT"/administrator/logs/*.php || true
