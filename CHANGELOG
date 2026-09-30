@@ -35,6 +35,11 @@
     two-factor auth when risk is high) would need to hook earlier in the
     login pipeline than this plugin currently does and is left for a
     separate, larger initiative
+  - PostgreSQL support (#206): install/uninstall scripts for PostgreSQL;
+    the plugin previously installed without creating its tables there and
+    then silently never blocked anything. IP subnet matching for block and
+    allow list entries is now done in PHP instead of with MySQL-only SQL
+    functions, and fixed-length time windows are computed in PHP
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

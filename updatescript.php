@@ -51,21 +51,25 @@ class PlgsystembfstopInstallerScript
 	public function update(InstallerAdapter $adapter)
 	{
 		// for version 1.4.2, whitelist was renamed to allowlist, but only for updates;
-		// for new installs, the old name remained, so let's fix this for all installations:
+		// for new installs, the old name remained, so let's fix this for all installations
+		// (MySQL only - PostgreSQL is supported from 2.0.0 on, so no such table exists there):
 		$db = Factory::getDbo();
-		try
+		if ($db->getServerType() === 'mysql')
 		{
-			$sql = "SELECT COUNT(*) FROM `#__bfstop_whitelist`";
-			$db->setQuery($sql);
-			$numEntries = ((int)$db->loadResult());
-			$sql = "RENAME TABLE `#__bfstop_whitelist` TO `#__bfstop_allowlist`";
-			$db->setQuery($sql);
-			$db->execute();
-		}
-		catch (Exception $e)
-		{
-			// if table doesn't exist, there's nothing we need to do
-//			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
+			try
+			{
+				$sql = "SELECT COUNT(*) FROM `#__bfstop_whitelist`";
+				$db->setQuery($sql);
+				$numEntries = ((int)$db->loadResult());
+				$sql = "RENAME TABLE `#__bfstop_whitelist` TO `#__bfstop_allowlist`";
+				$db->setQuery($sql);
+				$db->execute();
+			}
+			catch (Exception $e)
+			{
+				// if table doesn't exist, there's nothing we need to do
+//				Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
+			}
 		}
 
 		// for 2.0.0, the previously separate blockEnabled/useHtaccess switches

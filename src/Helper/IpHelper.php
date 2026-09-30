@@ -33,6 +33,45 @@ class IpHelper
 		'HTTP_CLIENT_IP',
 	);
 
+	/**
+	 * Whether $ip lies within $subnet, given in CIDR notation (e.g.
+	 * "192.0.2.0/24" or "2001:db8::/32"). Anything malformed - an address
+	 * that doesn't parse, IPv4 vs. IPv6 mismatch, or a prefix length that
+	 * isn't a plain number within range for the address family - never
+	 * matches, so a corrupted stored entry can't turn into a wildcard.
+	 */
+	public static function isInSubnet($ip, $subnet)
+	{
+		$parts = explode('/', $subnet);
+		if (count($parts) !== 2 || !preg_match('/^[0-9]{1,3}$/', $parts[1]))
+		{
+			return false;
+		}
+		$ipBin = @inet_pton($ip);
+		$subnetBin = @inet_pton($parts[0]);
+		if ($ipBin === false || $subnetBin === false || strlen($ipBin) !== strlen($subnetBin))
+		{
+			return false;
+		}
+		$bits = (int)$parts[1];
+		if ($bits > strlen($ipBin) * 8)
+		{
+			return false;
+		}
+		$fullBytes = intdiv($bits, 8);
+		if (substr($ipBin, 0, $fullBytes) !== substr($subnetBin, 0, $fullBytes))
+		{
+			return false;
+		}
+		$remainingBits = $bits % 8;
+		if ($remainingBits === 0)
+		{
+			return true;
+		}
+		$mask = (0xff << (8 - $remainingBits)) & 0xff;
+		return (ord($ipBin[$fullBytes]) & $mask) === (ord($subnetBin[$fullBytes]) & $mask);
+	}
+
 	private static function firstValidPublicIP($headerValue)
 	{
 		foreach (explode(',', $headerValue) as $ip)
