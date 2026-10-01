@@ -10,6 +10,26 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Manifest, language and package checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: XML files are well-formed
+        run: |
+          sudo apt-get install -y -q libxml2-utils > /dev/null
+          find . -name '*.xml' -not -path './.git/*' -print0 | xargs -0 xmllint --noout
+      - name: Language files
+        run: php tests/lint/check-language.php bfstop.xml PLG_SYSTEM_BFSTOP
+      - name: Release zip contains everything the manifest references
+        run: |
+          ./deploy.sh zip
+          php tests/lint/check-zip.php bfstop-*.zip bfstop.xml
+
   unit:
     name: Syntax check and unit tests (PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
