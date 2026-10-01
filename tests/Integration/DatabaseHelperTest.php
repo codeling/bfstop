@@ -66,17 +66,23 @@ class DatabaseHelperTest extends IntegrationTestCase
 
 	public function testUsernameStatistics()
 	{
+		// the log times are taken from the clock while inserting: compare against the window of
+		// the inserts, as a second-exact value breaks when a second boundary passes before the assert
+		$before = time();
 		$this->failedLogin('203.0.113.5', 'bob', 30);
 		$this->failedLogin('203.0.113.6', 'bob', 20);
 		$this->failedLogin('203.0.113.5', 'bob', 10);
 		$this->failedLogin('203.0.113.5', 'eve', 5);
+		$after = time();
 
 		$this->db->setQuery('SELECT username, attempts, first_attempt, last_attempt FROM #__bfstop_username_stats ORDER BY username');
 		$rows = $this->db->loadObjectList();
 		$this->assertCount(2, $rows);
 		$this->assertSame(array('bob', 3), array($rows[0]->username, (int) $rows[0]->attempts));
-		$this->assertSame(self::minutesAgo(30), substr($rows[0]->first_attempt, 0, 19));
-		$this->assertSame(self::minutesAgo(10), substr($rows[0]->last_attempt, 0, 19));
+		$this->assertGreaterThanOrEqual($before - 30 * 60, strtotime($rows[0]->first_attempt));
+		$this->assertLessThanOrEqual($after - 30 * 60, strtotime($rows[0]->first_attempt));
+		$this->assertGreaterThanOrEqual($before - 10 * 60, strtotime($rows[0]->last_attempt));
+		$this->assertLessThanOrEqual($after - 10 * 60, strtotime($rows[0]->last_attempt));
 		$this->assertSame(array('eve', 1), array($rows[1]->username, (int) $rows[1]->attempts));
 
 		// not removed by the automatic purge, unlike the failed logins themselves
