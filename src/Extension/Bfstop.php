@@ -37,6 +37,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			'onUserLoginFailure' => 'onUserLoginFailure',
 			'onUserLogin'        => 'onUserLogin',
 			'onAfterInitialise'  => 'onAfterInitialise',
+			'onAfterRoute'       => 'onAfterRoute',
 		);
 	}
 
@@ -511,6 +512,25 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$this->params->set('lastPurge', $now);
 				$this->mydb->saveParams($this->params);
 			}
+		}
+	}
+
+	/**
+	 * Enforcing the block happens after routing, not in onAfterInitialise:
+	 * the exemptions below look at option/view/task, which with
+	 * search-engine-friendly URLs (e.g. /index.php/component/users/reset)
+	 * are only populated once the router has run.
+	 */
+	public function onAfterRoute($event)
+	{
+		if (!isset($this->mydb))
+		{
+			// onAfterInitialise did not run (or bailed out early)
+			$this->init();
+		}
+		if (!$this->isEnabledForCurrentOrigin())
+		{
+			return;
 		}
 		$ipaddress = IpHelper::getAddress($this->logger);
 		if ($this->mydb->isIPOnAllowList($ipaddress))
