@@ -56,10 +56,10 @@ class BlockedRequestTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo($minutesAgo), 'duration' => $duration), 'id');
 	}
 
-	private function request($query = '', $ip = self::Ip)
+	private function request($query = '', $ip = self::Ip, $routed = true)
 	{
 		$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/request.php').' '.
-			escapeshellarg($ip).' '.escapeshellarg($query).' 2>&1';
+			escapeshellarg($ip).' '.escapeshellarg($query).($routed ? '' : ' --no-route').' 2>&1';
 		exec($command, $output, $exitCode);
 		$output = implode("\n", $output);
 		$this->assertSame(0, $exitCode, $output);
@@ -88,6 +88,17 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_content&view=article&id=1');
 		$this->assertBlocked('option=com_users&task=user.login');
 		$this->assertNotBlocked('', '203.0.113.42');
+	}
+
+	public function testBlockIsEnforcedOnlyAfterRouting()
+	{
+		// with SEF URLs option/view are empty until the router ran, so the
+		// password recovery exemption can only be evaluated afterwards
+		$this->configure();
+		$this->block();
+		$output = $this->request('', self::Ip, false);
+		$this->assertStringContainsString('NOT BLOCKED', $output);
+		$this->assertBlocked();
 	}
 
 	public function testBlockedMessageCanShowIp()

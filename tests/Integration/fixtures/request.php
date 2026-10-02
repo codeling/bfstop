@@ -27,4 +27,9 @@ foreach ($params as $name => $value)
 }
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
 $app->getDispatcher()->dispatch('onAfterInitialise', new Event('onAfterInitialise', array()));
+// blocking is enforced after routing (SEF URLs only yield option/view then)
+if (!in_array('--no-route', $argv, true))
+{
+	$app->getDispatcher()->dispatch('onAfterRoute', new Event('onAfterRoute', array()));
+}
 echo "NOT BLOCKED\n";
