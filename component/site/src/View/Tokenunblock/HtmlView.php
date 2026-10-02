@@ -42,14 +42,14 @@ class HtmlView extends BaseHtmlView
 			$this->model = $this->getModel();
 			$unblockSuccess = $this->model->unblock($token, $logger);
 			$this->message = ($unblockSuccess)
-				? Text::sprintf('UNBLOCKTOKEN_SUCCESS',
+				? Text::sprintf('COM_BFSTOP_UNBLOCKTOKEN_SUCCESS',
 					$this->getLoginLink(),
 					$this->getPasswordResetLink())
-				: Text::_('UNBLOCKTOKEN_FAILED');
+				: Text::_('COM_BFSTOP_UNBLOCKTOKEN_FAILED');
 		}
 		else
 		{
-			$this->message = Text::_('UNBLOCKTOKEN_INVALID');
+			$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_INVALID');
 		}
 		parent::display($tpl);
 	}

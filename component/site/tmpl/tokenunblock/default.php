@@ -10,5 +10,5 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Language\Text;
 
 ?>
-<h1><?php echo Text::_('UNBLOCKTOKEN_HEADING'); ?></h1>
+<h1><?php echo Text::_('COM_BFSTOP_UNBLOCKTOKEN_HEADING'); ?></h1>
 <div> <?php echo $this->message; ?> </div>
