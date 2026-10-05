@@ -57,6 +57,24 @@
     and private client addresses reported by the proxy are accepted. Not
     all proxies append to an incoming header: pick a header yours sets or
     appends to
+  - Security: a failed login is now recorded, counted and checked against
+    the block threshold before the configured delay is applied, not after
+    it, and a request whose IP address just got (or already is) blocked is
+    not delayed any more. Before, a burst of parallel login attempts all
+    ran before the first of them was counted, and every one of them held
+    on to a server worker for the whole delay
+  - Security: usernames of failed logins which do not belong to an existing
+    account (and are not on the list of common usernames) are now stored,
+    shown, logged and mailed as an unreadable hash by default, as users
+    often type their password into the username field; the hash is the same
+    for the same input, so attempts are still counted together. The new
+    setting "Usernames Not Matching an Account" restores the old behaviour.
+    Entries stored by earlier versions stay as they are - purge them in the
+    failed login and username statistics views if you want them gone
+  - Security: unblocking by the link in the notification email now needs a
+    confirmation (a POST request) and only works from the IP address which
+    was blocked, so mail security scanners or link previews which open
+    every link in a message can't unblock an attacker (see com_bfstop)
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

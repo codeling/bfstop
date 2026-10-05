@@ -16,6 +16,7 @@ use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
+use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -361,6 +362,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $delayDuration;
 	}
 
+	/**
+	 * The form in which the username of a failed login is stored, mailed and
+	 * logged, see UsernameHelper.
+	 */
+	private function usernameForStorage($username)
+	{
+		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
+		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
+			($this->mydb->userExists($username) ||
+				RiskHelper::isCommonUsername($this->params, $username));
+		return UsernameHelper::forStorage($username, $mode, $isReadable,
+			$this->getApplication()->get('secret', ''));
+	}
+
 	public function onUserLoginFailure($event)
 	{
 		$user = $event->getArgument(0);
@@ -383,23 +398,22 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$username = mb_strimwidth($user['username'], 0, 150, "...");
 		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
-		$delayDuration = $this->determineDelayDuration($riskScore);
-		if ($delayDuration != 0)
-		{
-			sleep((int) round($delayDuration));
-		}
-
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
 		$logEntry->ipaddress = $ipAddress;
 		$logEntry->logtime = date("Y-m-d H:i:s");
-		$logEntry->username = $username;
+		$logEntry->username = $this->usernameForStorage($username);
 		$logEntry->origin = $this->getApplication()->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.
 			$logEntry->ipaddress, Log::DEBUG);
 
-		// insert into log:
+		// Everything is recorded and evaluated *before* the delay below. The
+		// password has been checked by now, so the delay only holds back the
+		// response; if the attempt was only counted after the sleep, a burst
+		// of parallel requests would all run before the first of them
+		// reached the block threshold, and each of them would tie up a
+		// worker for the whole delay.
 		$this->mydb->insertFailedLogin($logEntry);
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
@@ -408,6 +422,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry, $riskScore);
 		$this->accountThrottleIfNeeded($logEntry);
+
+		$delayDuration = $this->determineDelayDuration($riskScore);
+		if ($delayDuration != 0)
+		{
+			// a blocked address gets nothing more out of a slow response;
+			// don't let it hold on to a worker (attackers could otherwise use
+			// the delay to exhaust the server's workers)
+			if ($this->mydb->isIPBlocked($ipAddress))
+			{
+				$this->logger->log('Not delaying the response, IP address '.
+					$ipAddress.' is blocked', Log::DEBUG);
+			}
+			else
+			{
+				sleep((int) round($delayDuration));
+			}
+		}
 	}
 
 	public function onUserLogin($event)

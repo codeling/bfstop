@@ -120,6 +120,68 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token'));
 	}
 
+	public function testTokenUnblockNeedsConfirmationAndTheBlockedIp()
+	{
+		$ip = '203.0.113.5';
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $blockId, 'crdate' => self::minutesAgo(60)));
+		$helper = new DatabaseHelper($this->logger);
+		$model = $this->model(TokenunblockModel::class);
+		$tokens = 'SELECT COUNT(*) FROM #__bfstop_unblock_token';
+
+		$this->assertSame(TokenunblockModel::ResultInvalid, $model->process('', true, $ip, $this->logger));
+
+		// opening the link (what a mail scanner does) changes nothing
+		$this->assertSame(TokenunblockModel::ResultConfirm, $model->process('valid', false, $ip, $this->logger));
+		$this->assertTrue($helper->isIPBlocked($ip));
+		$this->assertSame(1, (int) $this->queryValue($tokens));
+
+		// confirming from another IP address doesn't unblock either
+		$this->assertSame(TokenunblockModel::ResultWrongIp, $model->process('valid', true, '198.51.100.9', $this->logger));
+		$this->assertTrue($helper->isIPBlocked($ip));
+		$this->assertSame(1, (int) $this->queryValue($tokens));
+
+		// neither does an unknown token
+		$this->assertSame(TokenunblockModel::ResultFailed, $model->process('unknown', true, $ip, $this->logger));
+		$this->logger->errors = array(); // expected: "token not found" error
+		$this->assertTrue($helper->isIPBlocked($ip));
+
+		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, $ip, $this->logger));
+		$this->assertFalse($helper->isIPBlocked($ip));
+		$this->assertSame(0, (int) $this->queryValue($tokens));
+	}
+
+	public function testTokenUnblockComparesIpv6AddressesNotSpellings()
+	{
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8::1', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $blockId, 'crdate' => self::minutesAgo(1)));
+		$model = $this->model(TokenunblockModel::class);
+		$this->assertSame(TokenunblockModel::ResultWrongIp, $model->process('valid', true, '2001:db8::2', $this->logger));
+		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, '2001:0DB8:0:0:0:0:0:1', $this->logger));
+	}
+
+	public function testLogViewEscapesLogContents()
+	{
+		// the message of a log entry can contain what a visitor sent (e.g. a username)
+		$view = new class {
+			public $items;
+			public function escape($string)
+			{
+				return htmlspecialchars((string) $string, ENT_QUOTES, 'UTF-8');
+			}
+		};
+		$view->items = array((object) array('date' => '2026-01-01T00:00:00+00:00',
+			'priority' => 'DEBUG', 'message' => 'Unknown user (<script>alert(1)</script>) blocked'));
+		ob_start();
+		(function ()
+		{
+			include getenv('COM_BFSTOP_ROOT').'/admin/tmpl/log/default_body.php';
+		})->call($view);
+		$html = ob_get_clean();
+		$this->assertStringNotContainsString('<script>', $html);
+		$this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
+	}
+
 	public function testWarnsAboutAdminUserCaseInsensitively()
 	{
 		// tests/ci/install-joomla.sh creates the super user as "Admin"

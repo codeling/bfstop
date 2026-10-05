@@ -403,6 +403,24 @@ class DatabaseHelper
 		}
 	}
 
+	public function userExists($username)
+	{
+		try
+		{
+			// LOWER: Joomla treats usernames case-insensitively on login
+			// (MySQL's default collations do, PostgreSQL's don't)
+			$sql = "SELECT COUNT(*) FROM #__users WHERE LOWER(username) = LOWER(".
+				$this->db->quote($username).")";
+			$this->db->setQuery($sql);
+			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
 	public function getUserEmailByID($uid)
 	{
 		return $this->getUserEmailWhere("id=".((int)$uid));
