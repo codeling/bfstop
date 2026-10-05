@@ -40,6 +40,23 @@
     then silently never blocked anything. IP subnet matching for block and
     allow list entries is now done in PHP instead of with MySQL-only SQL
     functions, and fixed-length time windows are computed in PHP
+  - Security: an emailed unblock token no longer lets a blocked IP address
+    bypass the block. It was accepted on any request with
+    view=tokenunblock (e.g. a login), was never used up by such a request
+    and was not checked for expiry, so anyone who got a token (e.g. by
+    getting their own account blocked) could keep guessing passwords from
+    a blocked IP. Now it only passes the unblock page of com_bfstop itself,
+    only while unexpired, and only if issued for a block of the requesting
+    IP address; the token is no longer written to the log either
+  - Security: behind a proxy/load balancer, the client IP is now taken from
+    the end of the forwarding header (the entry added by the trusted proxy)
+    instead of its first public entry, which a visitor could forge to evade
+    blocking, get other addresses blocked or impersonate an allowlisted one.
+    Several trusted proxies (and CIDR subnets) can be configured, the
+    "Forwarded" header (RFC 7239) and addresses with ports are understood,
+    and private client addresses reported by the proxy are accepted. Not
+    all proxies append to an incoming header: pick a header yours sets or
+    appends to
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

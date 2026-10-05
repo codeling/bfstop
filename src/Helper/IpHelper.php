@@ -72,14 +72,122 @@ class IpHelper
 		return (ord($ipBin[$fullBytes]) & $mask) === (ord($subnetBin[$fullBytes]) & $mask);
 	}
 
-	private static function firstValidPublicIP($headerValue)
+	/**
+	 * Splits the trusted proxy setting into its entries. Each entry is a
+	 * single IP address or a subnet in CIDR notation; entries may be
+	 * separated by comma, semicolon or whitespace. A setting holding just one
+	 * address (the only form older versions knew) keeps working unchanged.
+	 */
+	public static function parseTrustedProxies($setting)
 	{
-		foreach (explode(',', $headerValue) as $ip)
+		return preg_split('/[\s,;]+/', (string) $setting, -1, PREG_SPLIT_NO_EMPTY);
+	}
+
+	/**
+	 * Whether $ip is one of the $trustedProxies (see parseTrustedProxies()).
+	 * Addresses are compared in binary form, so different spellings of the
+	 * same IPv6 address match.
+	 */
+	public static function isTrustedProxy($ip, array $trustedProxies)
+	{
+		$ipBin = @inet_pton((string) $ip);
+		if ($ipBin === false)
 		{
-			$ip = trim($ip); // just to be safe
-			if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false)
+			return false;
+		}
+		foreach ($trustedProxies as $proxy)
+		{
+			if (strpos($proxy, '/') !== false)
 			{
-				return $ip;
+				if (self::isInSubnet($ip, $proxy))
+				{
+					return true;
+				}
+			}
+			elseif (@inet_pton($proxy) === $ipBin)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The address in one entry of a forwarding header, without the quotes,
+	 * brackets and port the various proxies decorate it with; whatever is
+	 * left is not necessarily a valid IP address.
+	 */
+	private static function normalizeHeaderEntry($entry)
+	{
+		$entry = trim(trim($entry), '"');
+		if (preg_match('/^\[([^\]]+)\](?::\d+)?$/', $entry, $m) ||
+			preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $entry, $m))
+		{
+			return $m[1];
+		}
+		return $entry;
+	}
+
+	/**
+	 * The addresses listed in a forwarding header, in the order they appear:
+	 * the leftmost one is whatever the client claimed, every further one was
+	 * appended by the proxy that handled the request next. Elements that carry
+	 * no address (e.g. a "Forwarded" element without for=) yield ''.
+	 */
+	private static function headerAddresses($headerName, $headerValue)
+	{
+		$addresses = array();
+		foreach (explode(',', $headerValue) as $element)
+		{
+			if ($headerName === 'HTTP_FORWARDED')
+			{
+				// RFC 7239: ';'-separated key=value pairs per element
+				$address = '';
+				foreach (explode(';', $element) as $pair)
+				{
+					$keyValue = explode('=', $pair, 2);
+					if (count($keyValue) === 2 && strcasecmp(trim($keyValue[0]), 'for') === 0)
+					{
+						$address = $keyValue[1];
+						break;
+					}
+				}
+				$element = $address;
+			}
+			$addresses[] = self::normalizeHeaderEntry($element);
+		}
+		return $addresses;
+	}
+
+	/**
+	 * The client address according to a forwarding header that was set by a
+	 * trusted proxy, or null if it cannot be determined reliably.
+	 *
+	 * Only the entries the trusted proxies themselves added can be believed,
+	 * and a proxy adds its entry on the right: everything to the left of that
+	 * is whatever the client (or someone upstream) put in the header, and
+	 * trivially forged. So the list is read from the right, skipping the
+	 * addresses of further trusted proxies (a CDN in front of a load
+	 * balancer, say); the first address that is not a trusted proxy is the
+	 * client. It must never be taken from further left: with a proxy that
+	 * appends to an incoming X-Forwarded-For, an attacker could otherwise
+	 * pick any address - to dodge blocking, to get another visitor's
+	 * address blocked, or to pass as an allowlisted one.
+	 */
+	public static function clientAddressFromHeader($headerName, $headerValue, array $trustedProxies)
+	{
+		$addresses = self::headerAddresses($headerName, (string) $headerValue);
+		for ($i = count($addresses) - 1; $i >= 0; --$i)
+		{
+			if (filter_var($addresses[$i], FILTER_VALIDATE_IP) === false)
+			{
+				// can't tell what this hop was; guessing from the entries
+				// further left would trust forgeable data
+				return null;
+			}
+			if (!self::isTrustedProxy($addresses[$i], $trustedProxies))
+			{
+				return $addresses[$i];
 			}
 		}
 		return null;
@@ -89,9 +197,11 @@ class IpHelper
 	 * Determine the client IP address. By default only REMOTE_ADDR (the
 	 * actual TCP peer address, which a visitor cannot forge) is used. A
 	 * reverse-proxy header is only consulted if the admin has explicitly
-	 * enabled proxy support and the request's REMOTE_ADDR matches the
-	 * configured, trusted proxy IP address - otherwise a client could bypass
-	 * the proxy entirely and spoof the header itself.
+	 * enabled proxy support and the request's REMOTE_ADDR is one of the
+	 * configured, trusted proxies - otherwise a client could bypass the proxy
+	 * entirely and spoof the header itself - and even then only the part of
+	 * the header the trusted proxies added is believed, see
+	 * clientAddressFromHeader().
 	 */
 	public static function getAddress(LoggerHelper $logger)
 	{
@@ -109,7 +219,8 @@ class IpHelper
 		}
 
 		$proxyIpAddress = (string) $params->get('proxyIpAddress', '');
-		if ($proxyIpAddress === '' || $remoteAddr !== $proxyIpAddress)
+		$trustedProxies = self::parseTrustedProxies($proxyIpAddress);
+		if (count($trustedProxies) === 0 || !self::isTrustedProxy($remoteAddr, $trustedProxies))
 		{
 			$logger->log('Proxy/load balancer usage is enabled, but the request did not originate from the '.
 				'configured proxy IP address (configured: "'.$proxyIpAddress.'", actual: "'.$remoteAddr.
@@ -120,14 +231,14 @@ class IpHelper
 		$proxyHeaderSource = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
 		if (array_key_exists($proxyHeaderSource, $_SERVER))
 		{
-			$ip = self::firstValidPublicIP($_SERVER[$proxyHeaderSource]);
+			$ip = self::clientAddressFromHeader($proxyHeaderSource, $_SERVER[$proxyHeaderSource], $trustedProxies);
 			if ($ip !== null)
 			{
 				return $ip;
 			}
 		}
 		$logger->log('Proxy/load balancer usage is enabled, but header "'.$proxyHeaderSource.
-			'" was missing or did not contain a valid public IP address, falling back to REMOTE_ADDR "'.
+			'" was missing or did not end in a valid client IP address, falling back to REMOTE_ADDR "'.
 			$remoteAddr.'"!', Log::WARNING);
 		return $remoteAddr;
 	}

@@ -426,18 +426,33 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->mydb->successfulLogin($info);
 	}
 
-	private function isUnblockRequest()
+	/**
+	 * A blocked IP may only reach com_bfstop's unblock page, and only with an
+	 * unexpired token that was issued for one of *its own* blocks. The pass
+	 * has to stay this narrow: the request is the one that consumes the token,
+	 * so it must really be the unblock view (no task, no other component).
+	 * Letting any request with view=tokenunblock through would turn a single
+	 * valid token - which the owner of any account can get emailed by getting
+	 * themselves blocked - into a reusable key around the block for logins
+	 * (e.g. option=com_users&task=user.login&view=tokenunblock&token=...).
+	 */
+	private function isUnblockRequest($blockIds)
 	{
 		$input = $this->getApplication()->input;
-		$view = $input->getString('view', '');
+		if (strcmp($input->getCmd('option', ''), 'com_bfstop') != 0 ||
+			strcmp($input->getCmd('view', ''), 'tokenunblock') != 0 ||
+			$input->getCmd('task', '') !== '')
+		{
+			return false;
+		}
 		$token = $input->getString('token', '');
-		$result = (strcmp($view, "tokenunblock") == 0 &&
-			$this->mydb->unblockTokenExists($token));
+		$result = $this->mydb->unblockTokenValidForBlocks($token, $blockIds);
 		if ($result)
 		{
-			$this->logger->log('Seeing valid unblock token ('.
-				$token.'), letting the request pass through '.
-				'to com_bfstop',
+			// deliberately not logging the token: it is a bearer secret and
+			// the log is readable in the backend
+			$this->logger->log('Seeing a valid unblock token for this IP '.
+				'address, letting the request pass through to com_bfstop',
 				Log::INFO);
 		}
 		return $result;
@@ -545,7 +560,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$this->mydb->getClientString(
 					$this->getApplication()->getClientId()),
 				Log::INFO);
-			if ($this->isUnblockRequest())
+			if ($this->isUnblockRequest($blockIds))
 			{
 				return;
 			}

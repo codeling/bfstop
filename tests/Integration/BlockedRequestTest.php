@@ -155,6 +155,37 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock');
 	}
 
+	public function testUnblockTokenIsNoPassForOtherRequests()
+	{
+		// the token is consumed by the unblock page only; as a parameter of
+		// any other request (here: a login) it must not get around the block
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option=com_users&task=user.login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_content&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&task=display&view=tokenunblock&token='.$token);
+		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	public function testUnblockTokenOfAnotherBlockIsNoPass()
+	{
+		$this->configure();
+		$this->block();
+		$otherBlockId = $this->block('203.0.113.99');
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	public function testExpiredUnblockTokenIsNoPass()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ef', 20),
+			'block_id' => $blockId, 'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('ef', 20));
+	}
+
 	public function testRejectedRequestsAreCounted()
 	{
 		$this->configure();

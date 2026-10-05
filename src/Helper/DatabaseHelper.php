@@ -22,6 +22,10 @@ class DatabaseHelper
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
 
+	// how long an emailed unblock token can be used; com_bfstop's
+	// TokenunblockModel::TokenValidDays must stay in sync with this
+	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
+
 	// how long a reverse-DNS lookup result is trusted before being redone -
 	// keeps the (potentially slow) gethostbyaddr() call to at most once per
 	// IP per TTL window, see issue #103
@@ -331,6 +335,39 @@ class DatabaseHelper
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return null;
+		}
+	}
+
+	/**
+	 * Whether $token is an unexpired unblock token issued for one of the
+	 * given blocks. Used to decide if a blocked client may reach the unblock
+	 * page: a token that belongs to a different IP address's block, or one
+	 * that has outlived its validity, must not work as a pass for this one.
+	 */
+	public function unblockTokenValidForBlocks($token, array $blockIds)
+	{
+		if ($token === '' || count($blockIds) === 0)
+		{
+			return false;
+		}
+		try
+		{
+			$sql = "SELECT block_id, crdate FROM #__bfstop_unblock_token WHERE token=".
+				$this->db->quote($token);
+			$this->db->setQuery($sql);
+			$row = $this->db->loadAssoc();
+			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
+			{
+				return false;
+			}
+			$created = strtotime($row['crdate']);
+			return $created !== false &&
+				(time() - $created) <= (self::$UNBLOCK_TOKEN_VALID_DAYS * 86400);
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
 		}
 	}
 
