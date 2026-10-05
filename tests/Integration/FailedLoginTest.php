@@ -150,4 +150,54 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->failedLogin('someone-unknown');
 		$this->assertSame(array('someone-unknown'), $this->storedUsernames());
 	}
+
+	private function requestFrom($ip)
+	{
+		$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/request.php').' '.escapeshellarg($ip).' 2>&1';
+		exec($command, $output, $exitCode);
+		$this->assertSame(0, $exitCode, implode("\n", $output));
+		return implode("\n", $output);
+	}
+
+	public function testIpv6ClientsAreTrackedAndBlockedByNetwork()
+	{
+		// switching to another address in its /64 must not reset an attacker
+		$this->configure(array('blockNumber' => 3, 'blockedMessage' => 'BFSTOP TEST: blocked'));
+		$this->failedLogin('Admin', '2001:db8:1:2::1');
+		$this->failedLogin('Admin', '2001:db8:1:2:aaaa::2');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->failedLogin('Admin', '2001:db8:1:2:bbbb::3');
+
+		$this->assertSame('2001:db8:1:2::/64', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertStringContainsString('BFSTOP TEST: blocked', $this->requestFrom('2001:db8:1:2:cccc::4'));
+		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('2001:db8:1:3::1'), 'a different /64');
+		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('203.0.113.7'));
+	}
+
+	public function testBlockedNetworkIsNotBlockedAgain()
+	{
+		$this->configure(array('blockNumber' => 1));
+		$this->failedLogin('Admin', '2001:db8:1:2::1');
+		$this->failedLogin('Admin', '2001:db8:1:2::2'); // its network is blocked already
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+	}
+
+	public function testIpv6PrefixCanBeSwitchedOff()
+	{
+		$this->configure(array('blockNumber' => 2, 'ipv6PrefixLength' => 128));
+		$this->failedLogin('Admin', '2001:db8:1:2::1');
+		$this->failedLogin('Admin', '2001:db8:1:2::2');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->failedLogin('Admin', '2001:db8:1:2::2');
+		$this->assertSame('2001:db8:1:2::2', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+	}
+
+	public function testIpv4MappedAddressesAreNotLumpedTogether()
+	{
+		$this->configure(array('blockNumber' => 2));
+		$this->failedLogin('Admin', '::ffff:203.0.113.7');
+		$this->failedLogin('Admin', '::ffff:203.0.113.8');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+	}
 }

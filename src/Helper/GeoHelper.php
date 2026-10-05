@@ -69,6 +69,13 @@ class GeoHelper
 		{
 			return null;
 		}
+		// a plain file of the file system only: is_readable() and the reader
+		// would also open stream wrappers (phar://, ftp://, ...)
+		if (preg_match('#^[a-z][a-z0-9+.-]*://#i', $dbPath))
+		{
+			$logger->log('GeoHelper: GeoIP database path is not a plain file name: '.$dbPath, Log::WARNING);
+			return null;
+		}
 		if (!is_readable($dbPath))
 		{
 			$logger->log('GeoHelper: GeoIP database file not readable: '.$dbPath, Log::WARNING);

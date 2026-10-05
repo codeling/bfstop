@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Cache\CacheControllerFactoryInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -25,6 +26,11 @@ class DatabaseHelper
 	// how long an emailed unblock token can be used; com_bfstop's
 	// TokenunblockModel::TokenValidDays must stay in sync with this
 	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
+
+	// upper bound for the rows of the username statistics, which (unlike
+	// the failed logins) are not purged by age: an attacker can make up as
+	// many usernames as they like
+	public static $USERNAME_STATS_MAX_ROWS = 10000;
 
 	// how long a reverse-DNS lookup result is trusted before being redone -
 	// keeps the (potentially slow) gethostbyaddr() call to at most once per
@@ -520,9 +526,18 @@ class DatabaseHelper
 		}
 	}
 
-	public function successfulLogin($info)
+	/**
+	 * @param object      $info           ipaddress (the client's address) and username
+	 * @param string|null $trackedAddress the key failed logins of this client
+	 *                                    are recorded under (see
+	 *                                    IpHelper::trackedAddress()), if different
+	 */
+	public function successfulLogin($info, $trackedAddress = null)
 	{
-		$this->setFailedLoginHandled($info, true);
+		$handled = new \stdClass();
+		$handled->ipaddress = $trackedAddress ?? $info->ipaddress;
+		$handled->username = $info->username;
+		$this->setFailedLoginHandled($handled, true);
 		$this->recordKnownIpUsername($info->ipaddress, $info->username);
 	}
 
@@ -686,18 +701,84 @@ class DatabaseHelper
 		}
 	}
 
-	public function saveParams($params)
+	/**
+	 * Remembers when the periodic maintenance last ran.
+	 *
+	 * Only this one value is changed in the plugin's stored settings, which
+	 * are read from the database right now: writing back the settings the
+	 * request was started with would undo whatever an administrator saved in
+	 * the meantime.
+	 */
+	public function saveLastPurge($timestamp)
 	{
 		try
 		{
-			$query = $this->db->getQuery(true);
+			$where = function ($query)
+			{
+				$query->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
+					->where($this->db->quoteName('folder').' = '.$this->db->quote('system'))
+					->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
+				return $query;
+			};
+			$query = $where($this->db->getQuery(true)
+				->select($this->db->quoteName('params'))
+				->from($this->db->quoteName('#__extensions')));
+			$this->db->setQuery($query);
+			$params = json_decode((string) $this->db->loadResult(), true);
+			if (!is_array($params))
+			{
+				$params = array();
+			}
+			$params['lastPurge'] = (int) $timestamp;
 			// no table alias here: PostgreSQL doesn't allow qualified column
 			// names in the SET clause (issue #206)
-			$query->update($this->db->quoteName('#__extensions'));
-			$query->set($this->db->quoteName('params').' = '. $this->db->quote((string)$params));
-			$query->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
+			$query = $where($this->db->getQuery(true)
+				->update($this->db->quoteName('#__extensions'))
+				->set($this->db->quoteName('params').' = '.$this->db->quote(json_encode($params))));
 			$this->db->setQuery($query);
 			$this->db->execute();
+			// the plugin list (with the settings) is cached
+			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
+				->createCacheController('callback', array('defaultgroup' => 'com_plugins'))
+				->clean();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Keeps the username statistics below $maxRows by deleting the entries of
+	 * the usernames with the fewest attempts, the longest ago first.
+	 */
+	public function trimUsernameStats($maxRows = null)
+	{
+		$maxRows = $maxRows ?? self::$USERNAME_STATS_MAX_ROWS;
+		try
+		{
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_username_stats');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('username'))
+					->from($this->db->quoteName('#__bfstop_username_stats'))
+					->order($this->db->quoteName('attempts').' ASC, '.$this->db->quoteName('last_attempt').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 1000));
+				$usernames = $this->db->loadColumn();
+				if (count($usernames) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_username_stats WHERE username IN ('.
+					implode(',', array_map(array($this->db, 'quote'), $usernames)).')');
+				$this->db->execute();
+			}
 		}
 		catch (\Exception $e)
 		{

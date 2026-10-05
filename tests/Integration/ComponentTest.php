@@ -182,6 +182,51 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $html);
 	}
 
+	public function testTokenUnblockForBlockedIpv6Network()
+	{
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8:1:2::/64', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $blockId, 'crdate' => self::minutesAgo(1)));
+		$model = $this->model(TokenunblockModel::class);
+		$this->assertSame(TokenunblockModel::ResultWrongIp, $model->process('valid', true, '2001:db8:1:3::1', $this->logger));
+		$this->assertSame(TokenunblockModel::ResultWrongIp, $model->process('valid', true, '203.0.113.5', $this->logger));
+		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, '2001:db8:1:2:abcd::77', $this->logger));
+	}
+
+	private function formRuleResult($ruleFile, $class, $value, $blockMode = 'full')
+	{
+		require_once getenv('COM_BFSTOP_ROOT').'/admin/rules/'.$ruleFile;
+		$rule = new $class();
+		return $rule->test(new \SimpleXMLElement('<field name="x" />'), $value, null,
+			new \Joomla\Registry\Registry(array('params' => array('blockMode' => $blockMode))));
+	}
+
+	public function testHtaccessPathRule()
+	{
+		$test = fn ($value, $mode = 'full') => $this->formRuleResult('htaccesspath.php', 'JFormRuleHtaccesspath', $value, $mode);
+		$this->assertTrue($test(''));
+		$this->assertTrue($test(sys_get_temp_dir(), 'htaccess'));
+		$this->assertTrue($test('/does/not/exist', 'full'), 'only has to exist if .htaccess is used for blocking');
+		$this->assertInstanceOf(\UnexpectedValueException::class, $test('/does/not/exist', 'htaccess'));
+		foreach (array('phar:///tmp/x.phar', 'ftp://example.org/', "/tmp\n", "/tmp\0") as $path)
+		{
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($path, 'full'), $path);
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($path, 'htaccess'), $path);
+		}
+	}
+
+	public function testGeoDbPathRule()
+	{
+		$test = fn ($value) => $this->formRuleResult('geodbpath.php', 'JFormRuleGeodbpath', $value);
+		$this->assertTrue($test(''));
+		$this->assertTrue($test('/var/lib/GeoLite2-City.mmdb'));
+		$this->assertTrue($test('relative/path/GeoLite2-Country.MMDB'));
+		foreach (array('/var/lib/GeoLite2.txt', '/etc/passwd', 'phar:///tmp/x.phar/y.mmdb', 'file:///etc/x.mmdb',
+			"/x/y.mmdb\n", "/x/y.mmdb\0.txt", '/x/y.mmdb.php') as $path)
+		{
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($path), $path);
+		}
+	}
+
 	public function testWarnsAboutAdminUserCaseInsensitively()
 	{
 		// tests/ci/install-joomla.sh creates the super user as "Admin"

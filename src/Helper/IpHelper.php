@@ -43,7 +43,7 @@ class IpHelper
 	public static function isInSubnet($ip, $subnet)
 	{
 		$parts = explode('/', $subnet);
-		if (count($parts) !== 2 || !preg_match('/^[0-9]{1,3}$/', $parts[1]))
+		if (count($parts) !== 2 || !preg_match('/^[0-9]{1,3}\z/', $parts[1]))
 		{
 			return false;
 		}
@@ -70,6 +70,64 @@ class IpHelper
 		}
 		$mask = (0xff << (8 - $remainingBits)) & 0xff;
 		return (ord($ipBin[$fullBytes]) & $mask) === (ord($subnetBin[$fullBytes]) & $mask);
+	}
+
+	/**
+	 * Whether $value is a single IP address or a subnet in CIDR notation
+	 * (prefix length a plain number within range for the address family) -
+	 * and nothing else: no whitespace, no further text. Used before anything
+	 * is written to a configuration file.
+	 */
+	public static function isValidIpOrSubnet($value)
+	{
+		$parts = explode('/', (string) $value);
+		if (count($parts) > 2 || filter_var($parts[0], FILTER_VALIDATE_IP) === false)
+		{
+			return false;
+		}
+		if (count($parts) === 1)
+		{
+			return true;
+		}
+		return preg_match('/^[0-9]{1,3}\z/', $parts[1]) === 1 &&
+			(int) $parts[1] <= (strpos($parts[0], ':') !== false ? 128 : 32);
+	}
+
+	private static function prefixMask($bits)
+	{
+		$mask = str_repeat("\xff", intdiv($bits, 8));
+		if ($bits % 8 > 0)
+		{
+			$mask .= chr((0xff << (8 - $bits % 8)) & 0xff);
+		}
+		return str_pad($mask, 16, "\x00");
+	}
+
+	/**
+	 * The key under which failed logins and blocks of a client are tracked.
+	 *
+	 * For IPv4 that is the address itself. An IPv6 client usually controls a
+	 * whole /64 (or more) and can switch to another address in it at will -
+	 * tracking single addresses would let it start over with every request -
+	 * so a global unicast IPv6 address is tracked as its network in CIDR
+	 * notation (e.g. "2001:db8:1:2::/64") if $prefixLength is between 32 and
+	 * 127. Left alone are IPv6 addresses that merely carry an IPv4 address or
+	 * a transition mechanism's prefix (IPv4-mapped, NAT64, 6to4, Teredo):
+	 * aggregating those would put unrelated clients, all over the world,
+	 * under one key.
+	 */
+	public static function trackedAddress($ip, $prefixLength)
+	{
+		$prefixLength = (int) $prefixLength;
+		$bin = @inet_pton((string) $ip);
+		if ($bin === false || strlen($bin) !== 16 || $prefixLength < 32 || $prefixLength > 127 ||
+			(ord($bin[0]) & 0xe0) !== 0x20 ||          // not 2000::/3 (global unicast)
+			substr($bin, 0, 2) === "\x20\x02" ||       // 6to4, 2002::/16
+			substr($bin, 0, 4) === "\x20\x01\x00\x00")  // Teredo, 2001::/32
+		{
+			return $ip;
+		}
+		return inet_ntop($bin & self::prefixMask($prefixLength)).'/'.$prefixLength;
 	}
 
 	/**

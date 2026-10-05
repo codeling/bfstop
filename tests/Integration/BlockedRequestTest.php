@@ -7,6 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Joomla\CMS\Factory;
 
@@ -99,6 +100,33 @@ class BlockedRequestTest extends IntegrationTestCase
 		$output = $this->request('', self::Ip, false);
 		$this->assertStringContainsString('NOT BLOCKED', $output);
 		$this->assertBlocked();
+	}
+
+	public function testBlockPageIsNeverCached()
+	{
+		foreach (array(true, false) as $useHttpError)
+		{
+			$headers = Bfstop::blockedResponseHeaders($useHttpError);
+			$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
+			$this->assertContains('Pragma: no-cache', $headers);
+			$this->assertSame($useHttpError, in_array('HTTP/1.0 403 Forbidden', $headers, true));
+		}
+	}
+
+	public function testBlockPageIsAnErrorByDefault()
+	{
+		$this->configure();
+		$this->block();
+		$this->assertMatchesRegularExpression('/^STATUS: 403$/m', $this->request());
+	}
+
+	public function testErrorStatusCanBeSwitchedOff()
+	{
+		$this->configure(array('useHttpError' => 0));
+		$this->block();
+		$output = $this->request();
+		$this->assertStringContainsString(self::BlockedMessage, $output);
+		$this->assertDoesNotMatchRegularExpression('/^STATUS: 403$/m', $output);
 	}
 
 	public function testBlockedMessageCanShowIp()

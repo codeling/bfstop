@@ -211,17 +211,43 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame('203.0.113.78', $this->queryValue('SELECT ipaddress FROM #__bfstop_dnscache'));
 	}
 
-	public function testSaveParams()
+	public function testSaveLastPurgeChangesOnlyThatValue()
 	{
 		$original = $this->getPluginParams();
 		try
 		{
-			$this->helper->saveParams(new Registry(array('marker' => 'saved-by-test')));
-			$this->assertStringContainsString('saved-by-test', $this->getPluginParams());
+			// what an administrator saved after the request started must survive
+			$this->setPluginParams(json_encode(array('blockNumber' => 7, 'lastPurge' => 1)));
+			$this->helper->saveLastPurge(1700000000);
+			$saved = json_decode($this->getPluginParams(), true);
+			$this->assertSame(array('blockNumber' => 7, 'lastPurge' => 1700000000), $saved);
 		}
 		finally
 		{
 			$this->setPluginParams($original);
 		}
+	}
+
+	public function testTrimUsernameStatsKeepsTheMostAttackedAndMostRecent()
+	{
+		$names = array(
+			// username => [attempts, minutes since last attempt]
+			'many-old'   => array(50, 5000),
+			'few-old'    => array(1, 5000),
+			'few-older'  => array(1, 9000),
+			'few-recent' => array(1, 10),
+			'some'       => array(5, 100),
+		);
+		foreach ($names as $name => $data)
+		{
+			$this->insert('#__bfstop_username_stats', array('username' => $name, 'attempts' => $data[0],
+				'first_attempt' => self::minutesAgo($data[1] + 1), 'last_attempt' => self::minutesAgo($data[1])));
+		}
+		$this->helper->trimUsernameStats(10);
+		$this->assertSame(5, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_username_stats'));
+
+		$this->helper->trimUsernameStats(3);
+		$this->db->setQuery('SELECT username FROM #__bfstop_username_stats ORDER BY username');
+		$this->assertSame(array('few-recent', 'many-old', 'some'), $this->db->loadColumn());
 	}
 }

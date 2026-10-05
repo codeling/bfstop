@@ -10,6 +10,7 @@ namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 class HtaccessHelperTest extends IntegrationTestCase
 {
@@ -133,6 +134,71 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$h->edit403Message('');
 		$this->assertStringNotContainsString('ErrorDocument 403', $this->content());
 		$this->assertSame(array('203.0.113.5'), array_values($h->getDeniedIPs()));
+	}
+
+	public static function invalidAddressProvider()
+	{
+		return array(
+			'injected directive' => array("192.0.2.1\nSetHandler application/x-httpd-php"),
+			'exponent prefix'    => array('192.0.2.0/1e1'),
+			'prefix too long'    => array('192.0.2.0/33'),
+			'trailing newline'   => array("192.0.2.1\n"),
+			'host name'          => array('example.org'),
+			'empty'              => array(''),
+		);
+	}
+
+	#[DataProvider('invalidAddressProvider')]
+	public function testDenyRefusesAnythingButAnAddress($address)
+	{
+		$h = $this->helper();
+		$h->denyIP('192.0.2.7');
+		$before = $this->content();
+		$this->assertFalse($h->denyIP($address));
+		$this->assertSame($before, $this->content(), 'file must stay untouched');
+		$this->assertTrue($this->logger->hasMessage(Log::ERROR, 'Refusing to write'));
+		$this->logger->errors = array(); // expected
+	}
+
+	public function test403MessageIsSanitised()
+	{
+		$h = $this->helper();
+		$this->assertFalse($h->edit403Message("Go away\nSetHandler application/x-httpd-php"));
+		$this->assertFalse($h->edit403Message("Go away\r"));
+		$this->assertFileDoesNotExist($this->dir.'/.htaccess');
+		$this->logger->errors = array(); // expected
+		$this->assertNotFalse($h->edit403Message('Say "hi" \\ bye'));
+		$this->assertStringContainsString('ErrorDocument 403 "Say \"hi\" \\\\ bye"'."\n", $this->content());
+	}
+
+	public function testConcurrentChangesDontLoseEntries()
+	{
+		// each request which blocks an IP address reads the file, adds a line
+		// and writes it back; without a lock around that cycle, parallel
+		// requests overwrite each other's lines
+		$count = 24;
+		$processes = array();
+		for ($i = 1; $i <= $count; ++$i)
+		{
+			$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/deny_ip.php').' '.
+				escapeshellarg($this->dir).' '.escapeshellarg('198.51.100.'.$i);
+			$processes[$i] = proc_open($command, array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes[$i]);
+		}
+		foreach ($processes as $i => $process)
+		{
+			stream_get_contents($pipes[$i][1]);
+			stream_get_contents($pipes[$i][2]);
+			proc_close($process);
+		}
+		$denied = $this->helper()->getDeniedIPs();
+		sort($denied);
+		$expected = array();
+		for ($i = 1; $i <= $count; ++$i)
+		{
+			$expected[] = '198.51.100.'.$i;
+		}
+		sort($expected);
+		$this->assertSame($expected, $denied);
 	}
 
 	public function testCorruptMarkersAreNotOverwritten()

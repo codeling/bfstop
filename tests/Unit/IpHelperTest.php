@@ -116,4 +116,79 @@ class IpHelperTest extends TestCase
 	{
 		$this->assertSame($expected, IpHelper::clientAddressFromHeader($header, $value, $proxies));
 	}
+
+	public static function ipOrSubnetProvider()
+	{
+		return array(
+			'IPv4'                    => array('192.0.2.1', true),
+			'IPv4 subnet'             => array('192.0.2.0/24', true),
+			'IPv4 /32'                => array('192.0.2.1/32', true),
+			'IPv4 /0'                 => array('0.0.0.0/0', true),
+			'IPv6'                    => array('2001:db8::1', true),
+			'IPv6 subnet'             => array('2001:db8::/32', true),
+			'IPv6 /128'               => array('2001:db8::1/128', true),
+			'prefix too long (IPv4)'  => array('192.0.2.0/33', false),
+			'prefix too long (IPv6)'  => array('2001:db8::/129', false),
+			'exponent as prefix'      => array('192.0.2.0/1e1', false),
+			'fraction as prefix'      => array('192.0.2.0/8.0', false),
+			'negative prefix'         => array('192.0.2.0/-1', false),
+			'signed prefix'           => array('192.0.2.0/+8', false),
+			'empty prefix'            => array('192.0.2.0/', false),
+			'hex prefix'              => array('192.0.2.0/0x8', false),
+			'trailing newline'        => array("192.0.2.1\n", false),
+			'trailing newline prefix' => array("192.0.2.0/8\n", false),
+			'injected directive'      => array("192.0.2.1\nSetHandler application/x-httpd-php", false),
+			'leading space'           => array(' 192.0.2.1', false),
+			'two prefixes'            => array('192.0.2.0/8/8', false),
+			'host name'               => array('example.org', false),
+			'empty'                   => array('', false),
+		);
+	}
+
+	#[DataProvider('ipOrSubnetProvider')]
+	public function testIsValidIpOrSubnet($value, $expected)
+	{
+		$this->assertSame($expected, IpHelper::isValidIpOrSubnet($value));
+	}
+
+	public static function trackedAddressProvider()
+	{
+		return array(
+			'IPv4 stays'                 => array('192.0.2.7', 64, '192.0.2.7'),
+			'IPv6 to its /64'            => array('2001:db8:1:2:aaaa:bbbb:cccc:dddd', 64, '2001:db8:1:2::/64'),
+			'same /64, other address'    => array('2001:db8:1:2::1', 64, '2001:db8:1:2::/64'),
+			'other /64'                  => array('2001:db8:1:3::1', 64, '2001:db8:1:3::/64'),
+			'/48'                        => array('2001:db8:1:2::1', 48, '2001:db8:1::/48'),
+			'/56 not on a byte border'   => array('2001:db8:1:ff7f::1', 56, '2001:db8:1:ff00::/56'),
+			'/60 not on a byte border'   => array('2001:db8:1:20ff::1', 60, '2001:db8:1:20f0::/60'),
+			'upper case input'           => array('2001:DB8:1:2::ABCD', 64, '2001:db8:1:2::/64'),
+			'128 means per address'      => array('2001:db8:1:2::1', 128, '2001:db8:1:2::1'),
+			'0 means per address'        => array('2001:db8:1:2::1', 0, '2001:db8:1:2::1'),
+			'absurdly short prefix'      => array('2001:db8:1:2::1', 16, '2001:db8:1:2::1'),
+			'IPv4-mapped stays'          => array('::ffff:192.0.2.7', 64, '::ffff:192.0.2.7'),
+			'NAT64 stays'                => array('64:ff9b::192.0.2.7', 64, '64:ff9b::192.0.2.7'),
+			'6to4 stays'                 => array('2002:c000:207::1', 64, '2002:c000:207::1'),
+			'Teredo stays'               => array('2001:0:4136:e378:8000:63bf:3fff:fdd2', 64, '2001:0:4136:e378:8000:63bf:3fff:fdd2'),
+			'unique local stays'         => array('fd00::1', 64, 'fd00::1'),
+			'link local stays'           => array('fe80::1', 64, 'fe80::1'),
+			'loopback stays'             => array('::1', 64, '::1'),
+			'garbage stays'              => array('not-an-ip', 64, 'not-an-ip'),
+		);
+	}
+
+	#[DataProvider('trackedAddressProvider')]
+	public function testTrackedAddress($ip, $prefix, $expected)
+	{
+		$this->assertSame($expected, IpHelper::trackedAddress($ip, $prefix));
+	}
+
+	public function testTrackedNetworkContainsTheAddress()
+	{
+		// what gets stored as the block has to match the client afterwards
+		$tracked = IpHelper::trackedAddress('2001:db8:1:2:aaaa:bbbb:cccc:dddd', 64);
+		$this->assertTrue(IpHelper::isInSubnet('2001:db8:1:2:aaaa:bbbb:cccc:dddd', $tracked));
+		$this->assertTrue(IpHelper::isInSubnet('2001:db8:1:2::99', $tracked));
+		$this->assertFalse(IpHelper::isInSubnet('2001:db8:1:3::99', $tracked));
+		$this->assertTrue(IpHelper::isValidIpOrSubnet($tracked));
+	}
 }

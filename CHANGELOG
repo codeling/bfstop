@@ -75,6 +75,34 @@
     confirmation (a POST request) and only works from the IP address which
     was blocked, so mail security scanners or link previews which open
     every link in a message can't unblock an attacker (see com_bfstop)
+  - Security: IPv6 clients are now tracked per network (default: /64, see
+    the new "IPv6 Tracking Granularity" setting) instead of per address:
+    failed logins are counted and blocks apply to the whole network, so an
+    attacker can no longer start over by switching to another address in
+    their /64. IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
+    unrelated clients' IPv4 addresses, are still tracked individually
+  - Security: the block page is never cached (Cache-Control: no-store) and,
+    if no setting says otherwise, answers with the HTTP status 403 instead of
+    200, so a caching proxy/CDN can't serve it to other visitors
+  - Security: only a valid IP address or subnet is written to the .htaccess
+    file (before, a value like "192.0.2.0/1e1" passed the backend validation
+    and made Apache reject the whole file); the 403 message is escaped; and
+    changes of the file are done while holding a lock, so that clients
+    getting blocked at the same time don't overwrite each other's lines
+  - Security: the plugin's log file is rotated at 5 MB, and the username
+    statistics (which aren't purged by age) are limited to 10000 usernames,
+    removing those with the fewest attempts first, so a visitor can't fill up
+    disk or database by making up usernames
+  - Security: the periodic maintenance (once a day) only updates its own
+    timestamp in the plugin's stored settings, instead of writing back all
+    settings as they were when the request started, which could undo a
+    change an administrator saved in the meantime; and it now also runs if
+    no purge age is configured
+  - Security (component): sending the test email now needs the permission to
+    change the settings; the .htaccess path and GeoIP database path settings
+    are validated (no stream wrappers like phar://, a .mmdb file name)
+  - Added SECURITY.md with the supported versions and how to report
+    vulnerabilities
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

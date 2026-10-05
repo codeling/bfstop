@@ -31,6 +31,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private LoggerHelper $logger;
 	private NotifierHelper $notifier;
 	private DatabaseHelper $mydb;
+	// the client's actual address while handling a failed login; the failed
+	// login entry holds the key it is tracked under instead (IPv6: its network)
+	private ?string $clientAddress = null;
 
 	public static function getSubscribedEvents(): array
 	{
@@ -98,7 +101,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		// if the IP address is blocked we actually shouldn't be here in
 		// the first place I guess, but just to make sure
-		if ($this->mydb->isIPBlocked($logEntry->ipaddress))
+		if ($this->mydb->isIPBlocked($this->clientAddress ?? $logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
 				' is already blocked!', Log::ERROR);
@@ -362,6 +365,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $delayDuration;
 	}
 
+	private function trackedAddress($ipAddress)
+	{
+		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', 64));
+	}
+
 	/**
 	 * The form in which the username of a failed login is stored, mailed and
 	 * logged, see UsernameHelper.
@@ -400,7 +408,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
-		$logEntry->ipaddress = $ipAddress;
+		$this->clientAddress = $ipAddress;
+		$logEntry->ipaddress = $this->trackedAddress($ipAddress);
 		$logEntry->logtime = date("Y-m-d H:i:s");
 		$logEntry->username = $this->usernameForStorage($username);
 		$logEntry->origin = $this->getApplication()->getClientId();
@@ -454,7 +463,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info->username = $user['username'];
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
-		$this->mydb->successfulLogin($info);
+		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress));
 	}
 
 	/**
@@ -546,19 +555,40 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$purgeAge = $this->getIntParam('deleteOld', 0);
-		if ($purgeAge > 0)
+		// periodic maintenance, at most once a day
+		$purgeInterval = 86400; // = 24*60*60 => one day
+		$lastPurge = $this->params->get('lastPurge', 0);
+		$now = time();
+		if ($now > ($lastPurge + $purgeInterval))
 		{
-			$purgeInterval = 86400; // = 24*60*60 => one day
-			$lastPurge = $this->params->get('lastPurge', 0);
-			$now = time();
-			if ($now > ($lastPurge + $purgeInterval))
+			$purgeAge = $this->getIntParam('deleteOld', 0);
+			if ($purgeAge > 0)
 			{
 				$this->mydb->purgeOldEntries($purgeAge);
-				$this->params->set('lastPurge', $now);
-				$this->mydb->saveParams($this->params);
 			}
+			// regardless of the purge age setting: these are not deleted by age
+			$this->mydb->trimUsernameStats();
+			$this->params->set('lastPurge', $now);
+			$this->mydb->saveLastPurge($now);
 		}
+	}
+
+	/**
+	 * The headers of the page shown to a blocked client.
+	 *
+	 * It must never be cached: a cache (browser, proxy, CDN) which kept it
+	 * would show it to other visitors of the same URL.
+	 */
+	public static function blockedResponseHeaders($useHttpError)
+	{
+		$headers = array();
+		if ($useHttpError)
+		{
+			$headers[] = 'HTTP/1.0 403 Forbidden';
+		}
+		$headers[] = 'Cache-Control: no-store, no-cache, must-revalidate, private';
+		$headers[] = 'Pragma: no-cache';
+		return $headers;
 	}
 
 	/**
@@ -607,9 +637,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				return;
 			}
 			$this->mydb->recordBlockedAttempt($blockIds);
-			if ($this->getBoolParam('useHttpError', false))
+			foreach (self::blockedResponseHeaders($this->getBoolParam('useHttpError', true)) as $header)
 			{
-				header('HTTP/1.0 403 Forbidden');
+				header($header);
 			}
 			$message = $this->params->get('blockedMessage',
 				Text::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
