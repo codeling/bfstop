@@ -63,6 +63,14 @@ class SettingsController extends FormController
 	public function testNotify()
 	{
 		$this->checkToken();
+		// part of the settings, so reserved for who may change them: the
+		// mail goes to the notification addresses configured there
+		if (!$this->allowSave())
+		{
+			$this->setRedirect(Route::_('index.php?option=com_bfstop&view=settings', false),
+				Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
+			return;
+		}
 		$emailAddress = ParamHelper::get('emailaddress', 'params', '');
 		$userID = (int) ParamHelper::get('userID', 'params', -1);
 		$userGroup = (int) ParamHelper::get('userGroup', 'params', -1);

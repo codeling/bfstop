@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Site\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -46,10 +47,16 @@ class TokenunblockModel extends BaseDatabaseModel
 		}
 	}
 
-	private static function sameAddress($a, $b)
+	// $blocked is an address, or a network in CIDR notation for clients which
+	// are tracked (and blocked) by their IPv6 network
+	private static function sameAddress($blocked, $address)
 	{
-		$binA = @inet_pton((string) $a);
-		return $binA !== false && $binA === @inet_pton((string) $b);
+		if (strpos($blocked, '/') !== false)
+		{
+			return IpHelper::isInSubnet($address, $blocked);
+		}
+		$binA = @inet_pton((string) $blocked);
+		return $binA !== false && $binA === @inet_pton((string) $address);
 	}
 
 	/**

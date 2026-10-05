@@ -21,6 +21,10 @@ For any further questions, don't hesitate to contact me under bfstop@bfroehler.i
 - The log view and the IP information view now escape everything they show.
 - New setting "Usernames Not Matching an Account" (default: hash), see the
   plugin's CHANGELOG.
+- New setting "IPv6 Tracking Granularity" (default: /64).
+- Sending the test email needs the permission to change the settings, and the
+  .htaccess and GeoIP database path settings are validated.
+- Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.
 
 ## 2.0.0: Joomla 5/6 migration
 

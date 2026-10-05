@@ -20,7 +20,7 @@ class ParamHelper
 		$sql = "SELECT $column FROM #__extensions WHERE name = 'plg_system_bfstop'";
 		$db->setQuery($sql);
 		$rawSettings = $db->loadResult();
-		$settings = json_decode($rawSettings, true);
-		return array_key_exists($name, $settings) ? $settings[$name] : $defaultValue;
+		$settings = json_decode((string) $rawSettings, true);
+		return (is_array($settings) && array_key_exists($name, $settings)) ? $settings[$name] : $defaultValue;
 	}
 }
