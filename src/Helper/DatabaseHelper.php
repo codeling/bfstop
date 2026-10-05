@@ -409,21 +409,59 @@ class DatabaseHelper
 		}
 	}
 
-	public function userExists($username)
+	/**
+	 * Whether $login is the username or the email address of an existing
+	 * account (Joomla! can be set up to accept either at the login).
+	 */
+	public function accountExists($login)
 	{
 		try
 		{
 			// LOWER: Joomla treats usernames case-insensitively on login
 			// (MySQL's default collations do, PostgreSQL's don't)
-			$sql = "SELECT COUNT(*) FROM #__users WHERE LOWER(username) = LOWER(".
-				$this->db->quote($username).")";
-			$this->db->setQuery($sql);
+			$quoted = "LOWER(".$this->db->quote($login).")";
+			$this->db->setQuery("SELECT COUNT(*) FROM #__users WHERE LOWER(username) = ".$quoted.
+				" OR LOWER(email) = ".$quoted);
 			return ((int) $this->db->loadResult()) > 0;
 		}
 		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return false;
+		}
+	}
+
+	/**
+	 * Whether the failed logins which count towards blocking $ipaddress (those
+	 * within $interval minutes before $logtime that haven't been handled yet)
+	 * include attempts against an existing account other than $username.
+	 * Attempts against usernames which don't exist don't count: they can't
+	 * get an attacker anywhere. If that can't be determined, it is assumed
+	 * that there are.
+	 */
+	public function hasFailedLoginsForOtherAccounts($interval, $ipaddress, $username, $logtime)
+	{
+		try
+		{
+			$this->db->setQuery("SELECT DISTINCT username FROM #__bfstop_failedlogin".
+				" WHERE ipaddress = ".$this->db->quote($ipaddress).
+				" AND handled = 0 AND logtime BETWEEN ".
+				$this->db->quote(self::minutesBefore($logtime, $interval)).
+				" AND ".$this->db->quote($logtime));
+			foreach ($this->db->loadColumn() as $attempted)
+			{
+				if (mb_strtolower($attempted) !== mb_strtolower($username) &&
+					$this->accountExists($attempted))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return true;
 		}
 	}
 

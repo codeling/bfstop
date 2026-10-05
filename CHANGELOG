@@ -75,6 +75,13 @@
     confirmation (a POST request) and only works from the IP address which
     was blocked, so mail security scanners or link previews which open
     every link in a message can't unblock an attacker (see com_bfstop)
+  - Security: the "User Block Message" with the unblock link is no longer
+    sent if the failed logins from the blocked IP address which led to the
+    block also went against other existing accounts. The link goes to the
+    owner of the account of the last attempt, so an attacker with an account
+    of their own could otherwise end every series of guesses at other
+    accounts with an attempt at their own, get the link and continue.
+    Attempts against names which don't exist (e.g. typos) don't count
   - Security: IPv6 clients are now tracked per network (default: /64, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an

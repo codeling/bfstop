@@ -19,6 +19,7 @@ class FailedLoginTest extends IntegrationTestCase
 	private const Ip = '203.0.113.51';
 
 	private static $originalParams;
+	private $createdUsers = array();
 
 	public static function setUpBeforeClass(): void
 	{
@@ -37,6 +38,23 @@ class FailedLoginTest extends IntegrationTestCase
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();
 		}
+	}
+
+	protected function tearDown(): void
+	{
+		foreach ($this->createdUsers as $id)
+		{
+			$this->db->setQuery('DELETE FROM #__users WHERE id='.(int) $id);
+			$this->db->execute();
+		}
+	}
+
+	private function createUser($username)
+	{
+		$id = $this->insert('#__users', array('name' => $username, 'username' => $username,
+			'email' => $username.'@example.org', 'password' => '', 'registerDate' => self::minutesAgo(0),
+			'params' => '{}'), 'id');
+		$this->createdUsers[] = $id;
 	}
 
 	private function configure(array $params = array())
@@ -199,5 +217,79 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->failedLogin('Admin', '::ffff:203.0.113.7');
 		$this->failedLogin('Admin', '::ffff:203.0.113.8');
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+	}
+
+	// The unblock token is created when the email with the link is prepared,
+	// so whether a token exists tells whether the link would be sent.
+	private function unblockLinkIssued()
+	{
+		return ((int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token')) === 1;
+	}
+
+	private function blockedAfter(array $usernames)
+	{
+		$this->configure(array('blockNumber' => count($usernames), 'notifyBlockedUser' => 1));
+		foreach ($usernames as $username)
+		{
+			$this->failedLogin($username);
+		}
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), 'blocked');
+	}
+
+	public function testUnblockLinkIsIssuedIfOnlyThatAccountWasTargeted()
+	{
+		$this->blockedAfter(array('Admin', 'Admin', 'Admin'));
+		$this->assertTrue($this->unblockLinkIssued());
+	}
+
+	public function testNoUnblockLinkIfAnotherAccountWasTargeted()
+	{
+		// the link goes to whoever owns the account of the last attempt: an
+		// attacker who owns one account mustn't get unblocked after going
+		// after other accounts from the same address
+		$this->createUser('victim');
+		$this->blockedAfter(array('victim', 'victim', 'Admin'));
+		$this->assertFalse($this->unblockLinkIssued());
+	}
+
+	public function testNoUnblockLinkIfAnotherAccountWasTargetedByEmailAddress()
+	{
+		$this->createUser('victim');
+		$this->blockedAfter(array('victim@example.org', 'victim@example.org', 'Admin'));
+		$this->assertFalse($this->unblockLinkIssued());
+	}
+
+	public function testMistypedUsernamesDontPreventTheUnblockLink()
+	{
+		// attempts against names which aren't an account harm nobody
+		$this->blockedAfter(array('adm1n', 'Admn', 'Admin'));
+		$this->assertTrue($this->unblockLinkIssued());
+	}
+
+	public function testMistypedUsernamesInPlainModeDontPreventTheUnblockLink()
+	{
+		$this->configure(array('blockNumber' => 3, 'notifyBlockedUser' => 1, 'unknownUsernameMode' => 'plain'));
+		foreach (array('nobody', 'nobody-else', 'Admin') as $username)
+		{
+			$this->failedLogin($username);
+		}
+		$this->assertTrue($this->unblockLinkIssued());
+	}
+
+	public function testOtherSpellingOfTheSameAccountIsTheSameAccount()
+	{
+		$this->blockedAfter(array('admin', 'ADMIN', 'Admin'));
+		$this->assertTrue($this->unblockLinkIssued());
+	}
+
+	public function testOnlyAttemptsOfTheSameAddressCount()
+	{
+		$this->createUser('victim');
+		$this->configure(array('blockNumber' => 2, 'notifyBlockedUser' => 1));
+		$this->failedLogin('victim', '203.0.113.99'); // somebody else
+		$this->failedLogin('Admin');
+		$this->failedLogin('Admin');
+		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		$this->assertTrue($this->unblockLinkIssued());
 	}
 }

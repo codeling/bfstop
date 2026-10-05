@@ -144,6 +144,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, Log::INFO);
 			$htaccessPath = JPATH_ROOT;
 		}
+		// has to be found out before blocking, which marks these failed logins
+		// as handled
+		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
+			$this->mydb->hasFailedLoginsForOtherAccounts(
+				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY)),
+				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
 		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
@@ -155,7 +161,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		if ($this->getBoolParam('notifyBlockedUser', false))
 		{
 			$userEmail = $this->mydb->getUserEmailByName($logEntry->username);
-			if ($userEmail != null)
+			if ($userEmail != null && $targetedOtherAccounts)
+			{
+				// The link unblocks this IP address, and it goes to the owner
+				// of the account of the last failed login. If the attempts
+				// which got the address blocked also went against other
+				// accounts, whoever caused that could just as well own this
+				// account - and would get to continue with the other
+				// accounts by following the link.
+				$this->logger->log("Existing user '".
+					$logEntry->username."' was blocked, but the failed ".
+					"logins from this address also targeted other accounts - ".
+					"not sending unblock instructions",
+					Log::INFO);
+			}
+			elseif ($userEmail != null)
 			{
 				$this->logger->log("Existing user '".
 					$logEntry->username.
@@ -378,7 +398,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
 		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
-			($this->mydb->userExists($username) ||
+			($this->mydb->accountExists($username) ||
 				RiskHelper::isCommonUsername($this->params, $username));
 		return UsernameHelper::forStorage($username, $mode, $isReadable,
 			$this->getApplication()->get('secret', ''));
