@@ -50,7 +50,7 @@ class LogModel extends ListModel
 				if (count($logItems) < 3)
 				{
 					$application = Factory::getApplication();
-					$application->enqueueMessage("Invalid entry in line number ".$lineNumber.": '".$line."' (expected 3 items - date, priority and message but that line only has ".count($logItems).")", 'error');
+					$application->enqueueMessage("Invalid entry in line number ".$lineNumber.": '".htmlspecialchars($line, ENT_QUOTES, 'UTF-8')."' (expected 3 items - date, priority and message but that line only has ".count($logItems).")", 'error');
 				}
 				else
 				{

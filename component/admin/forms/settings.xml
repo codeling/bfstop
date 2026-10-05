@@ -169,6 +169,12 @@
 				<option value="64">PLG_SYSTEM_BFSTOP_INFO</option>
 				<option value="128">PLG_SYSTEM_BFSTOP_DEBUG</option>
 			</field>
+			<field name="unknownUsernameMode" type="list" default="hash"
+				label="COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_LABEL"
+				description="COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_DESC">
+				<option value="hash">COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_HASH</option>
+				<option value="plain">COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_PLAIN</option>
+			</field>
 			<field name="useHttpError" type="list" default="1"
 				label="PLG_SYSTEM_BFSTOP_USE_HTTP_ERROR_LABEL"
 				description="PLG_SYSTEM_BFSTOP_USE_HTTP_ERROR_DESC">

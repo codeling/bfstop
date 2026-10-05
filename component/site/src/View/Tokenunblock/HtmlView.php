@@ -11,6 +11,8 @@ namespace Codeling\Component\Bfstop\Site\View\Tokenunblock;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
+use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -33,23 +35,33 @@ class HtmlView extends BaseHtmlView
 		// clear the messages still enqueued from the invalid login attempt:
 		$session = Factory::getSession();
 		$session->set('application.queue', null);
-		// try to unblock:
 		$input = Factory::getApplication()->input;
-		$token = $input->getString('token', '');
+		$this->token = $input->getString('token', '');
+		$this->showConfirmation = false;
 		$logger = LogHelper::getLogger();
-		if (strcmp($token, '') != 0)
+		$this->model = $this->getModel();
+		switch ($this->model->process($this->token,
+			$input->getMethod() === 'POST',
+			IpHelper::getAddress($logger),
+			$logger))
 		{
-			$this->model = $this->getModel();
-			$unblockSuccess = $this->model->unblock($token, $logger);
-			$this->message = ($unblockSuccess)
-				? Text::sprintf('COM_BFSTOP_UNBLOCKTOKEN_SUCCESS',
+			case TokenunblockModel::ResultConfirm:
+				$this->showConfirmation = true;
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_CONFIRM');
+				break;
+			case TokenunblockModel::ResultUnblocked:
+				$this->message = Text::sprintf('COM_BFSTOP_UNBLOCKTOKEN_SUCCESS',
 					$this->getLoginLink(),
-					$this->getPasswordResetLink())
-				: Text::_('COM_BFSTOP_UNBLOCKTOKEN_FAILED');
-		}
-		else
-		{
-			$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_INVALID');
+					$this->getPasswordResetLink());
+				break;
+			case TokenunblockModel::ResultWrongIp:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_WRONG_IP');
+				break;
+			case TokenunblockModel::ResultFailed:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_FAILED');
+				break;
+			default:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_INVALID');
 		}
 		parent::display($tpl);
 	}

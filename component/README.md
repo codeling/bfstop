@@ -13,6 +13,15 @@ If you are interested in the source code, or want to contribute, please check [t
 
 For any further questions, don't hesitate to contact me under bfstop@bfroehler.info
 
+## Security changes in this release
+
+- The link in the "you were blocked" email now only asks for confirmation when
+  opened; the unblock itself is a POST request, and only works from the IP
+  address which was blocked (so mail scanners and link previews can't use it).
+- The log view and the IP information view now escape everything they show.
+- New setting "Usernames Not Matching an Account" (default: hash), see the
+  plugin's CHANGELOG.
+
 ## 2.0.0: Joomla 5/6 migration
 
 Version 2.0.0 migrates the component to PSR-4 namespaced classes
