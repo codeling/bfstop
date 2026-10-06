@@ -19,6 +19,11 @@ For any further questions, don't hesitate to contact me under bfstop@bfroehler.i
   opened; the unblock itself is a POST request, and only works from the IP
   address which was blocked (so mail scanners and link previews can't use it).
 - The log view and the IP information view now escape everything they show.
+- The unblock page answers with an error status if the link can't be used (400,
+  403, 404 or 500; a GET request just asks for confirmation and stays a 200),
+  unless the plugin's "Use HTTP Error" setting is off. Because the link contains
+  a secret, the page is not cached, sends no Referer and asks search engines
+  not to index it.
 - New setting "Usernames Not Matching an Account" (default: hash), see the
   plugin's CHANGELOG.
 - New setting "IPv6 Tracking Granularity" (default: /64).

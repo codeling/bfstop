@@ -25,7 +25,33 @@ class TokenunblockModel extends BaseDatabaseModel
 	const ResultConfirm = 'confirm';
 	const ResultWrongIp = 'wrongip';
 	const ResultUnblocked = 'unblocked';
+	// no such token (it never existed, expired or was used already)
+	const ResultNotFound = 'notfound';
+	// the token exists, but unblocking failed (database error)
 	const ResultFailed = 'failed';
+
+	/**
+	 * The HTTP status to answer an outcome of process() with. A GET request
+	 * for a link only asks for confirmation whatever the token is (which keeps
+	 * mail scanners and link previews, which open every link, from learning
+	 * anything and from marking links as dead), so it is a 200, as is success.
+	 */
+	public static function httpStatus($result)
+	{
+		switch ($result)
+		{
+			case self::ResultInvalid:
+				return 400;
+			case self::ResultWrongIp:
+				return 403;
+			case self::ResultNotFound:
+				return 404;
+			case self::ResultFailed:
+				return 500;
+			default:
+				return 200;
+		}
+	}
 
 	/**
 	 * The IP address the block belongs to which the token was issued for, or
@@ -90,12 +116,15 @@ class TokenunblockModel extends BaseDatabaseModel
 				"other than the blocked one.", Log::WARNING);
 			return self::ResultWrongIp;
 		}
-		return $this->unblock($token, $logger)
-			? self::ResultUnblocked
-			: self::ResultFailed;
+		return $this->unblockWithResult($token, $logger);
 	}
 
 	public function unblock($token, $logger)
+	{
+		return $this->unblockWithResult($token, $logger) === self::ResultUnblocked;
+	}
+
+	private function unblockWithResult($token, $logger)
 	{
 		// prune old tokens:
 		try
@@ -112,7 +141,7 @@ class TokenunblockModel extends BaseDatabaseModel
 			if ($unblockTokenEntry == null)
 			{
 				$logger->log("com_bfstop-tokenunblock: Token not found.", Log::ERROR);
-				return false;
+				return self::ResultNotFound;
 			}
 			UnblockHelper::unblockDB($this->_db, array($unblockTokenEntry->block_id), 1, $logger);
 			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE token='.
@@ -133,6 +162,6 @@ class TokenunblockModel extends BaseDatabaseModel
 		{
 			$logger->log("com_bfstop-tokenunblock: Successfully unblocked with token.", Log::INFO);
 		}
-		return $success;
+		return $success ? self::ResultUnblocked : self::ResultFailed;
 	}
 }
