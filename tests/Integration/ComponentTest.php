@@ -142,13 +142,37 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame(1, (int) $this->queryValue($tokens));
 
 		// neither does an unknown token
-		$this->assertSame(TokenunblockModel::ResultFailed, $model->process('unknown', true, $ip, $this->logger));
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('unknown', true, $ip, $this->logger));
 		$this->logger->errors = array(); // expected: "token not found" error
 		$this->assertTrue($helper->isIPBlocked($ip));
 
 		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, $ip, $this->logger));
 		$this->assertFalse($helper->isIPBlocked($ip));
 		$this->assertSame(0, (int) $this->queryValue($tokens));
+	}
+
+	public function testTokenUnblockHttpStatus()
+	{
+		$this->assertSame(400, TokenunblockModel::httpStatus(TokenunblockModel::ResultInvalid));
+		$this->assertSame(403, TokenunblockModel::httpStatus(TokenunblockModel::ResultWrongIp));
+		$this->assertSame(404, TokenunblockModel::httpStatus(TokenunblockModel::ResultNotFound));
+		$this->assertSame(500, TokenunblockModel::httpStatus(TokenunblockModel::ResultFailed));
+		// opening the link only asks for confirmation, whatever the token is
+		$this->assertSame(200, TokenunblockModel::httpStatus(TokenunblockModel::ResultConfirm));
+		$this->assertSame(200, TokenunblockModel::httpStatus(TokenunblockModel::ResultUnblocked));
+	}
+
+	public function testExpiredAndUsedTokensAreNotFound()
+	{
+		$ip = '203.0.113.5';
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'expired', 'block_id' => $blockId, 'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->insert('#__bfstop_unblock_token', array('token' => 'used', 'block_id' => $blockId, 'crdate' => self::minutesAgo(10)));
+		$model = $this->model(TokenunblockModel::class);
+		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('used', true, $ip, $this->logger));
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('used', true, $ip, $this->logger), 'used up');
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('expired', true, $ip, $this->logger));
+		$this->logger->errors = array(); // expected: "token not found" errors
 	}
 
 	public function testTokenUnblockComparesIpv6AddressesNotSpellings()

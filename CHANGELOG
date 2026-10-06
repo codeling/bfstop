@@ -107,6 +107,13 @@
     age if one is configured). The status code of the block page is set with
     http_response_code() instead of a raw "HTTP/1.0 403" header, which hard-coded
     the protocol version
+  - The unblock page of com_bfstop answers with an error status if the link
+    can't be used (400 without a token, 403 from another IP address, 404 for
+    an unknown, expired or used token, 500 if unblocking failed), unless "Use
+    HTTP Error" is switched off; opening the link (a GET request) stays a 200
+    for every token. The page is not cached and tells browsers not to send
+    its address (which contains the token) to other sites and search engines
+    not to index it
   - Security: IPv6 clients are now tracked per network (default: /64, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an
