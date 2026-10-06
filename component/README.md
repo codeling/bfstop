@@ -22,6 +22,9 @@ For any further questions, don't hesitate to contact me under bfstop@bfroehler.i
 - New setting "Usernames Not Matching an Account" (default: hash), see the
   plugin's CHANGELOG.
 - New setting "IPv6 Tracking Granularity" (default: /64).
+- The "User Block Message" setting has a new value: the email with the unblock
+  link is by default only sent if the user has logged in from the blocked IP
+  address before, so it can't be used to flood somebody's inbox.
 - Sending the test email needs the permission to change the settings, and the
   .htaccess and GeoIP database path settings are validated.
 - Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.

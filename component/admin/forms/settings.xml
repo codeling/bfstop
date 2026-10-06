@@ -51,7 +51,8 @@
 				label="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_LABEL"
 				description="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_DESC">
 				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
-				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
+				<option value="1">PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_KNOWN</option>
+				<option value="2">PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_USER_ANY</option>
 			</field>
 			<field name="notifyBlockedNumber" type="list" default="5"
 				label="PLG_SYSTEM_BFSTOP_NOTIFY_BLOCKED_NUMBER_LABEL"
