@@ -139,7 +139,11 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->failedLogin('admin'); // as typed
 		$this->failedLogin('ROOT');
 		$this->assertSame(array('Admin', 'admin', 'ROOT'), $this->storedUsernames());
-		$this->assertSame(3, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_username_stats'));
+		// MySQL's collation is case-insensitive, so "Admin" and "admin" share a
+		// row there, PostgreSQL's isn't: what has to hold on both is that every
+		// attempt is counted
+		$this->assertSame(3, (int) $this->queryValue('SELECT SUM(attempts) FROM #__bfstop_username_stats'));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_username_stats WHERE username = 'ROOT'"));
 	}
 
 	public function testOtherUsernamesAreStoredHashed()
