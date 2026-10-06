@@ -38,7 +38,9 @@ class HtmlView extends BaseHtmlView
 		}
 		else
 		{
-			$this->ipInfo = "<pre>".Text::sprintf("COM_BFSTOP_IPINFO_DETAILS",
+			// the address comes from the request and the rest from the GeoIP
+			// database file, so none of it is trusted to be free of markup
+			$this->ipInfo = "<pre>".$this->escape(Text::sprintf("COM_BFSTOP_IPINFO_DETAILS",
 				$details->ip,
 				$details->countryCode,
 				$details->countryName,
@@ -46,7 +48,7 @@ class HtmlView extends BaseHtmlView
 				$details->city,
 				$details->postalCode,
 				$details->latitude,
-				$details->longitude)."</pre>";
+				$details->longitude))."</pre>";
 		}
 		$this->addToolbar();
 		parent::display($tpl);
@@ -54,7 +56,8 @@ class HtmlView extends BaseHtmlView
 
 	protected function addToolbar()
 	{
-		ToolbarHelper::title(Text::sprintf('COM_BFSTOP_HEADING_IPINFO', $this->ipAddress), 'bfstop');
+		// the toolbar title is output as HTML
+		ToolbarHelper::title(Text::sprintf('COM_BFSTOP_HEADING_IPINFO', $this->escape((string) $this->ipAddress)), 'bfstop');
 		ToolbarHelper::divider();
 		ToolbarHelper::back();
 	}

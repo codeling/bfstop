@@ -11,6 +11,9 @@ namespace Codeling\Component\Bfstop\Site\View\Tokenunblock;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
+use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -33,24 +36,54 @@ class HtmlView extends BaseHtmlView
 		// clear the messages still enqueued from the invalid login attempt:
 		$session = Factory::getSession();
 		$session->set('application.queue', null);
-		// try to unblock:
-		$input = Factory::getApplication()->input;
-		$token = $input->getString('token', '');
+		$app = Factory::getApplication();
+		$input = $app->input;
+		$this->token = $input->getString('token', '');
+		$this->showConfirmation = false;
 		$logger = LogHelper::getLogger();
-		if (strcmp($token, '') != 0)
+		$this->model = $this->getModel();
+		$result = $this->model->process($this->token,
+			$input->getMethod() === 'POST',
+			IpHelper::getAddress($logger),
+			$logger);
+		switch ($result)
 		{
-			$this->model = $this->getModel();
-			$unblockSuccess = $this->model->unblock($token, $logger);
-			$this->message = ($unblockSuccess)
-				? Text::sprintf('COM_BFSTOP_UNBLOCKTOKEN_SUCCESS',
+			case TokenunblockModel::ResultConfirm:
+				$this->showConfirmation = true;
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_CONFIRM');
+				break;
+			case TokenunblockModel::ResultUnblocked:
+				$this->message = Text::sprintf('COM_BFSTOP_UNBLOCKTOKEN_SUCCESS',
 					$this->getLoginLink(),
-					$this->getPasswordResetLink())
-				: Text::_('COM_BFSTOP_UNBLOCKTOKEN_FAILED');
+					$this->getPasswordResetLink());
+				break;
+			case TokenunblockModel::ResultWrongIp:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_WRONG_IP');
+				break;
+			case TokenunblockModel::ResultNotFound:
+			case TokenunblockModel::ResultFailed:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_FAILED');
+				break;
+			default:
+				$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_INVALID');
 		}
-		else
+		// The status is only set if the plugin's "Use HTTP Error" setting is
+		// on: a web server or CDN replacing error pages with its own would
+		// otherwise hide the message from the user.
+		if ((bool) ParamHelper::get('useHttpError', 'params', true))
 		{
-			$this->message = Text::_('COM_BFSTOP_UNBLOCKTOKEN_INVALID');
+			$status = TokenunblockModel::httpStatus($result);
+			if ($status !== 200)
+			{
+				$app->setHeader('status', $status, true);
+			}
 		}
+		// The link carries a secret: neither the page nor the address may be
+		// kept by caches, passed on to other sites in the Referer header of
+		// requests for resources the template loads from them, or indexed.
+		$app->allowCache(false);
+		$app->setHeader('Referrer-Policy', 'no-referrer', true);
+		$app->setHeader('X-Robots-Tag', 'noindex, nofollow', true);
 		parent::display($tpl);
 	}
 }

@@ -13,6 +13,27 @@ If you are interested in the source code, or want to contribute, please check [t
 
 For any further questions, don't hesitate to contact me under bfstop@bfroehler.info
 
+## Security changes in this release
+
+- The link in the "you were blocked" email now only asks for confirmation when
+  opened; the unblock itself is a POST request, and only works from the IP
+  address which was blocked (so mail scanners and link previews can't use it).
+- The log view and the IP information view now escape everything they show.
+- The unblock page answers with an error status if the link can't be used (400,
+  403, 404 or 500; a GET request just asks for confirmation and stays a 200),
+  unless the plugin's "Use HTTP Error" setting is off. Because the link contains
+  a secret, the page is not cached, sends no Referer and asks search engines
+  not to index it.
+- New setting "Usernames Not Matching an Account" (default: hash), see the
+  plugin's CHANGELOG.
+- New setting "IPv6 Tracking Granularity" (default: /64).
+- The "User Block Message" setting has a new value: the email with the unblock
+  link is by default only sent if the user has logged in from the blocked IP
+  address before, so it can't be used to flood somebody's inbox.
+- Sending the test email needs the permission to change the settings, and the
+  .htaccess and GeoIP database path settings are validated.
+- Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.
+
 ## 2.0.0: Joomla 5/6 migration
 
 Version 2.0.0 migrates the component to PSR-4 namespaced classes

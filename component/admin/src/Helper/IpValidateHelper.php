@@ -26,7 +26,10 @@ class IpValidateHelper
 			$subnet = $parts[1];
 			$ip = $parts[0];
 			$maxBits = IpRangeHelper::isIPv6($ip) ? 128 : 32;
-			if (!is_numeric($subnet) || $subnet < 0 || $subnet > $maxBits)
+			// digits only: is_numeric() would also accept "1e1", "0x8" or " 8",
+			// which don't mean what they look like in the places the range ends
+			// up (e.g. the web server's configuration)
+			if (preg_match('/^[0-9]{1,3}\z/', $subnet) !== 1 || (int) $subnet > $maxBits)
 			{
 				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', $subnet), 'warning');
 				return false;

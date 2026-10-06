@@ -8,8 +8,8 @@
 defined('_JEXEC') or die;
 foreach ($this->items as $i => $logline): ?>
 <tr>
-	<td><?php echo $logline->date; ?></td>
-	<td><?php echo $logline->priority; ?></td>
-	<td><?php echo $logline->message; ?></td>
+	<td><?php echo $this->escape($logline->date); ?></td>
+	<td><?php echo $this->escape($logline->priority); ?></td>
+	<td><?php echo $this->escape($logline->message); ?></td>
 </tr>
 <?php endforeach;
