@@ -271,6 +271,17 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame(array('203.0.113.2 bob', '203.0.113.4 bob'), $this->knownRows());
 	}
 
+	public function testPurgeExpiredUnblockTokens()
+	{
+		$this->insert('#__bfstop_unblock_token', array('token' => 'tokenOld', 'block_id' => 1,
+			'crdate' => self::minutesAgo(3 * 24 * 60 + 5)));
+		$this->insert('#__bfstop_unblock_token', array('token' => 'tokenNew', 'block_id' => 2,
+			'crdate' => self::minutesAgo(3 * 24 * 60 - 5)));
+		$this->helper->purgeExpiredUnblockTokens();
+		$this->db->setQuery('SELECT token FROM #__bfstop_unblock_token');
+		$this->assertSame(array('tokenNew'), $this->db->loadColumn());
+	}
+
 	public function testDnsCache()
 	{
 		$this->assertFalse($this->helper->getCachedHostname('203.0.113.5'), 'not cached');

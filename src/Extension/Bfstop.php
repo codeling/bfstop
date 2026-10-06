@@ -626,9 +626,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// regardless of the purge age setting: these are not deleted by age
 			$this->mydb->trimUsernameStats();
 			$this->mydb->pruneKnownIps();
+			$this->mydb->purgeExpiredUnblockTokens();
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);
 		}
+	}
+
+	/**
+	 * The status code of the page shown to a blocked client, or null for none
+	 * (which makes it 200). Set with http_response_code(), not as a raw
+	 * "HTTP/1.x 403 ..." header: that would hard-code the protocol version,
+	 * which is the web server's business (HTTP/2 doesn't even have a status line).
+	 */
+	public static function blockedResponseCode($useHttpError)
+	{
+		return $useHttpError ? 403 : null;
 	}
 
 	/**
@@ -637,16 +649,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * It must never be cached: a cache (browser, proxy, CDN) which kept it
 	 * would show it to other visitors of the same URL.
 	 */
-	public static function blockedResponseHeaders($useHttpError)
+	public static function blockedResponseHeaders()
 	{
-		$headers = array();
-		if ($useHttpError)
-		{
-			$headers[] = 'HTTP/1.0 403 Forbidden';
-		}
-		$headers[] = 'Cache-Control: no-store, no-cache, must-revalidate, private';
-		$headers[] = 'Pragma: no-cache';
-		return $headers;
+		return array(
+			'Cache-Control: no-store, no-cache, must-revalidate, private',
+			'Pragma: no-cache',
+		);
 	}
 
 	/**
@@ -695,7 +703,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				return;
 			}
 			$this->mydb->recordBlockedAttempt($blockIds);
-			foreach (self::blockedResponseHeaders($this->getBoolParam('useHttpError', true)) as $header)
+			$status = self::blockedResponseCode($this->getBoolParam('useHttpError', true));
+			if ($status !== null)
+			{
+				http_response_code($status);
+			}
+			foreach (self::blockedResponseHeaders() as $header)
 			{
 				header($header);
 			}

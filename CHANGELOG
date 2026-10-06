@@ -102,6 +102,11 @@
     from them (and the table is limited to 100000 rows, oldest first). This
     maintenance, like the limit of the username statistics, runs once a day
     whatever the purge age is set to
+  - Unblock tokens which have expired are deleted by the daily maintenance too
+    (before: only when somebody visited the unblock page, or by the purge by
+    age if one is configured). The status code of the block page is set with
+    http_response_code() instead of a raw "HTTP/1.0 403" header, which hard-coded
+    the protocol version
   - Security: IPv6 clients are now tracked per network (default: /64, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an

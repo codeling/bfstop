@@ -860,6 +860,26 @@ class DatabaseHelper
 	}
 
 	/**
+	 * Deletes the unblock tokens which can't be used any more. A used token is
+	 * deleted when it is used, and the unblock page deletes the expired ones
+	 * when somebody visits it - but nobody may, and the purge by age only runs
+	 * if a purge age is configured.
+	 */
+	public function purgeExpiredUnblockTokens()
+	{
+		try
+		{
+			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.
+				$this->db->quote(date("Y-m-d H:i:s", time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
+			$this->db->execute();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
 	 * Forgets the addresses users logged in from longer ago than $maxAgeDays,
 	 * and, oldest first, as many more as needed to keep at most $maxRows.
 	 */

@@ -120,8 +120,14 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->configure(array('deleteOld' => 0, 'blockNumber' => 7));
 		$this->knownIp('203.0.113.1', 400);
 		$this->knownIp('203.0.113.2', 1);
+		// unblock tokens nobody can use any more
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ab', 20), 'block_id' => 1,
+			'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('cd', 20), 'block_id' => 2,
+			'crdate' => self::minutesAgo(60)));
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
+		$this->assertSame(array(str_repeat('cd', 20)), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
@@ -137,13 +143,19 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testBlockPageIsNeverCached()
 	{
-		foreach (array(true, false) as $useHttpError)
+		$headers = Bfstop::blockedResponseHeaders();
+		$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
+		$this->assertContains('Pragma: no-cache', $headers);
+		foreach ($headers as $header)
 		{
-			$headers = Bfstop::blockedResponseHeaders($useHttpError);
-			$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
-			$this->assertContains('Pragma: no-cache', $headers);
-			$this->assertSame($useHttpError, in_array('HTTP/1.0 403 Forbidden', $headers, true));
+			$this->assertStringStartsNotWith('HTTP/', $header, 'the status is set with http_response_code()');
 		}
+	}
+
+	public function testBlockedResponseCode()
+	{
+		$this->assertSame(403, Bfstop::blockedResponseCode(true));
+		$this->assertNull(Bfstop::blockedResponseCode(false));
 	}
 
 	public function testBlockPageIsAnErrorByDefault()
