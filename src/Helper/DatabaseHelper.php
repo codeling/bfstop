@@ -321,7 +321,10 @@ class DatabaseHelper
 		}
 	}
 
-	public function getNewUnblockToken($id, $token)
+	/**
+	 * @param string|null $username the user the link is sent to, if any
+	 */
+	public function getNewUnblockToken($id, $token, $username = null)
 	{
 		try
 		{
@@ -329,6 +332,7 @@ class DatabaseHelper
 			$tokenEntry->token = $token;
 			$tokenEntry->block_id = $id;
 			$tokenEntry->crdate = date("Y-m-d H:i:s");
+			$tokenEntry->username = $username;
 			if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
 			{
 				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
@@ -374,6 +378,27 @@ class DatabaseHelper
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return false;
+		}
+	}
+
+	/**
+	 * Whether an unblock link which can still be used was sent to $username:
+	 * one that hasn't expired and wasn't used (a used token is deleted).
+	 */
+	public function hasCurrentUnblockToken($username)
+	{
+		try
+		{
+			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_unblock_token".
+				" WHERE LOWER(username) = LOWER(".$this->db->quote($username).")".
+				" AND crdate >= ".$this->db->quote(date("Y-m-d H:i:s",
+					time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
+			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return true;
 		}
 	}
 
@@ -588,6 +613,36 @@ class DatabaseHelper
 				" AND username = ".$this->db->quote($username);
 			$this->db->setQuery($sql);
 			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
+	/**
+	 * Whether $username has logged in successfully from $ipaddress before -
+	 * or, for an IPv6 client tracked by its network (see
+	 * IpHelper::trackedAddress()), from another address of the same network:
+	 * IPv6 clients commonly switch addresses within their network.
+	 */
+	public function hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength)
+	{
+		try
+		{
+			$this->db->setQuery("SELECT ipaddress FROM #__bfstop_knownip".
+				" WHERE LOWER(username) = LOWER(".$this->db->quote($username).")");
+			$network = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
+			foreach ($this->db->loadColumn() as $known)
+			{
+				if (strcasecmp($known, $ipaddress) === 0 ||
+					($network !== $ipaddress && IpHelper::trackedAddress($known, $ipv6PrefixLength) === $network))
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 		catch (\Exception $e)
 		{

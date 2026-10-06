@@ -82,6 +82,18 @@
     of their own could otherwise end every series of guesses at other
     accounts with an attempt at their own, get the link and continue.
     Attempts against names which don't exist (e.g. typos) don't count
+  - Security: anybody can make the plugin send the "User Block Message" to
+    a user, by failing to log in with that username from an address until it
+    is blocked - a way to flood somebody's inbox. The setting now has three
+    values: disabled; enabled only if the user has logged in from the
+    blocked IP address (or, for IPv6, its network) before, which is the
+    case for somebody locking themselves out but never for an attacker's
+    address; and enabled for any IP address, where a user gets at most one
+    unblock link at a time which can still be used (not yet expired or used
+    up). Note that the previous "enabled" now means the first of these; the
+    old behaviour is the third. Known IP addresses are recorded at
+    successful logins, so users get the message again after having logged
+    in once. The username a link was sent to is recorded with its token
   - Security: IPv6 clients are now tracked per network (default: /64, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an

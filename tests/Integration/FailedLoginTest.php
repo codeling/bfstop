@@ -228,7 +228,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	private function blockedAfter(array $usernames)
 	{
-		$this->configure(array('blockNumber' => count($usernames), 'notifyBlockedUser' => 1));
+		$this->configure(array('blockNumber' => count($usernames), 'notifyBlockedUser' => 2));
 		foreach ($usernames as $username)
 		{
 			$this->failedLogin($username);
@@ -268,7 +268,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testMistypedUsernamesInPlainModeDontPreventTheUnblockLink()
 	{
-		$this->configure(array('blockNumber' => 3, 'notifyBlockedUser' => 1, 'unknownUsernameMode' => 'plain'));
+		$this->configure(array('blockNumber' => 3, 'notifyBlockedUser' => 2, 'unknownUsernameMode' => 'plain'));
 		foreach (array('nobody', 'nobody-else', 'Admin') as $username)
 		{
 			$this->failedLogin($username);
@@ -285,11 +285,131 @@ class FailedLoginTest extends IntegrationTestCase
 	public function testOnlyAttemptsOfTheSameAddressCount()
 	{
 		$this->createUser('victim');
-		$this->configure(array('blockNumber' => 2, 'notifyBlockedUser' => 1));
+		$this->configure(array('blockNumber' => 2, 'notifyBlockedUser' => 2));
 		$this->failedLogin('victim', '203.0.113.99'); // somebody else
 		$this->failedLogin('Admin');
 		$this->failedLogin('Admin');
 		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
 		$this->assertTrue($this->unblockLinkIssued());
+	}
+
+	private function knownIp($ip, $username)
+	{
+		$this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => $username,
+			'first_success' => self::minutesAgo(100), 'last_success' => self::minutesAgo(10)));
+	}
+
+	private function tokenCount($where = '1=1')
+	{
+		return (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE '.$where);
+	}
+
+	private function blockWith($mode, $username = 'Admin', $ip = self::Ip)
+	{
+		$this->configure(array('blockNumber' => 3, 'notifyBlockedUser' => $mode));
+		for ($i = 0; $i < 3; ++$i)
+		{
+			$this->failedLogin($username, $ip);
+		}
+	}
+
+	public function testNoUnblockLinkIfSwitchedOff()
+	{
+		$this->blockWith(0);
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	// mode 1: only for IP addresses the user has logged in from
+
+	public function testKnownAddressModeSendsLinkIfTheUserLoggedInFromThere()
+	{
+		$this->knownIp(self::Ip, 'Admin');
+		$this->blockWith(1);
+		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+	}
+
+	public function testKnownAddressModeNeverSendsToAnAttackersAddress()
+	{
+		// nobody ever logged in as Admin from here
+		$this->blockWith(1);
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeIgnoresLoginsOfOtherUsersAndAddresses()
+	{
+		$this->knownIp(self::Ip, 'someone-else');
+		$this->knownIp('203.0.113.77', 'Admin');
+		$this->blockWith(1);
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeIsCaseInsensitiveForTheUsername()
+	{
+		$this->knownIp(self::Ip, 'admin');
+		$this->blockWith(1);
+		$this->assertSame(1, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeRecognisesTheNetworkOfAnIpv6Client()
+	{
+		// IPv6 clients switch to other addresses in their network all the time
+		$this->knownIp('2001:db8:1:2:aaaa:bbbb:cccc:9', 'Admin');
+		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
+		$this->assertSame(1, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeDoesntRecogniseAnotherIpv6Network()
+	{
+		$this->knownIp('2001:db8:1:3:aaaa::9', 'Admin');
+		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeDoesntLumpIpv4MappedAddressesTogether()
+	{
+		$this->knownIp('::ffff:203.0.113.8', 'Admin');
+		$this->blockWith(1, 'Admin', '::ffff:203.0.113.7');
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	// mode 2: any address, but only one usable link per user
+
+	public function testAnyAddressModeSendsOnlyOneUsableLinkAtATime()
+	{
+		$this->blockWith(2);
+		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+		// the same user, from another address (another botnet member)
+		$this->blockWith(2, 'Admin', '203.0.113.52');
+		$this->assertSame(2, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), 'blocked');
+		$this->assertSame(1, $this->tokenCount(), 'no second link');
+	}
+
+	public function testAnyAddressModeSendsAnotherLinkOnceTheOldOneExpired()
+	{
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ab', 20), 'block_id' => 1,
+			'crdate' => self::minutesAgo(4 * 24 * 60), 'username' => 'Admin'));
+		$this->blockWith(2);
+		$this->assertSame(2, $this->tokenCount("username = 'Admin'"));
+	}
+
+	public function testAnyAddressModeSendsAnotherLinkOnceTheOldOneWasUsed()
+	{
+		// a token which was used up is deleted, so there is none left
+		$this->blockWith(2);
+		$this->db->setQuery('DELETE FROM #__bfstop_unblock_token');
+		$this->db->execute();
+		$this->blockWith(2, 'Admin', '203.0.113.52');
+		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+	}
+
+	public function testAnyAddressModeLimitsPerUser()
+	{
+		$this->createUser('victim');
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('cd', 20), 'block_id' => 1,
+			'crdate' => self::minutesAgo(10), 'username' => 'victim'));
+		$this->blockWith(2);
+		$this->assertSame(1, $this->tokenCount("username = 'Admin'"), 'the link for victim has no bearing on Admin');
 	}
 }

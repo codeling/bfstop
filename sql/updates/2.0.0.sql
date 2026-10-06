@@ -17,6 +17,9 @@ ALTER TABLE `#__bfstop_unblock` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4
 
 ALTER TABLE `#__bfstop_unblock_token` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- the user an unblock link was sent to, to limit the links per user
+ALTER TABLE `#__bfstop_unblock_token` ADD COLUMN username varchar(150) NULL DEFAULT NULL;
+
 ALTER TABLE `#__bfstop_allowlist` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- tables introduced in 2.0.0, see install.mysql.utf8.sql for details

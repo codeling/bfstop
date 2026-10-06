@@ -28,6 +28,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 {
 	protected $autoloadLanguage = true;
 
+	// values of the "notifyBlockedUser" setting besides 0 (off) and 1 (only to
+	// users who logged in from the blocked address before)
+	private const NotifyBlockedAnyAddress = 2;
+
 	private LoggerHelper $logger;
 	private NotifierHelper $notifier;
 	private DatabaseHelper $mydb;
@@ -70,10 +74,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return (substr($haystack, -$length) === $needle);
 	}
 
-	private function getUnblockLink($id)
+	private function getUnblockLink($id, $username)
 	{
 		$token = $this->mydb->getNewUnblockToken($id,
-			TokenHelper::getToken($this->logger));
+			TokenHelper::getToken($this->logger), $username);
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
@@ -175,6 +179,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					"not sending unblock instructions",
 					Log::INFO);
 			}
+			elseif ($userEmail != null && ($withheld = $this->whyNoUnblockMail($logEntry)) !== null)
+			{
+				$this->logger->log("Existing user '".$logEntry->username.
+					"' was blocked, but ".$withheld." - not sending unblock instructions",
+					Log::INFO);
+			}
 			elseif ($userEmail != null)
 			{
 				$this->logger->log("Existing user '".
@@ -183,7 +193,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					"instructions",
 					Log::INFO);
 				$this->notifier->sendUnblockMail($userEmail,
-					$this->getUnblockLink($id));
+					$this->getUnblockLink($id, $logEntry->username));
 			}
 			else
 			{
@@ -193,6 +203,33 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					'notifications', Log::DEBUG);
 			}
 		}
+	}
+
+	/**
+	 * Anybody can make the plugin send an unblock email to a user: by failing
+	 * to log in with that username from an IP address until it is blocked.
+	 * To keep that from being used to flood somebody's inbox:
+	 *
+	 * - by default (mode 1) the email is only sent if the user has logged in
+	 *   from the blocked IP address before - which is where somebody
+	 *   locking themselves out comes from, but never an attacker's address;
+	 * - if it is to go to any address (mode 2), at most one email which can
+	 *   still be used is out for a user at any time.
+	 *
+	 * @return string|null why no email is sent, null if it may be
+	 */
+	private function whyNoUnblockMail($logEntry)
+	{
+		if ($this->getIntParam('notifyBlockedUser', 0) === self::NotifyBlockedAnyAddress)
+		{
+			return $this->mydb->hasCurrentUnblockToken($logEntry->username)
+				? 'there already is an unblock link for this user which can be used'
+				: null;
+		}
+		return $this->mydb->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
+			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
+			? null
+			: 'the user has never logged in from this IP address';
 	}
 
 	private function getRealDurationFromDBDuration($duration)

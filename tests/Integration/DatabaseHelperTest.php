@@ -167,6 +167,14 @@ class DatabaseHelperTest extends IntegrationTestCase
 	public function testUnblockToken()
 	{
 		$this->assertSame('tokenA', $this->helper->getNewUnblockToken(1, 'tokenA'));
+		$this->assertNull($this->queryValue("SELECT username FROM #__bfstop_unblock_token WHERE token='tokenA'"));
+		$this->assertFalse($this->helper->hasCurrentUnblockToken('Someone'));
+		$this->assertSame('tokenU', $this->helper->getNewUnblockToken(2, 'tokenU', 'Someone'));
+		$this->assertTrue($this->helper->hasCurrentUnblockToken('someone'), 'case-insensitive');
+		$this->assertFalse($this->helper->hasCurrentUnblockToken('Somebody-else'));
+		$this->insert('#__bfstop_unblock_token', array('token' => 'tokenOld', 'block_id' => 3,
+			'crdate' => self::minutesAgo(4 * 24 * 60), 'username' => 'Expired'));
+		$this->assertFalse($this->helper->hasCurrentUnblockToken('Expired'), 'an expired token is not current');
 		$this->assertTrue($this->helper->unblockTokenExists('tokenA'));
 		$this->assertFalse($this->helper->unblockTokenExists('tokenB'));
 	}
