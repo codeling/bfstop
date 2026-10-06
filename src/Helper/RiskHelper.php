@@ -40,7 +40,7 @@ class RiskHelper
 		}
 		try
 		{
-			if ($db->isKnownIpUsername($ipaddress, $username))
+			if ($db->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', 64)))
 			{
 				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
 			}
@@ -52,22 +52,33 @@ class RiskHelper
 		return 0;
 	}
 
-	private static function commonUsernameScore(Registry $params, $username)
+	/**
+	 * Whether $username is on the admin's list of common/high-value
+	 * usernames (case-insensitive).
+	 */
+	public static function isCommonUsername(Registry $params, $username)
 	{
-		if (!self::getBoolParam($params, 'riskCommonUsernameEnabled', true))
-		{
-			return 0;
-		}
 		$list = (string) $params->get('riskCommonUsernames', '');
 		$candidates = array_filter(array_map('trim', explode("\n", str_replace("\r", '', $list))));
 		foreach ($candidates as $candidate)
 		{
 			if ($candidate !== '' && strcasecmp($candidate, $username) === 0)
 			{
-				return self::getIntParam($params, 'riskCommonUsernamePoints', 2);
+				return true;
 			}
 		}
-		return 0;
+		return false;
+	}
+
+	private static function commonUsernameScore(Registry $params, $username)
+	{
+		if (!self::getBoolParam($params, 'riskCommonUsernameEnabled', true))
+		{
+			return 0;
+		}
+		return self::isCommonUsername($params, $username)
+			? self::getIntParam($params, 'riskCommonUsernamePoints', 2)
+			: 0;
 	}
 
 	private static function userAgentScore(Registry $params)

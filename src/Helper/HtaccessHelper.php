@@ -80,7 +80,7 @@ class HtaccessHelper
 	{
 		$result = array(
 			'apacheserver' =>
-				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'])), 'apache'),
+				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'] ?? '')), 'apache'),
 			'found'		=> file_exists($this->path),
 			'readable'	=> is_readable($this->path),
 			'writeable'	=> is_writeable($this->path)
@@ -113,7 +113,23 @@ class HtaccessHelper
 	 */
 	public function denyIP($IP)
 	{
-		return $this->addLine(self::BlockPrefix . $IP);
+		// the value ends up in a web server configuration file as is: a
+		// newline or anything but an address/subnet in it would add
+		// arbitrary directives (or make Apache reject the whole file, taking
+		// the site down)
+		if (!IpHelper::isValidIpOrSubnet($IP))
+		{
+			if (!is_null($this->logger))
+			{
+				$this->logger->log("Refusing to write invalid IP address '".
+					addcslashes((string) $IP, "\0..\37\177")."' to .htaccess!", Log::ERROR);
+			}
+			return false;
+		}
+		return $this->locked(function () use ($IP)
+		{
+			return $this->addLine(self::BlockPrefix . $IP);
+		});
 	}
 
 	/**
@@ -124,7 +140,10 @@ class HtaccessHelper
 	 */
 	public function undenyIP($IP)
 	{
-		return $this->removeLine(self::BlockPrefix . $IP);
+		return $this->locked(function () use ($IP)
+		{
+			return $this->removeLine(self::BlockPrefix . $IP);
+		});
 	}
 
 	/**
@@ -139,14 +158,26 @@ class HtaccessHelper
 		{
 			return $this->remove403Message();
 		}
+		// a line break would start a new directive
+		if (preg_match('/[\x00-\x1f\x7f]/', $message))
+		{
+			if (!is_null($this->logger))
+			{
+				$this->logger->log("Refusing to write a 403 message containing control characters to .htaccess!", Log::ERROR);
+			}
+			return false;
+		}
 
-		$line = 'ErrorDocument 403 "' . $message . '"';
+		$line = 'ErrorDocument 403 "' . addcslashes($message, '"\\') . '"';
 
-		$otherLines = $this->getLines('ErrorDocument 403 ', true, true);
+		return $this->locked(function () use ($line)
+		{
+			$otherLines = $this->getLines('ErrorDocument 403 ', true, true);
 
-		$insertion = array_merge($this->getHeader(), array($line), $otherLines, $this->getFooter());
+			$insertion = array_merge($this->getHeader(), array($line), $otherLines, $this->getFooter());
 
-		return $this->insert($insertion);
+			return $this->insert($insertion);
+		});
 	}
 
 	/**
@@ -156,7 +187,47 @@ class HtaccessHelper
 	 */
 	public function remove403Message()
 	{
-		return $this->removeLine('', 'ErrorDocument 403 ');
+		return $this->locked(function ()
+		{
+			return $this->removeLine('', 'ErrorDocument 403 ');
+		});
+	}
+
+	/**
+	 * Runs a read-modify-write cycle of the .htaccess file while holding an
+	 * exclusive lock, so that concurrent requests (several clients getting
+	 * blocked at once is exactly when this happens) don't overwrite each
+	 * other's changes: each of them would otherwise read the file, add its
+	 * line and write the result back, losing the lines the others added in
+	 * between. The lock is a file in the temporary directory, not the
+	 * .htaccess itself, which is replaced as a whole when written. If no lock
+	 * can be taken the change is done anyway, as before.
+	 */
+	private function locked(callable $change)
+	{
+		$lockFile = sys_get_temp_dir().'/bfstop-htaccess-'.md5($this->path).'.lock';
+		$handle = @fopen($lockFile, 'c');
+		if ($handle === false || !flock($handle, LOCK_EX))
+		{
+			if (!is_null($this->logger))
+			{
+				$this->logger->log("Could not lock '$lockFile', changing .htaccess without it", Log::WARNING);
+			}
+			if ($handle !== false)
+			{
+				fclose($handle);
+			}
+			return $change();
+		}
+		try
+		{
+			return $change();
+		}
+		finally
+		{
+			flock($handle, LOCK_UN);
+			fclose($handle);
+		}
 	}
 
 	/**

@@ -25,6 +25,12 @@ foreach ($params as $name => $value)
 {
 	$app->input->set($name, $value);
 }
+// the plugin ends a blocked request with exit(), so report the response
+// status it set when the script ends
+register_shutdown_function(function ()
+{
+	echo "\nSTATUS: ".http_response_code()."\n";
+});
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
 $app->getDispatcher()->dispatch('onAfterInitialise', new Event('onAfterInitialise', array()));
 // blocking is enforced after routing (SEF URLs only yield option/view then)

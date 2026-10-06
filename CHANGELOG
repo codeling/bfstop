@@ -40,6 +40,108 @@
     then silently never blocked anything. IP subnet matching for block and
     allow list entries is now done in PHP instead of with MySQL-only SQL
     functions, and fixed-length time windows are computed in PHP
+  - Security: an emailed unblock token no longer lets a blocked IP address
+    bypass the block. It was accepted on any request with
+    view=tokenunblock (e.g. a login), was never used up by such a request
+    and was not checked for expiry, so anyone who got a token (e.g. by
+    getting their own account blocked) could keep guessing passwords from
+    a blocked IP. Now it only passes the unblock page of com_bfstop itself,
+    only while unexpired, and only if issued for a block of the requesting
+    IP address; the token is no longer written to the log either
+  - Security: behind a proxy/load balancer, the client IP is now taken from
+    the end of the forwarding header (the entry added by the trusted proxy)
+    instead of its first public entry, which a visitor could forge to evade
+    blocking, get other addresses blocked or impersonate an allowlisted one.
+    Several trusted proxies (and CIDR subnets) can be configured, the
+    "Forwarded" header (RFC 7239) and addresses with ports are understood,
+    and private client addresses reported by the proxy are accepted. Not
+    all proxies append to an incoming header: pick a header yours sets or
+    appends to
+  - Security: a failed login is now recorded, counted and checked against
+    the block threshold before the configured delay is applied, not after
+    it, and a request whose IP address just got (or already is) blocked is
+    not delayed any more. Before, a burst of parallel login attempts all
+    ran before the first of them was counted, and every one of them held
+    on to a server worker for the whole delay
+  - Security: usernames of failed logins which do not belong to an existing
+    account (and are not on the list of common usernames) are now stored,
+    shown, logged and mailed as an unreadable hash by default, as users
+    often type their password into the username field; the hash is the same
+    for the same input, so attempts are still counted together. The new
+    setting "Usernames Not Matching an Account" restores the old behaviour.
+    Entries stored by earlier versions stay as they are - purge them in the
+    failed login and username statistics views if you want them gone
+  - Security: unblocking by the link in the notification email now needs a
+    confirmation (a POST request) and only works from the IP address which
+    was blocked, so mail security scanners or link previews which open
+    every link in a message can't unblock an attacker (see com_bfstop)
+  - Security: the "User Block Message" with the unblock link is no longer
+    sent if the failed logins from the blocked IP address which led to the
+    block also went against other existing accounts. The link goes to the
+    owner of the account of the last attempt, so an attacker with an account
+    of their own could otherwise end every series of guesses at other
+    accounts with an attempt at their own, get the link and continue.
+    Attempts against names which don't exist (e.g. typos) don't count
+  - Security: anybody can make the plugin send the "User Block Message" to
+    a user, by failing to log in with that username from an address until it
+    is blocked - a way to flood somebody's inbox. The setting now has three
+    values: disabled; enabled only if the user has logged in from the
+    blocked IP address (or, for IPv6, its network) before, which is the
+    case for somebody locking themselves out but never for an attacker's
+    address; and enabled for any IP address, where a user gets at most one
+    unblock link at a time which can still be used (not yet expired or used
+    up). Note that the previous "enabled" now means the first of these; the
+    old behaviour is the third. Known IP addresses are recorded at
+    successful logins, so users get the message again after having logged
+    in once. The username a link was sent to is recorded with its token
+  - The addresses users logged in from (used for the risk score and for the
+    unblock message) are remembered by network for IPv6 clients, as failed
+    logins are, so a client whose address changes within its /64 every day
+    stays a known one and doesn't add a row per address; the lookup ignores
+    the case of the username. They are forgotten a year after the last login
+    from them (and the table is limited to 100000 rows, oldest first). This
+    maintenance, like the limit of the username statistics, runs once a day
+    whatever the purge age is set to
+  - Unblock tokens which have expired are deleted by the daily maintenance too
+    (before: only when somebody visited the unblock page, or by the purge by
+    age if one is configured). The status code of the block page is set with
+    http_response_code() instead of a raw "HTTP/1.0 403" header, which hard-coded
+    the protocol version
+  - The unblock page of com_bfstop answers with an error status if the link
+    can't be used (400 without a token, 403 from another IP address, 404 for
+    an unknown, expired or used token, 500 if unblocking failed), unless "Use
+    HTTP Error" is switched off; opening the link (a GET request) stays a 200
+    for every token. The page is not cached and tells browsers not to send
+    its address (which contains the token) to other sites and search engines
+    not to index it
+  - Security: IPv6 clients are now tracked per network (default: /64, see
+    the new "IPv6 Tracking Granularity" setting) instead of per address:
+    failed logins are counted and blocks apply to the whole network, so an
+    attacker can no longer start over by switching to another address in
+    their /64. IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
+    unrelated clients' IPv4 addresses, are still tracked individually
+  - Security: the block page is never cached (Cache-Control: no-store) and,
+    if no setting says otherwise, answers with the HTTP status 403 instead of
+    200, so a caching proxy/CDN can't serve it to other visitors
+  - Security: only a valid IP address or subnet is written to the .htaccess
+    file (before, a value like "192.0.2.0/1e1" passed the backend validation
+    and made Apache reject the whole file); the 403 message is escaped; and
+    changes of the file are done while holding a lock, so that clients
+    getting blocked at the same time don't overwrite each other's lines
+  - Security: the plugin's log file is rotated at 5 MB, and the username
+    statistics (which aren't purged by age) are limited to 10000 usernames,
+    removing those with the fewest attempts first, so a visitor can't fill up
+    disk or database by making up usernames
+  - Security: the periodic maintenance (once a day) only updates its own
+    timestamp in the plugin's stored settings, instead of writing back all
+    settings as they were when the request started, which could undo a
+    change an administrator saved in the meantime; and it now also runs if
+    no purge age is configured
+  - Security (component): sending the test email now needs the permission to
+    change the settings; the .htaccess path and GeoIP database path settings
+    are validated (no stream wrappers like phar://, a .mmdb file name)
+  - Added SECURITY.md with the supported versions and how to report
+    vulnerabilities
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

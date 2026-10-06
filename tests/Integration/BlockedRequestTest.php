@@ -7,6 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Joomla\CMS\Factory;
 
@@ -101,6 +102,78 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked();
 	}
 
+	private function knownIps()
+	{
+		$this->db->setQuery('SELECT ipaddress FROM #__bfstop_knownip ORDER BY ipaddress');
+		return $this->db->loadColumn();
+	}
+
+	private function knownIp($ip, $daysAgo)
+	{
+		$this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => 'bob',
+			'first_success' => self::minutesAgo($daysAgo * 1440 + 1), 'last_success' => self::minutesAgo($daysAgo * 1440)));
+	}
+
+	public function testDailyMaintenancePrunesAndRemembersWhenItRan()
+	{
+		// purge age 0: nothing is purged by age, but this has to happen regardless
+		$this->configure(array('deleteOld' => 0, 'blockNumber' => 7));
+		$this->knownIp('203.0.113.1', 400);
+		$this->knownIp('203.0.113.2', 1);
+		// unblock tokens nobody can use any more
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ab', 20), 'block_id' => 1,
+			'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('cd', 20), 'block_id' => 2,
+			'crdate' => self::minutesAgo(60)));
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.2'), $this->knownIps());
+		$this->assertSame(array(str_repeat('cd', 20)), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
+		$saved = json_decode($this->getPluginParams(), true);
+		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
+		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
+	}
+
+	public function testMaintenanceRunsOnlyOncePerDay()
+	{
+		$this->configure(array('lastPurge' => time() - 3600));
+		$this->knownIp('203.0.113.1', 400);
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.1'), $this->knownIps(), 'ran an hour ago already');
+	}
+
+	public function testBlockPageIsNeverCached()
+	{
+		$headers = Bfstop::blockedResponseHeaders();
+		$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
+		$this->assertContains('Pragma: no-cache', $headers);
+		foreach ($headers as $header)
+		{
+			$this->assertStringStartsNotWith('HTTP/', $header, 'the status is set with http_response_code()');
+		}
+	}
+
+	public function testBlockedResponseCode()
+	{
+		$this->assertSame(403, Bfstop::blockedResponseCode(true));
+		$this->assertNull(Bfstop::blockedResponseCode(false));
+	}
+
+	public function testBlockPageIsAnErrorByDefault()
+	{
+		$this->configure();
+		$this->block();
+		$this->assertMatchesRegularExpression('/^STATUS: 403$/m', $this->request());
+	}
+
+	public function testErrorStatusCanBeSwitchedOff()
+	{
+		$this->configure(array('useHttpError' => 0));
+		$this->block();
+		$output = $this->request();
+		$this->assertStringContainsString(self::BlockedMessage, $output);
+		$this->assertDoesNotMatchRegularExpression('/^STATUS: 403$/m', $output);
+	}
+
 	public function testBlockedMessageCanShowIp()
 	{
 		$this->configure(array('blockedMsgShowIP' => 1));
@@ -153,6 +226,37 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('0', 40));
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock');
+	}
+
+	public function testUnblockTokenIsNoPassForOtherRequests()
+	{
+		// the token is consumed by the unblock page only; as a parameter of
+		// any other request (here: a login) it must not get around the block
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option=com_users&task=user.login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_content&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&task=display&view=tokenunblock&token='.$token);
+		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	public function testUnblockTokenOfAnotherBlockIsNoPass()
+	{
+		$this->configure();
+		$this->block();
+		$otherBlockId = $this->block('203.0.113.99');
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	public function testExpiredUnblockTokenIsNoPass()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ef', 20),
+			'block_id' => $blockId, 'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('ef', 20));
 	}
 
 	public function testRejectedRequestsAreCounted()

@@ -43,4 +43,13 @@ class GeoHelperTest extends IntegrationTestCase
 			unlink($file);
 		}
 	}
+
+	public function testStreamWrapperPathsAreRefused()
+	{
+		foreach (array('phar:///tmp/x.phar/GeoLite2.mmdb', 'file:///etc/GeoLite2.mmdb', 'ftp://example.org/GeoLite2.mmdb') as $path)
+		{
+			$this->assertNull(GeoHelper::getCountryCode($this->logger, $path, '203.0.113.5'));
+		}
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'not a plain file name'));
+	}
 }

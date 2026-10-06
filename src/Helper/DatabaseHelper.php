@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Cache\CacheControllerFactoryInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -21,6 +22,22 @@ class DatabaseHelper
 
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
+
+	// how long an emailed unblock token can be used; com_bfstop's
+	// TokenunblockModel::TokenValidDays must stay in sync with this
+	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
+
+	// upper bound for the rows of the username statistics, which (unlike
+	// the failed logins) are not purged by age: an attacker can make up as
+	// many usernames as they like
+	public static $USERNAME_STATS_MAX_ROWS = 10000;
+
+	// known IP addresses (where a user logged in from) are forgotten after
+	// this long without a login from them, and the table is kept below this
+	// number of rows, oldest first: a visitor with an account can log in from
+	// as many addresses as they like
+	public static $KNOWN_IP_MAX_AGE_DAYS = 365;
+	public static $KNOWN_IP_MAX_ROWS = 100000;
 
 	// how long a reverse-DNS lookup result is trusted before being redone -
 	// keeps the (potentially slow) gethostbyaddr() call to at most once per
@@ -311,7 +328,10 @@ class DatabaseHelper
 		}
 	}
 
-	public function getNewUnblockToken($id, $token)
+	/**
+	 * @param string|null $username the user the link is sent to, if any
+	 */
+	public function getNewUnblockToken($id, $token, $username = null)
 	{
 		try
 		{
@@ -319,6 +339,7 @@ class DatabaseHelper
 			$tokenEntry->token = $token;
 			$tokenEntry->block_id = $id;
 			$tokenEntry->crdate = date("Y-m-d H:i:s");
+			$tokenEntry->username = $username;
 			if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
 			{
 				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
@@ -331,6 +352,60 @@ class DatabaseHelper
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return null;
+		}
+	}
+
+	/**
+	 * Whether $token is an unexpired unblock token issued for one of the
+	 * given blocks. Used to decide if a blocked client may reach the unblock
+	 * page: a token that belongs to a different IP address's block, or one
+	 * that has outlived its validity, must not work as a pass for this one.
+	 */
+	public function unblockTokenValidForBlocks($token, array $blockIds)
+	{
+		if ($token === '' || count($blockIds) === 0)
+		{
+			return false;
+		}
+		try
+		{
+			$sql = "SELECT block_id, crdate FROM #__bfstop_unblock_token WHERE token=".
+				$this->db->quote($token);
+			$this->db->setQuery($sql);
+			$row = $this->db->loadAssoc();
+			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
+			{
+				return false;
+			}
+			$created = strtotime($row['crdate']);
+			return $created !== false &&
+				(time() - $created) <= (self::$UNBLOCK_TOKEN_VALID_DAYS * 86400);
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
+	/**
+	 * Whether an unblock link which can still be used was sent to $username:
+	 * one that hasn't expired and wasn't used (a used token is deleted).
+	 */
+	public function hasCurrentUnblockToken($username)
+	{
+		try
+		{
+			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_unblock_token".
+				" WHERE LOWER(username) = LOWER(".$this->db->quote($username).")".
+				" AND crdate >= ".$this->db->quote(date("Y-m-d H:i:s",
+					time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
+			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return true;
 		}
 	}
 
@@ -363,6 +438,62 @@ class DatabaseHelper
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return '';
+		}
+	}
+
+	/**
+	 * Whether $login is the username or the email address of an existing
+	 * account (Joomla! can be set up to accept either at the login).
+	 */
+	public function accountExists($login)
+	{
+		try
+		{
+			// LOWER: Joomla treats usernames case-insensitively on login
+			// (MySQL's default collations do, PostgreSQL's don't)
+			$quoted = "LOWER(".$this->db->quote($login).")";
+			$this->db->setQuery("SELECT COUNT(*) FROM #__users WHERE LOWER(username) = ".$quoted.
+				" OR LOWER(email) = ".$quoted);
+			return ((int) $this->db->loadResult()) > 0;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return false;
+		}
+	}
+
+	/**
+	 * Whether the failed logins which count towards blocking $ipaddress (those
+	 * within $interval minutes before $logtime that haven't been handled yet)
+	 * include attempts against an existing account other than $username.
+	 * Attempts against usernames which don't exist don't count: they can't
+	 * get an attacker anywhere. If that can't be determined, it is assumed
+	 * that there are.
+	 */
+	public function hasFailedLoginsForOtherAccounts($interval, $ipaddress, $username, $logtime)
+	{
+		try
+		{
+			$this->db->setQuery("SELECT DISTINCT username FROM #__bfstop_failedlogin".
+				" WHERE ipaddress = ".$this->db->quote($ipaddress).
+				" AND handled = 0 AND logtime BETWEEN ".
+				$this->db->quote(self::minutesBefore($logtime, $interval)).
+				" AND ".$this->db->quote($logtime));
+			foreach ($this->db->loadColumn() as $attempted)
+			{
+				if (mb_strtolower($attempted) !== mb_strtolower($username) &&
+					$this->accountExists($attempted))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return true;
 		}
 	}
 
@@ -465,21 +596,71 @@ class DatabaseHelper
 		}
 	}
 
-	public function successfulLogin($info)
+	/**
+	 * @param object      $info           ipaddress (the client's address) and username
+	 * @param string|null $trackedAddress the key this client is tracked by (see
+	 *                                    IpHelper::trackedAddress(): for IPv6 its
+	 *                                    network), if not its address. Failed
+	 *                                    logins are recorded, and logins
+	 *                                    remembered, under this key
+	 */
+	public function successfulLogin($info, $trackedAddress = null)
 	{
-		$this->setFailedLoginHandled($info, true);
-		$this->recordKnownIpUsername($info->ipaddress, $info->username);
+		$key = $trackedAddress ?? $info->ipaddress;
+		$handled = new \stdClass();
+		$handled->ipaddress = $key;
+		$handled->username = $info->username;
+		$this->setFailedLoginHandled($handled, true);
+		$this->recordKnownIpUsername($key, $info->username);
 	}
 
-	public function isKnownIpUsername($ipaddress, $username)
+	/**
+	 * Whether $username has logged in successfully from $ipaddress before.
+	 *
+	 * Logins are remembered under the key the client is tracked by (see
+	 * IpHelper::trackedAddress()): an IPv4 address itself, an IPv6 address by
+	 * its network, as IPv6 clients commonly switch addresses within it. So
+	 * is a login from any address of the network a login from this one.
+	 */
+	public function hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength)
 	{
 		try
 		{
-			$sql = "SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
-				"ipaddress = ".$this->db->quote($ipaddress).
-				" AND username = ".$this->db->quote($username);
-			$this->db->setQuery($sql);
-			return ((int) $this->db->loadResult()) > 0;
+			$key = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
+			$user = "LOWER(".$this->db->quote($username).")";
+			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
+				"ipaddress IN (".$this->db->quote($key).", ".$this->db->quote($ipaddress).")".
+				" AND LOWER(username) = ".$user);
+			if (((int) $this->db->loadResult()) > 0)
+			{
+				return true;
+			}
+			if (strpos($ipaddress, ':') === false)
+			{
+				return false;
+			}
+			// IPv6: look for entries under another spelling of the address,
+			// or recorded at another granularity (the setting was changed)
+			$this->db->setQuery("SELECT ipaddress FROM #__bfstop_knownip WHERE LOWER(username) = ".$user);
+			$ipBin = @inet_pton($ipaddress);
+			foreach ($this->db->loadColumn() as $known)
+			{
+				if (strpos($known, '/') !== false)
+				{
+					$match = IpHelper::isInSubnet($ipaddress, $known);
+				}
+				else
+				{
+					$knownBin = @inet_pton($known);
+					$match = $knownBin !== false &&
+						($knownBin === $ipBin || IpHelper::trackedAddress($known, $ipv6PrefixLength) === $key);
+				}
+				if ($match)
+				{
+					return true;
+				}
+			}
+			return false;
 		}
 		catch (\Exception $e)
 		{
@@ -564,7 +745,7 @@ class DatabaseHelper
 			$now = date("Y-m-d H:i:s");
 			$sql = "SELECT id FROM #__bfstop_knownip WHERE ".
 				"ipaddress = ".$this->db->quote($ipaddress).
-				" AND username = ".$this->db->quote($username);
+				" AND LOWER(username) = LOWER(".$this->db->quote($username).")";
 			$this->db->setQuery($sql);
 			$id = $this->db->loadResult();
 			if ($id)
@@ -631,18 +812,146 @@ class DatabaseHelper
 		}
 	}
 
-	public function saveParams($params)
+	/**
+	 * Remembers when the periodic maintenance last ran.
+	 *
+	 * Only this one value is changed in the plugin's stored settings, which
+	 * are read from the database right now: writing back the settings the
+	 * request was started with would undo whatever an administrator saved in
+	 * the meantime.
+	 */
+	public function saveLastPurge($timestamp)
 	{
 		try
 		{
-			$query = $this->db->getQuery(true);
+			$where = function ($query)
+			{
+				$query->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
+					->where($this->db->quoteName('folder').' = '.$this->db->quote('system'))
+					->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
+				return $query;
+			};
+			$query = $where($this->db->getQuery(true)
+				->select($this->db->quoteName('params'))
+				->from($this->db->quoteName('#__extensions')));
+			$this->db->setQuery($query);
+			$params = json_decode((string) $this->db->loadResult(), true);
+			if (!is_array($params))
+			{
+				$params = array();
+			}
+			$params['lastPurge'] = (int) $timestamp;
 			// no table alias here: PostgreSQL doesn't allow qualified column
 			// names in the SET clause (issue #206)
-			$query->update($this->db->quoteName('#__extensions'));
-			$query->set($this->db->quoteName('params').' = '. $this->db->quote((string)$params));
-			$query->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
+			$query = $where($this->db->getQuery(true)
+				->update($this->db->quoteName('#__extensions'))
+				->set($this->db->quoteName('params').' = '.$this->db->quote(json_encode($params))));
 			$this->db->setQuery($query);
 			$this->db->execute();
+			// the plugin list (with the settings) is cached
+			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
+				->createCacheController('callback', array('defaultgroup' => 'com_plugins'))
+				->clean();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Deletes the unblock tokens which can't be used any more. A used token is
+	 * deleted when it is used, and the unblock page deletes the expired ones
+	 * when somebody visits it - but nobody may, and the purge by age only runs
+	 * if a purge age is configured.
+	 */
+	public function purgeExpiredUnblockTokens()
+	{
+		try
+		{
+			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.
+				$this->db->quote(date("Y-m-d H:i:s", time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
+			$this->db->execute();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Forgets the addresses users logged in from longer ago than $maxAgeDays,
+	 * and, oldest first, as many more as needed to keep at most $maxRows.
+	 */
+	public function pruneKnownIps($maxAgeDays = null, $maxRows = null)
+	{
+		$maxAgeDays = $maxAgeDays ?? self::$KNOWN_IP_MAX_AGE_DAYS;
+		$maxRows = $maxRows ?? self::$KNOWN_IP_MAX_ROWS;
+		try
+		{
+			$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE last_success < '.
+				$this->db->quote(date("Y-m-d H:i:s", time() - $maxAgeDays * 86400)));
+			$this->db->execute();
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_knownip');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('id'))
+					->from($this->db->quoteName('#__bfstop_knownip'))
+					->order($this->db->quoteName('last_success').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 1000));
+				$ids = $this->db->loadColumn();
+				if (count($ids) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE id IN ('.
+					implode(',', array_map('intval', $ids)).')');
+				$this->db->execute();
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Keeps the username statistics below $maxRows by deleting the entries of
+	 * the usernames with the fewest attempts, the longest ago first.
+	 */
+	public function trimUsernameStats($maxRows = null)
+	{
+		$maxRows = $maxRows ?? self::$USERNAME_STATS_MAX_ROWS;
+		try
+		{
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_username_stats');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('username'))
+					->from($this->db->quoteName('#__bfstop_username_stats'))
+					->order($this->db->quoteName('attempts').' ASC, '.$this->db->quoteName('last_attempt').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 1000));
+				$usernames = $this->db->loadColumn();
+				if (count($usernames) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_username_stats WHERE username IN ('.
+					implode(',', array_map(array($this->db, 'quote'), $usernames)).')');
+				$this->db->execute();
+			}
 		}
 		catch (\Exception $e)
 		{

@@ -40,10 +40,12 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_unblock" (
 );
 
 
+-- username: the user the unblock link was sent to, to limit the links per user
 CREATE TABLE IF NOT EXISTS "#__bfstop_unblock_token" (
   "token" varchar(40) NOT NULL,
   "block_id" integer NOT NULL,
   "crdate" timestamp without time zone NOT NULL,
+  "username" varchar(150) NULL DEFAULT NULL,
   PRIMARY KEY ("token")
 );
 

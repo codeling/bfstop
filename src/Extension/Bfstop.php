@@ -16,6 +16,7 @@ use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
+use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -27,9 +28,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 {
 	protected $autoloadLanguage = true;
 
+	// values of the "notifyBlockedUser" setting besides 0 (off) and 1 (only to
+	// users who logged in from the blocked address before)
+	private const NotifyBlockedAnyAddress = 2;
+
 	private LoggerHelper $logger;
 	private NotifierHelper $notifier;
 	private DatabaseHelper $mydb;
+	// the client's actual address while handling a failed login; the failed
+	// login entry holds the key it is tracked under instead (IPv6: its network)
+	private ?string $clientAddress = null;
 
 	public static function getSubscribedEvents(): array
 	{
@@ -66,10 +74,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return (substr($haystack, -$length) === $needle);
 	}
 
-	private function getUnblockLink($id)
+	private function getUnblockLink($id, $username)
 	{
 		$token = $this->mydb->getNewUnblockToken($id,
-			TokenHelper::getToken($this->logger));
+			TokenHelper::getToken($this->logger), $username);
 		$link = 'index.php?option=com_bfstop'.
 			'&view=tokenunblock'.
 			'&token='.$token;
@@ -97,7 +105,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		// if the IP address is blocked we actually shouldn't be here in
 		// the first place I guess, but just to make sure
-		if ($this->mydb->isIPBlocked($logEntry->ipaddress))
+		if ($this->mydb->isIPBlocked($this->clientAddress ?? $logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
 				' is already blocked!', Log::ERROR);
@@ -140,6 +148,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, Log::INFO);
 			$htaccessPath = JPATH_ROOT;
 		}
+		// has to be found out before blocking, which marks these failed logins
+		// as handled
+		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
+			$this->mydb->hasFailedLoginsForOtherAccounts(
+				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY)),
+				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
 		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
@@ -151,7 +165,27 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		if ($this->getBoolParam('notifyBlockedUser', false))
 		{
 			$userEmail = $this->mydb->getUserEmailByName($logEntry->username);
-			if ($userEmail != null)
+			if ($userEmail != null && $targetedOtherAccounts)
+			{
+				// The link unblocks this IP address, and it goes to the owner
+				// of the account of the last failed login. If the attempts
+				// which got the address blocked also went against other
+				// accounts, whoever caused that could just as well own this
+				// account - and would get to continue with the other
+				// accounts by following the link.
+				$this->logger->log("Existing user '".
+					$logEntry->username."' was blocked, but the failed ".
+					"logins from this address also targeted other accounts - ".
+					"not sending unblock instructions",
+					Log::INFO);
+			}
+			elseif ($userEmail != null && ($withheld = $this->whyNoUnblockMail($logEntry)) !== null)
+			{
+				$this->logger->log("Existing user '".$logEntry->username.
+					"' was blocked, but ".$withheld." - not sending unblock instructions",
+					Log::INFO);
+			}
+			elseif ($userEmail != null)
 			{
 				$this->logger->log("Existing user '".
 					$logEntry->username.
@@ -159,7 +193,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					"instructions",
 					Log::INFO);
 				$this->notifier->sendUnblockMail($userEmail,
-					$this->getUnblockLink($id));
+					$this->getUnblockLink($id, $logEntry->username));
 			}
 			else
 			{
@@ -169,6 +203,33 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					'notifications', Log::DEBUG);
 			}
 		}
+	}
+
+	/**
+	 * Anybody can make the plugin send an unblock email to a user: by failing
+	 * to log in with that username from an IP address until it is blocked.
+	 * To keep that from being used to flood somebody's inbox:
+	 *
+	 * - by default (mode 1) the email is only sent if the user has logged in
+	 *   from the blocked IP address before - which is where somebody
+	 *   locking themselves out comes from, but never an attacker's address;
+	 * - if it is to go to any address (mode 2), at most one email which can
+	 *   still be used is out for a user at any time.
+	 *
+	 * @return string|null why no email is sent, null if it may be
+	 */
+	private function whyNoUnblockMail($logEntry)
+	{
+		if ($this->getIntParam('notifyBlockedUser', 0) === self::NotifyBlockedAnyAddress)
+		{
+			return $this->mydb->hasCurrentUnblockToken($logEntry->username)
+				? 'there already is an unblock link for this user which can be used'
+				: null;
+		}
+		return $this->mydb->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
+			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
+			? null
+			: 'the user has never logged in from this IP address';
 	}
 
 	private function getRealDurationFromDBDuration($duration)
@@ -361,6 +422,25 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $delayDuration;
 	}
 
+	private function trackedAddress($ipAddress)
+	{
+		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', 64));
+	}
+
+	/**
+	 * The form in which the username of a failed login is stored, mailed and
+	 * logged, see UsernameHelper.
+	 */
+	private function usernameForStorage($username)
+	{
+		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
+		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
+			($this->mydb->accountExists($username) ||
+				RiskHelper::isCommonUsername($this->params, $username));
+		return UsernameHelper::forStorage($username, $mode, $isReadable,
+			$this->getApplication()->get('secret', ''));
+	}
+
 	public function onUserLoginFailure($event)
 	{
 		$user = $event->getArgument(0);
@@ -383,23 +463,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$username = mb_strimwidth($user['username'], 0, 150, "...");
 		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
-		$delayDuration = $this->determineDelayDuration($riskScore);
-		if ($delayDuration != 0)
-		{
-			sleep((int) round($delayDuration));
-		}
-
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
-		$logEntry->ipaddress = $ipAddress;
+		$this->clientAddress = $ipAddress;
+		$logEntry->ipaddress = $this->trackedAddress($ipAddress);
 		$logEntry->logtime = date("Y-m-d H:i:s");
-		$logEntry->username = $username;
+		$logEntry->username = $this->usernameForStorage($username);
 		$logEntry->origin = $this->getApplication()->getClientId();
 
 		$this->logger->log('Failed login attempt from IP address '.
 			$logEntry->ipaddress, Log::DEBUG);
 
-		// insert into log:
+		// Everything is recorded and evaluated *before* the delay below. The
+		// password has been checked by now, so the delay only holds back the
+		// response; if the attempt was only counted after the sleep, a burst
+		// of parallel requests would all run before the first of them
+		// reached the block threshold, and each of them would tie up a
+		// worker for the whole delay.
 		$this->mydb->insertFailedLogin($logEntry);
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
@@ -408,6 +488,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry, $riskScore);
 		$this->accountThrottleIfNeeded($logEntry);
+
+		$delayDuration = $this->determineDelayDuration($riskScore);
+		if ($delayDuration != 0)
+		{
+			// a blocked address gets nothing more out of a slow response;
+			// don't let it hold on to a worker (attackers could otherwise use
+			// the delay to exhaust the server's workers)
+			if ($this->mydb->isIPBlocked($ipAddress))
+			{
+				$this->logger->log('Not delaying the response, IP address '.
+					$ipAddress.' is blocked', Log::DEBUG);
+			}
+			else
+			{
+				sleep((int) round($delayDuration));
+			}
+		}
 	}
 
 	public function onUserLogin($event)
@@ -423,21 +520,36 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info->username = $user['username'];
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
-		$this->mydb->successfulLogin($info);
+		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress));
 	}
 
-	private function isUnblockRequest()
+	/**
+	 * A blocked IP may only reach com_bfstop's unblock page, and only with an
+	 * unexpired token that was issued for one of *its own* blocks. The pass
+	 * has to stay this narrow: the request is the one that consumes the token,
+	 * so it must really be the unblock view (no task, no other component).
+	 * Letting any request with view=tokenunblock through would turn a single
+	 * valid token - which the owner of any account can get emailed by getting
+	 * themselves blocked - into a reusable key around the block for logins
+	 * (e.g. option=com_users&task=user.login&view=tokenunblock&token=...).
+	 */
+	private function isUnblockRequest($blockIds)
 	{
 		$input = $this->getApplication()->input;
-		$view = $input->getString('view', '');
+		if (strcmp($input->getCmd('option', ''), 'com_bfstop') != 0 ||
+			strcmp($input->getCmd('view', ''), 'tokenunblock') != 0 ||
+			$input->getCmd('task', '') !== '')
+		{
+			return false;
+		}
 		$token = $input->getString('token', '');
-		$result = (strcmp($view, "tokenunblock") == 0 &&
-			$this->mydb->unblockTokenExists($token));
+		$result = $this->mydb->unblockTokenValidForBlocks($token, $blockIds);
 		if ($result)
 		{
-			$this->logger->log('Seeing valid unblock token ('.
-				$token.'), letting the request pass through '.
-				'to com_bfstop',
+			// deliberately not logging the token: it is a bearer secret and
+			// the log is readable in the backend
+			$this->logger->log('Seeing a valid unblock token for this IP '.
+				'address, letting the request pass through to com_bfstop',
 				Log::INFO);
 		}
 		return $result;
@@ -500,19 +612,49 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$purgeAge = $this->getIntParam('deleteOld', 0);
-		if ($purgeAge > 0)
+		// periodic maintenance, at most once a day
+		$purgeInterval = 86400; // = 24*60*60 => one day
+		$lastPurge = $this->params->get('lastPurge', 0);
+		$now = time();
+		if ($now > ($lastPurge + $purgeInterval))
 		{
-			$purgeInterval = 86400; // = 24*60*60 => one day
-			$lastPurge = $this->params->get('lastPurge', 0);
-			$now = time();
-			if ($now > ($lastPurge + $purgeInterval))
+			$purgeAge = $this->getIntParam('deleteOld', 0);
+			if ($purgeAge > 0)
 			{
 				$this->mydb->purgeOldEntries($purgeAge);
-				$this->params->set('lastPurge', $now);
-				$this->mydb->saveParams($this->params);
 			}
+			// regardless of the purge age setting: these are not deleted by age
+			$this->mydb->trimUsernameStats();
+			$this->mydb->pruneKnownIps();
+			$this->mydb->purgeExpiredUnblockTokens();
+			$this->params->set('lastPurge', $now);
+			$this->mydb->saveLastPurge($now);
 		}
+	}
+
+	/**
+	 * The status code of the page shown to a blocked client, or null for none
+	 * (which makes it 200). Set with http_response_code(), not as a raw
+	 * "HTTP/1.x 403 ..." header: that would hard-code the protocol version,
+	 * which is the web server's business (HTTP/2 doesn't even have a status line).
+	 */
+	public static function blockedResponseCode($useHttpError)
+	{
+		return $useHttpError ? 403 : null;
+	}
+
+	/**
+	 * The headers of the page shown to a blocked client.
+	 *
+	 * It must never be cached: a cache (browser, proxy, CDN) which kept it
+	 * would show it to other visitors of the same URL.
+	 */
+	public static function blockedResponseHeaders()
+	{
+		return array(
+			'Cache-Control: no-store, no-cache, must-revalidate, private',
+			'Pragma: no-cache',
+		);
 	}
 
 	/**
@@ -545,7 +687,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$this->mydb->getClientString(
 					$this->getApplication()->getClientId()),
 				Log::INFO);
-			if ($this->isUnblockRequest())
+			if ($this->isUnblockRequest($blockIds))
 			{
 				return;
 			}
@@ -561,9 +703,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				return;
 			}
 			$this->mydb->recordBlockedAttempt($blockIds);
-			if ($this->getBoolParam('useHttpError', false))
+			$status = self::blockedResponseCode($this->getBoolParam('useHttpError', true));
+			if ($status !== null)
 			{
-				header('HTTP/1.0 403 Forbidden');
+				http_response_code($status);
+			}
+			foreach (self::blockedResponseHeaders() as $header)
+			{
+				header($header);
 			}
 			$message = $this->params->get('blockedMessage',
 				Text::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));

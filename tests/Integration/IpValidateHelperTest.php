@@ -96,6 +96,12 @@ class IpValidateHelperTest extends IntegrationTestCase
 			'negative subnet'       => array('203.0.113.0/-1', 'COM_BFSTOP_IP_INVALID_SUBNET', '-1'),
 			'non-numeric subnet'    => array('203.0.113.0/abc', 'COM_BFSTOP_IP_INVALID_SUBNET', 'abc'),
 			'empty subnet'          => array('203.0.113.0/', 'COM_BFSTOP_IP_INVALID_SUBNET', ''),
+			// is_numeric() accepts these; they must not get as far as a config file
+			'exponent subnet'       => array('203.0.113.0/1e1', 'COM_BFSTOP_IP_INVALID_SUBNET', '1e1'),
+			'hex subnet'            => array('203.0.113.0/0x8', 'COM_BFSTOP_IP_INVALID_SUBNET', '0x8'),
+			'fractional subnet'     => array('203.0.113.0/8.5', 'COM_BFSTOP_IP_INVALID_SUBNET', '8.5'),
+			'padded subnet'         => array('203.0.113.0/ 8', 'COM_BFSTOP_IP_INVALID_SUBNET', ' 8'),
+			'subnet with newline'   => array("203.0.113.0/8\n", 'COM_BFSTOP_IP_INVALID_SUBNET', "8\n"),
 			'not an address'        => array('foo.bar', 'COM_BFSTOP_IP_INVALID_ADDRESS', 'foo.bar'),
 			'octet out of range'    => array('203.0.113.256', 'COM_BFSTOP_IP_INVALID_ADDRESS', '203.0.113.256'),
 			'empty'                 => array('', 'COM_BFSTOP_IP_INVALID_ADDRESS', ''),

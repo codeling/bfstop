@@ -97,27 +97,43 @@ class IpHelperAddressTest extends IntegrationTestCase
 	{
 		return array(
 			'single public IP'        => array('203.0.113.5', '203.0.113.5'),
-			'first public in list'    => array('203.0.113.5, 198.51.100.9', '203.0.113.5'),
-			'skips private'           => array('10.0.0.1, 192.168.1.1, 203.0.113.5', '203.0.113.5'),
-			'skips loopback/reserved' => array('127.0.0.1,0.0.0.0, 203.0.113.5', '203.0.113.5'),
+			'last entry wins'         => array('203.0.113.5, 198.51.100.9', '198.51.100.9'),
+			'forged leftmost entry'   => array('1.2.3.4, 203.0.113.5', '203.0.113.5'),
+			'private client'          => array('203.0.113.5, 10.0.0.9', '10.0.0.9'),
 			'whitespace is trimmed'   => array('   203.0.113.5   ', '203.0.113.5'),
-			'garbage is skipped'      => array('not-an-ip, 203.0.113.5', '203.0.113.5'),
 			'public IPv6'             => array('fd00::1, 2001:4860:4860::8888', '2001:4860:4860::8888'),
+			'trusted proxy hop'       => array('203.0.113.5, 198.51.100.7', '203.0.113.5'),
 		);
 	}
 
 	#[DataProvider('trustedProxyHeaderProvider')]
-	public function testTrustedProxyUsesFirstPublicIpFromHeader($header, $expected)
+	public function testTrustedProxyUsesRightmostNonProxyAddress($header, $expected)
 	{
 		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));
 		$_SERVER['HTTP_X_FORWARDED_FOR'] = $header;
 		$this->assertSame($expected, IpHelper::getAddress($this->logger));
 	}
 
-	public function testTrustedProxyWithOnlyPrivateAddressesFallsBack()
+	public function testTrustedProxyListAndSubnets()
+	{
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '192.0.2.1, 198.51.100.0/24'));
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '1.2.3.4, 203.0.113.5, 192.0.2.1';
+		$this->assertSame('203.0.113.5', IpHelper::getAddress($this->logger));
+	}
+
+	public function testGarbageAsLastEntryFallsBack()
+	{
+		// nothing to the left of it can be trusted
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5, not-an-ip';
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'falling back to REMOTE_ADDR'));
+	}
+
+	public function testHeaderOfOnlyTrustedProxiesFallsBack()
 	{
 		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));
-		$_SERVER['HTTP_X_FORWARDED_FOR'] = '10.1.2.3, 172.16.0.1';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '198.51.100.7';
 		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
 		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'falling back to REMOTE_ADDR'));
 	}

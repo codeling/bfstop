@@ -41,10 +41,12 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock (
 
 -- stores randomized tokens for unblocking an IP via an email
 -- to the blocked user
+-- username: the user the unblock link was sent to, to limit the links per user
 CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 	token varchar(40) NOT NULL,
 	block_id int(10) NOT NULL,
 	crdate datetime NOT NULL,
+	username varchar(150) NULL DEFAULT NULL,
 	PRIMARY KEY (token)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 

@@ -121,4 +121,24 @@ class PluginEventsTest extends IntegrationTestCase
 		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
 		$this->assertSame('Admin', $this->queryValue("SELECT username FROM #__bfstop_knownip WHERE ipaddress='203.0.113.30'"));
 	}
+
+	public function testSuccessfulLoginOfAnIpv6ClientIsRememberedByNetwork()
+	{
+		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2::77';
+		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2:abcd::1'; // the next day's privacy address
+		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+		$this->assertSame('2001:db8:1:2::/64', $this->queryValue('SELECT ipaddress FROM #__bfstop_knownip'));
+	}
+
+	public function testSuccessfulLoginHandlesTheFailedLoginsOfItsNetwork()
+	{
+		$this->failedLogin('2001:db8:1:2::1', 'Admin');
+		$this->failedLogin('2001:db8:1:2::2', 'Admin');
+		$this->assertSame(2, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2::3';
+		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+	}
 }
