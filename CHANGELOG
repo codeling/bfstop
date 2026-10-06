@@ -94,6 +94,14 @@
     old behaviour is the third. Known IP addresses are recorded at
     successful logins, so users get the message again after having logged
     in once. The username a link was sent to is recorded with its token
+  - The addresses users logged in from (used for the risk score and for the
+    unblock message) are remembered by network for IPv6 clients, as failed
+    logins are, so a client whose address changes within its /64 every day
+    stays a known one and doesn't add a row per address; the lookup ignores
+    the case of the username. They are forgotten a year after the last login
+    from them (and the table is limited to 100000 rows, oldest first). This
+    maintenance, like the limit of the username statistics, runs once a day
+    whatever the purge age is set to
   - Security: IPv6 clients are now tracked per network (default: /64, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an

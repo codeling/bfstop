@@ -47,14 +47,14 @@ class RiskHelperTest extends IntegrationTestCase
 	private function db($knownIp = false)
 	{
 		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('isKnownIpUsername')->willReturn($knownIp);
+		$db->method('hasLoggedInFrom')->willReturn($knownIp);
 		return $db;
 	}
 
 	public function testAllSignalsDisabledScoresZero()
 	{
 		$db = $this->createMock(DatabaseHelper::class);
-		$db->expects($this->never())->method('isKnownIpUsername');
+		$db->expects($this->never())->method('hasLoggedInFrom');
 		$db->expects($this->never())->method('getCachedHostname');
 		$_SERVER['HTTP_USER_AGENT'] = '';
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, self::allOff(), '203.0.113.5', 'admin'));
@@ -79,7 +79,7 @@ class RiskHelperTest extends IntegrationTestCase
 	public function testKnownIpLookupFailureFailsSafe()
 	{
 		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('isKnownIpUsername')->willThrowException(new \RuntimeException('db down'));
+		$db->method('hasLoggedInFrom')->willThrowException(new \RuntimeException('db down'));
 		$logger = $this->logger;
 		$params = self::allOff(array('riskKnownIpEnabled' => 1));
 		$this->assertSame(0, RiskHelper::computeScore($db, $logger, $params, '203.0.113.5', 'jdoe'));
@@ -148,10 +148,31 @@ class RiskHelperTest extends IntegrationTestCase
 			'riskReverseDnsEnabled' => 1,
 		));
 		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('isKnownIpUsername')->willReturn(true);
+		$db->method('hasLoggedInFrom')->willReturn(true);
 		$db->method('getCachedHostname')->willReturn(null);
 		unset($_SERVER['HTTP_USER_AGENT']);
 		// known IP -5, common username +2, no user agent +2, no rDNS +2
 		$this->assertSame(1, RiskHelper::computeScore($db, $this->logger, $params, '203.0.113.5', 'admin'));
+	}
+
+	public function testKnownIpScoreRecognisesTheNetworkOfAnIpv6Client()
+	{
+		// logins are remembered by network (see DatabaseHelper::successfulLogin()),
+		// so an IPv6 client switching addresses is still a known one
+		$db = new DatabaseHelper($this->logger);
+		$db->successfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::/64');
+		$params = self::allOff(array('riskKnownIpEnabled' => 1, 'riskKnownIpPoints' => 5));
+		$this->assertSame(-5, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2:aaaa::9', 'bob'));
+		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:3::9', 'bob'), 'another network');
+		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2:aaaa::9', 'eve'), 'another user');
+	}
+
+	public function testKnownIpScoreHonoursTheConfiguredNetworkSize()
+	{
+		$db = new DatabaseHelper($this->logger);
+		$db->successfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::5');
+		$params = self::allOff(array('riskKnownIpEnabled' => 1, 'riskKnownIpPoints' => 5, 'ipv6PrefixLength' => 128));
+		$this->assertSame(-5, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'bob'));
+		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::6', 'bob'));
 	}
 }

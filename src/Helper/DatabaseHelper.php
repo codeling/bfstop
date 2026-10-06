@@ -32,6 +32,13 @@ class DatabaseHelper
 	// many usernames as they like
 	public static $USERNAME_STATS_MAX_ROWS = 10000;
 
+	// known IP addresses (where a user logged in from) are forgotten after
+	// this long without a login from them, and the table is kept below this
+	// number of rows, oldest first: a visitor with an account can log in from
+	// as many addresses as they like
+	public static $KNOWN_IP_MAX_AGE_DAYS = 365;
+	public static $KNOWN_IP_MAX_ROWS = 100000;
+
 	// how long a reverse-DNS lookup result is trusted before being redone -
 	// keeps the (potentially slow) gethostbyaddr() call to at most once per
 	// IP per TTL window, see issue #103
@@ -591,53 +598,64 @@ class DatabaseHelper
 
 	/**
 	 * @param object      $info           ipaddress (the client's address) and username
-	 * @param string|null $trackedAddress the key failed logins of this client
-	 *                                    are recorded under (see
-	 *                                    IpHelper::trackedAddress()), if different
+	 * @param string|null $trackedAddress the key this client is tracked by (see
+	 *                                    IpHelper::trackedAddress(): for IPv6 its
+	 *                                    network), if not its address. Failed
+	 *                                    logins are recorded, and logins
+	 *                                    remembered, under this key
 	 */
 	public function successfulLogin($info, $trackedAddress = null)
 	{
+		$key = $trackedAddress ?? $info->ipaddress;
 		$handled = new \stdClass();
-		$handled->ipaddress = $trackedAddress ?? $info->ipaddress;
+		$handled->ipaddress = $key;
 		$handled->username = $info->username;
 		$this->setFailedLoginHandled($handled, true);
-		$this->recordKnownIpUsername($info->ipaddress, $info->username);
-	}
-
-	public function isKnownIpUsername($ipaddress, $username)
-	{
-		try
-		{
-			$sql = "SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
-				"ipaddress = ".$this->db->quote($ipaddress).
-				" AND username = ".$this->db->quote($username);
-			$this->db->setQuery($sql);
-			return ((int) $this->db->loadResult()) > 0;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
+		$this->recordKnownIpUsername($key, $info->username);
 	}
 
 	/**
-	 * Whether $username has logged in successfully from $ipaddress before -
-	 * or, for an IPv6 client tracked by its network (see
-	 * IpHelper::trackedAddress()), from another address of the same network:
-	 * IPv6 clients commonly switch addresses within their network.
+	 * Whether $username has logged in successfully from $ipaddress before.
+	 *
+	 * Logins are remembered under the key the client is tracked by (see
+	 * IpHelper::trackedAddress()): an IPv4 address itself, an IPv6 address by
+	 * its network, as IPv6 clients commonly switch addresses within it. So
+	 * is a login from any address of the network a login from this one.
 	 */
 	public function hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength)
 	{
 		try
 		{
-			$this->db->setQuery("SELECT ipaddress FROM #__bfstop_knownip".
-				" WHERE LOWER(username) = LOWER(".$this->db->quote($username).")");
-			$network = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
+			$key = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
+			$user = "LOWER(".$this->db->quote($username).")";
+			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
+				"ipaddress IN (".$this->db->quote($key).", ".$this->db->quote($ipaddress).")".
+				" AND LOWER(username) = ".$user);
+			if (((int) $this->db->loadResult()) > 0)
+			{
+				return true;
+			}
+			if (strpos($ipaddress, ':') === false)
+			{
+				return false;
+			}
+			// IPv6: look for entries under another spelling of the address,
+			// or recorded at another granularity (the setting was changed)
+			$this->db->setQuery("SELECT ipaddress FROM #__bfstop_knownip WHERE LOWER(username) = ".$user);
+			$ipBin = @inet_pton($ipaddress);
 			foreach ($this->db->loadColumn() as $known)
 			{
-				if (strcasecmp($known, $ipaddress) === 0 ||
-					($network !== $ipaddress && IpHelper::trackedAddress($known, $ipv6PrefixLength) === $network))
+				if (strpos($known, '/') !== false)
+				{
+					$match = IpHelper::isInSubnet($ipaddress, $known);
+				}
+				else
+				{
+					$knownBin = @inet_pton($known);
+					$match = $knownBin !== false &&
+						($knownBin === $ipBin || IpHelper::trackedAddress($known, $ipv6PrefixLength) === $key);
+				}
+				if ($match)
 				{
 					return true;
 				}
@@ -727,7 +745,7 @@ class DatabaseHelper
 			$now = date("Y-m-d H:i:s");
 			$sql = "SELECT id FROM #__bfstop_knownip WHERE ".
 				"ipaddress = ".$this->db->quote($ipaddress).
-				" AND username = ".$this->db->quote($username);
+				" AND LOWER(username) = LOWER(".$this->db->quote($username).")";
 			$this->db->setQuery($sql);
 			$id = $this->db->loadResult();
 			if ($id)
@@ -834,6 +852,48 @@ class DatabaseHelper
 			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
 				->createCacheController('callback', array('defaultgroup' => 'com_plugins'))
 				->clean();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Forgets the addresses users logged in from longer ago than $maxAgeDays,
+	 * and, oldest first, as many more as needed to keep at most $maxRows.
+	 */
+	public function pruneKnownIps($maxAgeDays = null, $maxRows = null)
+	{
+		$maxAgeDays = $maxAgeDays ?? self::$KNOWN_IP_MAX_AGE_DAYS;
+		$maxRows = $maxRows ?? self::$KNOWN_IP_MAX_ROWS;
+		try
+		{
+			$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE last_success < '.
+				$this->db->quote(date("Y-m-d H:i:s", time() - $maxAgeDays * 86400)));
+			$this->db->execute();
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_knownip');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('id'))
+					->from($this->db->quoteName('#__bfstop_knownip'))
+					->order($this->db->quoteName('last_success').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 1000));
+				$ids = $this->db->loadColumn();
+				if (count($ids) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE id IN ('.
+					implode(',', array_map('intval', $ids)).')');
+				$this->db->execute();
+			}
 		}
 		catch (\Exception $e)
 		{

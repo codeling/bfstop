@@ -184,10 +184,91 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$login = (object) array('ipaddress' => '203.0.113.5', 'username' => 'bob');
 		$this->helper->successfulLogin($login);
 		$this->helper->successfulLogin($login); // second time: update instead of insert
-		$this->assertTrue($this->helper->isKnownIpUsername('203.0.113.5', 'bob'));
-		$this->assertFalse($this->helper->isKnownIpUsername('203.0.113.5', 'eve'));
-		$this->assertFalse($this->helper->isKnownIpUsername('203.0.113.6', 'bob'));
+		$this->assertTrue($this->helper->hasLoggedInFrom('203.0.113.5', 'bob', 64));
+		$this->assertFalse($this->helper->hasLoggedInFrom('203.0.113.5', 'eve', 64));
+		$this->assertFalse($this->helper->hasLoggedInFrom('203.0.113.6', 'bob', 64));
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+	}
+
+	private function knownRows()
+	{
+		$this->db->setQuery('SELECT ipaddress, username FROM #__bfstop_knownip ORDER BY id');
+		return array_map(fn ($row) => $row->ipaddress.' '.$row->username, $this->db->loadObjectList());
+	}
+
+	public function testIpv6ClientsAreRememberedByNetwork()
+	{
+		// the privacy extensions give an IPv6 client a new address every day:
+		// one row per address would pile up, and none of them match tomorrow
+		$net = '2001:db8:1:2::/64';
+		$this->helper->successfulLogin((object) array('ipaddress' => '2001:db8:1:2:aaaa::1', 'username' => 'bob'), $net);
+		$this->helper->successfulLogin((object) array('ipaddress' => '2001:db8:1:2:bbbb::2', 'username' => 'bob'), $net);
+		$this->assertSame(array($net.' bob'), $this->knownRows());
+		$this->assertTrue($this->helper->hasLoggedInFrom('2001:db8:1:2:cccc::3', 'bob', 64), 'a third address of the network');
+		$this->assertFalse($this->helper->hasLoggedInFrom('2001:db8:1:3::1', 'bob', 64), 'another network');
+		$this->assertFalse($this->helper->hasLoggedInFrom('2001:db8:1:2:cccc::3', 'eve', 64), 'another user');
+	}
+
+	public function testKnownIpUsernameIsCaseInsensitive()
+	{
+		$this->helper->successfulLogin((object) array('ipaddress' => '203.0.113.5', 'username' => 'Bob'));
+		$this->helper->successfulLogin((object) array('ipaddress' => '203.0.113.5', 'username' => 'bob'));
+		$this->assertSame(array('203.0.113.5 Bob'), $this->knownRows(), 'one row, not one per spelling');
+		$this->assertTrue($this->helper->hasLoggedInFrom('203.0.113.5', 'BOB', 64));
+	}
+
+	public function testSuccessfulLoginHandlesFailuresRecordedUnderTheNetwork()
+	{
+		$net = '2001:db8:1:2::/64';
+		$this->failedLogin($net, 'bob', 0);
+		$this->failedLogin($net, 'eve', 0);
+		$this->helper->successfulLogin((object) array('ipaddress' => '2001:db8:1:2::9', 'username' => 'bob'), $net);
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0"), 'only bob\'s');
+	}
+
+	public function testEarlierRecordingsAreStillRecognised()
+	{
+		$row = fn ($ip) => $this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => 'bob',
+			'first_success' => self::minutesAgo(10), 'last_success' => self::minutesAgo(5)));
+		// recorded by address (earlier version), now looked up by network
+		$row('2001:db8:1:2:aaaa::1');
+		$this->assertTrue($this->helper->hasLoggedInFrom('2001:db8:1:2:bbbb::2', 'bob', 64));
+		$this->assertFalse($this->helper->hasLoggedInFrom('2001:db8:1:3::2', 'bob', 64));
+		// the same address in another spelling
+		$this->assertTrue($this->helper->hasLoggedInFrom('2001:0DB8:1:2:AAAA:0:0:1', 'bob', 128));
+		// recorded by network, then the setting was changed to single addresses
+		$row('2001:db8:5:6::/64');
+		$this->assertTrue($this->helper->hasLoggedInFrom('2001:db8:5:6::77', 'bob', 128));
+		$this->assertFalse($this->helper->hasLoggedInFrom('2001:db8:5:7::77', 'bob', 128));
+		// IPv4 is only ever matched exactly
+		$row('203.0.113.5');
+		$this->assertTrue($this->helper->hasLoggedInFrom('203.0.113.5', 'bob', 64));
+		$this->assertFalse($this->helper->hasLoggedInFrom('203.0.113.6', 'bob', 64));
+	}
+
+	public function testPruneKnownIpsForgetsOldLogins()
+	{
+		$row = fn ($ip, $daysAgo) => $this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => 'bob',
+			'first_success' => self::minutesAgo($daysAgo * 1440 + 1), 'last_success' => self::minutesAgo($daysAgo * 1440)));
+		$row('203.0.113.1', 400);
+		$row('203.0.113.2', 364);
+		$row('203.0.113.3', 1);
+		$this->helper->pruneKnownIps();
+		$this->assertSame(array('203.0.113.2 bob', '203.0.113.3 bob'), $this->knownRows());
+	}
+
+	public function testPruneKnownIpsKeepsTheNewestRows()
+	{
+		$row = fn ($ip, $daysAgo) => $this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => 'bob',
+			'first_success' => self::minutesAgo($daysAgo * 1440 + 1), 'last_success' => self::minutesAgo($daysAgo * 1440)));
+		$row('203.0.113.1', 30);
+		$row('203.0.113.2', 10);
+		$row('203.0.113.3', 20);
+		$row('203.0.113.4', 5);
+		$this->helper->pruneKnownIps(365, 10);
+		$this->assertCount(4, $this->knownRows(), 'below the limit');
+		$this->helper->pruneKnownIps(365, 2);
+		$this->assertSame(array('203.0.113.2 bob', '203.0.113.4 bob'), $this->knownRows());
 	}
 
 	public function testDnsCache()

@@ -102,6 +102,39 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked();
 	}
 
+	private function knownIps()
+	{
+		$this->db->setQuery('SELECT ipaddress FROM #__bfstop_knownip ORDER BY ipaddress');
+		return $this->db->loadColumn();
+	}
+
+	private function knownIp($ip, $daysAgo)
+	{
+		$this->insert('#__bfstop_knownip', array('ipaddress' => $ip, 'username' => 'bob',
+			'first_success' => self::minutesAgo($daysAgo * 1440 + 1), 'last_success' => self::minutesAgo($daysAgo * 1440)));
+	}
+
+	public function testDailyMaintenancePrunesAndRemembersWhenItRan()
+	{
+		// purge age 0: nothing is purged by age, but this has to happen regardless
+		$this->configure(array('deleteOld' => 0, 'blockNumber' => 7));
+		$this->knownIp('203.0.113.1', 400);
+		$this->knownIp('203.0.113.2', 1);
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.2'), $this->knownIps());
+		$saved = json_decode($this->getPluginParams(), true);
+		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
+		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
+	}
+
+	public function testMaintenanceRunsOnlyOncePerDay()
+	{
+		$this->configure(array('lastPurge' => time() - 3600));
+		$this->knownIp('203.0.113.1', 400);
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.1'), $this->knownIps(), 'ran an hour ago already');
+	}
+
 	public function testBlockPageIsNeverCached()
 	{
 		foreach (array(true, false) as $useHttpError)

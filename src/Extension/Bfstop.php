@@ -625,6 +625,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 			// regardless of the purge age setting: these are not deleted by age
 			$this->mydb->trimUsernameStats();
+			$this->mydb->pruneKnownIps();
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);
 		}

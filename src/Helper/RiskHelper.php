@@ -40,7 +40,7 @@ class RiskHelper
 		}
 		try
 		{
-			if ($db->isKnownIpUsername($ipaddress, $username))
+			if ($db->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', 64)))
 			{
 				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
 			}
