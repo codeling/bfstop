@@ -33,6 +33,22 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// users who logged in from the blocked address before)
 	private const NotifyBlockedAnyAddress = 2;
 
+	/**
+	 * What the settings are while they have not been saved: the same as the
+	 * settings page shows for them (com_bfstop's forms/settings.xml - a test
+	 * compares them). The plugin is enabled by the installation, so it runs
+	 * with these until an administrator opens the settings.
+	 */
+	public const DefaultSettings = array(
+		'blockNumber' => 10,
+		'checkInterval' => 10080,
+		'maxBlocksBefore' => 3,
+		'notifyUsePasswordReminder' => 1,
+		'adaptiveDelayMax' => 0,
+		'adaptiveDelayThresholdMin' => 50,
+		'adaptiveDelayThresholdMax' => 200,
+	);
+
 	private LoggerHelper $logger;
 	private NotifierHelper $notifier;
 	private DatabaseHelper $mydb;
@@ -125,7 +141,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				' is already blocked!', Log::ERROR);
 			return;
 		}
-		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', 0);
+		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', self::DefaultSettings['maxBlocksBefore']);
 		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
 		if ($maxBlocksBefore > 0 || $progressiveEnabled)
 		{
@@ -166,7 +182,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
 			$this->mydb->hasFailedLoginsForOtherAccounts(
-				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY)),
+				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', self::DefaultSettings['checkInterval'])),
 				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
 		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
 		if ($id < 1)
@@ -311,7 +327,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function determineEffectiveBlockNumber($riskScore)
 	{
-		$blockNumber = $this->getIntParam('blockNumber', 15);
+		$blockNumber = $this->getIntParam('blockNumber', self::DefaultSettings['blockNumber']);
 		$reductionPerPoint = $this->getIntParam('riskBlockNumberReductionPerPoint', 1);
 		$minBlockNumber = $this->getIntParam('riskMinBlockNumber', 2);
 		$effective = (int) round($blockNumber - $riskScore * $reductionPerPoint);
@@ -323,7 +339,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$blockInterval = $this->getIntParam('blockDuration', NotifierHelper::$ONE_DAY);
 		$maxNumber = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
-			$this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY));
+			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
 		if ($this->mydb->getNumberOfFailedLogins(
 			$checkInterval,
 			$logEntry->ipaddress,
@@ -389,7 +405,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// remaining attempts notification only makes sense if we
 		// actually block
 		$notifyRemaining = $this->getBoolParam('notifyRemainingAttempts', false);
-		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder', -1);
+		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder', self::DefaultSettings['notifyUsePasswordReminder']);
 		if ($this->getStringParam('blockMode', 'full') === 'off' ||
 			(!$notifyRemaining &&
 			  !($passwordReminder == -1 || $passwordReminder > 0)))
@@ -399,7 +415,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$allowedAttempts = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
-			$this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY));
+			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
 		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
 			$checkInterval,
 			$logEntry->ipaddress, $logEntry->logtime);
@@ -454,9 +470,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$adaptive = $this->getBoolParam('adaptiveDelay', false);
 		if ($adaptive)
 		{
-			$maxDelay = $this->getIntParam('adaptiveDelayMax', 60);
-			$lowThreshold = $this->getIntParam('adaptiveDelayThresholdMin', 50);
-			$highThreshold = $this->getIntParam('adaptiveDelayThresholdMax', 1000);
+			$maxDelay = $this->getIntParam('adaptiveDelayMax', self::DefaultSettings['adaptiveDelayMax']);
+			$lowThreshold = $this->getIntParam('adaptiveDelayThresholdMin', self::DefaultSettings['adaptiveDelayThresholdMin']);
+			$highThreshold = $this->getIntParam('adaptiveDelayThresholdMax', self::DefaultSettings['adaptiveDelayThresholdMax']);
 			if ($lowThreshold > $highThreshold)
 			{
 				$tmp = $lowThreshold;
