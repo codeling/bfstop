@@ -33,6 +33,9 @@ For any further questions, don't hesitate to contact me under bfstop@bfroehler.i
 - Sending the test email needs the permission to change the settings, and the
   .htaccess and GeoIP database path settings are validated.
 - Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.
+- The "Blocked IPs (database)" list now shows whether expired blocks are deleted
+  automatically ("Prune old attempts" setting), and the username statistics view says
+  that the table is limited to 10,000 usernames.
 
 ## 2.0.0: Joomla 5/6 migration
 

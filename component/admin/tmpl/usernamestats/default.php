@@ -14,6 +14,7 @@ use Joomla\CMS\Router\Route;
 ?>
 <div class="alert alert-info">
 	<?php echo Text::_('COM_BFSTOP_USERNAMESTATS_INFO'); ?>
+	<?php echo Text::sprintf('COM_BFSTOP_USERNAMESTATS_AUTOTRIM', $this->maxUsernames); ?>
 </div>
 <form method="post" name="adminForm" id="adminForm">
 	<input type="hidden" name="task" value="" />

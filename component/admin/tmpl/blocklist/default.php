@@ -9,8 +9,15 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Router\Route;
 
+$settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
 ?>
+<div class="alert alert-info">
+	<?php echo ($this->autoPurgeWeeks > 0)
+		? Text::sprintf('COM_BFSTOP_BLOCKLIST_AUTOPURGE_ENABLED', $this->autoPurgeWeeks, $settingsUrl)
+		: Text::sprintf('COM_BFSTOP_BLOCKLIST_AUTOPURGE_DISABLED', $settingsUrl); ?>
+</div>
 <form method="post" name="adminForm" id="adminForm">
 	<input type="hidden" name="task" value="unblock" />
 	<?php echo HTMLHelper::_('form.token'); ?>
