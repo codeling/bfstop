@@ -32,7 +32,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 		{
 			self::markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
 		}
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
@@ -41,7 +41,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	{
 		if (self::$originalParams !== null)
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();

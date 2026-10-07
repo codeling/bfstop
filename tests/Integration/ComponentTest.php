@@ -270,7 +270,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// Joomla shows the messages as HTML
 		$app = Factory::getApplication();
-		Factory::getLanguage()->load('com_bfstop', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
 		$app->getMessageQueue(true);
 		$evil = '<script>alert(1)</script>';
 		$this->assertFalse(IpValidateHelper::validIPRange($evil));

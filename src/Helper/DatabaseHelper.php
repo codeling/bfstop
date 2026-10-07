@@ -14,6 +14,7 @@ use Joomla\CMS\Cache\CacheControllerFactoryInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
+use Joomla\Database\DatabaseInterface;
 
 class DatabaseHelper
 {
@@ -82,7 +83,7 @@ class DatabaseHelper
 
 	public function __construct(LoggerHelper $logger)
 	{
-		$this->db = Factory::getDbo();
+		$this->db = Factory::getContainer()->get(DatabaseInterface::class);
 		$this->logger = $logger;
 	}
 

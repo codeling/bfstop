@@ -79,7 +79,7 @@ abstract class IntegrationTestCase extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->db = Factory::getDbo();
+		$this->db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$this->logger = new RecordingLogger();
 		$this->emptyTables();
 	}

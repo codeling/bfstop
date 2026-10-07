@@ -27,7 +27,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	public static function setUpBeforeClass(): void
 	{
 		parent::setUpBeforeClass();
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
@@ -36,7 +36,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		if (self::$originalParams !== null)
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();

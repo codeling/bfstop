@@ -11,6 +11,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
+use Joomla\Database\DatabaseInterface;
 
 class PlgsystembfstopInstallerScript
 {
@@ -21,7 +22,7 @@ class PlgsystembfstopInstallerScript
 		// plugins install disabled by default, but bfstop only does anything
 		// useful while running, and all its settings now live in the
 		// component - so there's nothing left to configure before enabling it.
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(DatabaseInterface::class);
 		$query = $db->getQuery(true)
 			->update($db->quoteName('#__extensions'))
 			->set($db->quoteName('enabled') . ' = 1')
@@ -71,7 +72,7 @@ class PlgsystembfstopInstallerScript
 		// for version 1.4.2, whitelist was renamed to allowlist, but only for updates;
 		// for new installs, the old name remained, so let's fix this for all installations
 		// (MySQL only - PostgreSQL is supported from 2.0.0 on, so no such table exists there):
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(DatabaseInterface::class);
 		if ($db->getServerType() === 'mysql')
 		{
 			try
