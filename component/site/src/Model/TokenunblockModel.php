@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Site\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
@@ -63,7 +64,7 @@ class TokenunblockModel extends BaseDatabaseModel
 		{
 			$this->_db->setQuery('SELECT b.ipaddress FROM #__bfstop_unblock_token t '.
 				'INNER JOIN #__bfstop_bannedip b ON b.id = t.block_id '.
-				'WHERE t.token='.$this->_db->quote($token));
+				'WHERE t.token='.$this->_db->quote(DatabaseHelper::hashToken($token)));
 			$ip = $this->_db->loadResult();
 			return ($ip === null || $ip === false) ? null : (string) $ip;
 		}
@@ -135,8 +136,10 @@ class TokenunblockModel extends BaseDatabaseModel
 				$this->_db->quote(date('Y-m-d H:i:s', time() - self::TokenValidDays * 86400)));
 			$this->_db->execute();
 			// get token:
+			// only the hash of a token is stored, see DatabaseHelper::hashToken()
+			$stored = DatabaseHelper::hashToken($token);
 			$this->_db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
-				$this->_db->quote($token));
+				$this->_db->quote($stored));
 			$unblockTokenEntry = $this->_db->loadObject();
 			if ($unblockTokenEntry == null)
 			{
@@ -145,7 +148,7 @@ class TokenunblockModel extends BaseDatabaseModel
 			}
 			UnblockHelper::unblockDB($this->_db, array($unblockTokenEntry->block_id), 1, $logger);
 			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE token='.
-					$this->_db->quote($token);
+					$this->_db->quote($stored);
 			$this->_db->setQuery($sql);
 			$success = $this->_db->execute();
 		}
