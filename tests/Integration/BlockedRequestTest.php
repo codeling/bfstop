@@ -128,7 +128,7 @@ class BlockedRequestTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(60)));
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
-		$this->assertSame(array(str_repeat('cd', 20)), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
+		$this->assertSame(array(DatabaseHelper::hashToken(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');

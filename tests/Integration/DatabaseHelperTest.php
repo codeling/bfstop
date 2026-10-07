@@ -167,7 +167,10 @@ class DatabaseHelperTest extends IntegrationTestCase
 	public function testUnblockToken()
 	{
 		$this->assertSame('tokenA', $this->helper->getNewUnblockToken(1, 'tokenA'));
-		$this->assertNull($this->queryValue("SELECT username FROM #__bfstop_unblock_token WHERE token='tokenA'"));
+		$this->assertNull($this->queryValue("SELECT username FROM #__bfstop_unblock_token WHERE token='".DatabaseHelper::hashToken('tokenA')."'"));
+		// only the hash is stored: the table doesn't hold what the link needs
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE token='tokenA'"));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE block_id=1'));
 		$this->assertFalse($this->helper->hasCurrentUnblockToken('Someone'));
 		$this->assertSame('tokenU', $this->helper->getNewUnblockToken(2, 'tokenU', 'Someone'));
 		$this->assertTrue($this->helper->hasCurrentUnblockToken('someone'), 'case-insensitive');
@@ -177,6 +180,17 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertFalse($this->helper->hasCurrentUnblockToken('Expired'), 'an expired token is not current');
 		$this->assertTrue($this->helper->unblockTokenExists('tokenA'));
 		$this->assertFalse($this->helper->unblockTokenExists('tokenB'));
+	}
+
+	public function testTokenHashFitsTheColumnAndIsStable()
+	{
+		$hash = DatabaseHelper::hashToken('abc');
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $hash);
+		$this->assertSame($hash, DatabaseHelper::hashToken('abc'));
+		$this->assertNotSame($hash, DatabaseHelper::hashToken('abd'));
+		// a stored hash is no token which unblocks: it would be hashed again
+		$this->helper->getNewUnblockToken(1, 'tokenA');
+		$this->assertFalse($this->helper->unblockTokenExists(DatabaseHelper::hashToken('tokenA')));
 	}
 
 	public function testKnownIpUsername()
@@ -279,7 +293,7 @@ class DatabaseHelperTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(3 * 24 * 60 - 5)));
 		$this->helper->purgeExpiredUnblockTokens();
 		$this->db->setQuery('SELECT token FROM #__bfstop_unblock_token');
-		$this->assertSame(array('tokenNew'), $this->db->loadColumn());
+		$this->assertSame(array(DatabaseHelper::hashToken('tokenNew')), $this->db->loadColumn());
 	}
 
 	public function testDnsCache()

@@ -354,14 +354,28 @@ class DatabaseHelper
 	}
 
 	/**
+	 * What is stored of an unblock token. The token itself is a secret which
+	 * only the mail holds: whoever reads the table (a backup, an SQL injection
+	 * somewhere else on the site) must not get working links out of it. The
+	 * token has 160 random bits, so a plain hash is enough; it is cut to the
+	 * 40 characters of the column. com_bfstop's TokenunblockModel uses this too.
+	 */
+	public static function hashToken($token)
+	{
+		return substr(hash('sha256', (string) $token), 0, 40);
+	}
+
+	/**
+	 * @param string      $token    the token to put into the link; only its hash is stored
 	 * @param string|null $username the user the link is sent to, if any
+	 * @return string|null $token, or null if it could not be stored
 	 */
 	public function getNewUnblockToken($id, $token, $username = null)
 	{
 		try
 		{
 			$tokenEntry = new \stdClass();
-			$tokenEntry->token = $token;
+			$tokenEntry->token = self::hashToken($token);
 			$tokenEntry->block_id = $id;
 			$tokenEntry->crdate = date("Y-m-d H:i:s");
 			$tokenEntry->username = $username;
@@ -369,9 +383,9 @@ class DatabaseHelper
 			{
 				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
 				$this->logger->log('Insert unblock token failed!', Log::ERROR);
-				$tokenEntry->token = null;
+				return null;
 			}
-			return $tokenEntry->token;
+			return $token;
 		}
 		catch (\Exception $e)
 		{
@@ -395,7 +409,7 @@ class DatabaseHelper
 		try
 		{
 			$sql = "SELECT block_id, crdate FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote($token);
+				$this->db->quote(self::hashToken($token));
 			$this->db->setQuery($sql);
 			$row = $this->db->loadAssoc();
 			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
@@ -439,7 +453,7 @@ class DatabaseHelper
 		try
 		{
 			$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote($token);
+				$this->db->quote(self::hashToken($token));
 			$this->db->setQuery($sql);
 			$result = $this->db->loadResult();
 			return $result != null;
