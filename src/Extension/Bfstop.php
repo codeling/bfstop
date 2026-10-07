@@ -64,6 +64,19 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $this->params->get($paramName, $default);
 	}
 
+	/**
+	 * A request parameter as a string: "option[]=x" and the like give arrays,
+	 * which strcmp() and friends don't take (a TypeError on PHP 8, i.e. an
+	 * error page instead of the intended answer). Such a value is returned as
+	 * a NUL character: not empty - so it doesn't pass for "parameter not
+	 * given" - and not equal to anything the parameter can legitimately be.
+	 */
+	private function requestString($name, $filter = 'cmd')
+	{
+		$value = $this->getApplication()->input->get($name, '', $filter);
+		return is_string($value) ? $value : "\0";
+	}
+
 	private static function endsWith($haystack, $needle)
 	{
 		$length = strlen($needle);
@@ -155,6 +168,15 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', NotifierHelper::$ONE_DAY)),
 				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
 		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
+		if ($id < 1)
+		{
+			// nothing is blocked: neither tell the administrators that
+			// something was, nor mail an unblock link for a block which
+			// doesn't exist
+			$this->logger->log('Could not block IP address '.$logEntry->ipaddress.
+				', see the previous errors', Log::ERROR);
+			return;
+		}
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', Log::INFO);
@@ -461,7 +483,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, Log::INFO);
 			return;
 		}
-		$username = mb_strimwidth($user['username'], 0, 150, "...");
+		$username = mb_strimwidth((string) ($user['username'] ?? ''), 0, 150, "...");
 		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
 		$logEntry = new \stdClass();
@@ -518,7 +540,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$info = new \stdClass();
 		$info->ipaddress = IpHelper::getAddress($this->logger);
-		$info->username = $user['username'];
+		$info->username = (string) ($user['username'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
 		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress));
@@ -536,14 +558,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isUnblockRequest($blockIds)
 	{
-		$input = $this->getApplication()->input;
-		if (strcmp($input->getCmd('option', ''), 'com_bfstop') != 0 ||
-			strcmp($input->getCmd('view', ''), 'tokenunblock') != 0 ||
-			$input->getCmd('task', '') !== '')
+		if (strcmp($this->requestString('option'), 'com_bfstop') != 0 ||
+			strcmp($this->requestString('view'), 'tokenunblock') != 0 ||
+			$this->requestString('task') !== '')
 		{
 			return false;
 		}
-		$token = $input->getString('token', '');
+		$token = $this->requestString('token', 'string');
 		$result = $this->mydb->unblockTokenValidForBlocks($token, $blockIds);
 		if ($result)
 		{
@@ -567,9 +588,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isPasswordRecoveryRequest()
 	{
-		$input = $this->getApplication()->input;
-		$option = $input->getCmd('option', '');
-		$view = $input->getCmd('view', '');
+		$option = $this->requestString('option');
+		$view = $this->requestString('view');
 		$result = (strcmp($option, 'com_users') == 0 &&
 			(strcmp($view, 'reset') == 0 || strcmp($view, 'remind') == 0));
 		if ($result)
@@ -593,9 +613,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isLoginAttemptRequest()
 	{
-		$input = $this->getApplication()->input;
-		$option = $input->getCmd('option', '');
-		$task = $input->getCmd('task', '');
+		$option = $this->requestString('option');
+		$task = $this->requestString('task');
 		$result = (strcmp($option, 'com_users') == 0 &&
 			(strcmp($task, 'user.login') == 0 || strcmp($task, 'login') == 0)) ||
 			(strcmp($option, 'com_login') == 0 && strcmp($task, 'login') == 0);

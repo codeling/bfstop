@@ -76,15 +76,6 @@ class DatabaseHelper
 		$this->logger = $logger;
 	}
 
-	public function myCheckDBError()
-	{
-		$errNum = $this->db->getErrorNum();
-		if ($errNum != 0)
-		{
-			$this->logger->log("Database error (#$errNum) occured: ".$this->db->getErrorMsg(), Log::ERROR);
-		}
-	}
-
 	public function eventsInInterval(
 		$interval,
 		$time,
@@ -188,7 +179,7 @@ class DatabaseHelper
 					str_repeat("-", 97)."\n";
 			foreach ($entries as $entry)
 			{
-				$result .= str_pad($entry->username, 25)." ".
+				$result .= str_pad(LoggerHelper::singleLine($entry->username), 25)." ".
 					str_pad($entry->ipaddress, 15)." ".
 					str_pad($entry->logtime, 20)." ".
 					str_pad($this->getClientString($entry->origin), 8)."\n";
@@ -310,7 +301,7 @@ class DatabaseHelper
 			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
 			{
 				$this->logger->log('Insert block entry failed!', Log::ERROR);
-				$blockEntry->id = -1;
+				return -1;
 			}
 			$this->setFailedLoginHandled($logEntry, false);
 			if ($usehtaccess)

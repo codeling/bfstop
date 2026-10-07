@@ -295,6 +295,22 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$otherToken);
 	}
 
+	/**
+	 * Parameters given as arrays ("option[]=x") are no valid values: they must
+	 * neither break the plugin nor get a request past the block.
+	 */
+	public function testArrayParametersDoNotBreakTheBlock()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option[]=com_bfstop&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view[]=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&task[]=display&token='.$token);
+		$this->assertBlocked('option[]=com_users&view[]=reset');
+		$this->assertBlocked('option[]=com_users&task[]=user.login');
+	}
+
 	public function testRejectedRequestsAreCounted()
 	{
 		$this->configure();

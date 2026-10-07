@@ -95,7 +95,7 @@ class NotifierHelper
 			$this->getSiteName(),
 			Uri::root())."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":", 15).
-			$logEntry->username."\n";
+			LoggerHelper::singleLine($logEntry->username)."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":", 15).
 			$logEntry->ipaddress."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":", 15).

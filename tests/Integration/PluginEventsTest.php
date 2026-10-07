@@ -107,6 +107,15 @@ class PluginEventsTest extends IntegrationTestCase
 		$this->assertSame($logErrorsBefore, $this->pluginLogErrors(), 'plugin logged errors');
 	}
 
+	public function testFailedLoginWithoutUsernameIsRecorded()
+	{
+		// some authentication flows hand over credentials without a username
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.23';
+		$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0';
+		$this->dispatch('onUserLoginFailure', array(array('status' => 4), array()));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE ipaddress='203.0.113.23'"));
+	}
+
 	public function testSubnetBlockAndAllowList()
 	{
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '198.51.100.0/24', 'crdate' => self::minutesAgo(0), 'duration' => 0));

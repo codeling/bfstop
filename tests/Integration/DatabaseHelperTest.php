@@ -350,4 +350,12 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->db->setQuery('SELECT username FROM #__bfstop_username_stats ORDER BY username');
 		$this->assertSame(array('few-recent', 'many-old', 'some'), $this->db->loadColumn());
 	}
+
+	public function testLineBreaksInUsernamesDoNotForgeLinesInTheMailedList()
+	{
+		$this->failedLogin('203.0.113.5', "bob\n[forged] 203.0.113.99", 1);
+		$list = $this->helper->getFormattedFailedList('203.0.113.5', self::minutesAgo(0), 60);
+		// header, separator and the one entry
+		$this->assertCount(3, array_filter(explode("\n", $list), 'strlen'));
+	}
 }
