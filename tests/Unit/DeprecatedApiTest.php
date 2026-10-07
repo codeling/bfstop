@@ -87,7 +87,9 @@ class DeprecatedApiTest extends TestCase
 				}
 			}
 		}
-		$this->assertGreaterThan(20, $files, 'the sources were not found');
+		// the plugin alone has about a dozen files (the unit tests run without
+		// the component), with the component there are over fifty
+		$this->assertGreaterThan(getenv('COM_BFSTOP_ROOT') ? 40 : 8, $files, 'the sources were not found');
 		$this->assertSame(array(), $found, "deprecated API:\n".implode("\n", $found));
 	}
 }
