@@ -406,4 +406,20 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertSame((string) $default, (string) $field[0]['default'], $name);
 		}
 	}
+
+	public function testEditViewsRegisterTheirStylesheetsAsRealFiles()
+	{
+		// a path with a leading slash would become "//administrator/...", a link to another host
+		foreach (array('Allow' => 'block', 'Block' => 'block', 'Htblock' => 'htblock') as $view => $folder)
+		{
+			$source = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/src/View/'.$view.'/HtmlView.php');
+			$this->assertSame(1, preg_match("#registerAndUseStyle\(\s*'([\w.]+)',\s*'([^']+)'\)#", $source, $m), $view);
+			$this->assertFileExists(getenv('COM_BFSTOP_ROOT').'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
+			$wa = new \Joomla\CMS\WebAsset\WebAssetManager(new \Joomla\CMS\WebAsset\WebAssetRegistry());
+			$wa->registerAndUseStyle($m[1], $m[2]);
+			$uri = $wa->getAsset('style', $m[1])->getUri();
+			$this->assertStringStartsWith('/administrator/components/com_bfstop/tmpl/', $uri, $view);
+			$this->assertStringEndsWith('/edit.css', $uri, $view);
+		}
+	}
 }

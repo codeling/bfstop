@@ -20,6 +20,10 @@
     TypeError in the check of blocked requests
   - Settings which have not been saved yet now have the values the settings
     page shows (block after 10 attempts instead of 15, ...)
+  - Internal: the Joomla! APIs deprecated in 4.3-5.3 and removed in Joomla! 7
+    are no longer used (Factory::getDbo/getConfig/getSession/getLanguage/
+    getDocument/getMailer, $_db, Table::getInstance, View::get(),
+    addStyleSheet(), getCfg()); a test fails if one comes back
   - Component: all list settings are validated against their options, the
     notification addresses against the email format; messages escape what was
     typed in; settings and log need the core.admin permission

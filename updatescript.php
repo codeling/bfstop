@@ -58,7 +58,7 @@ class PlgsystembfstopInstallerScript
 	{
 		if ($type === 'update')
 		{
-			$lang = Factory::getLanguage();
+			$lang = Factory::getApplication()->getLanguage();
 			$lang->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
 			Factory::getApplication()->enqueueMessage(
 				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_HINT', Route::_('index.php?option=com_bfstop&view=settings', false)),

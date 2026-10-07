@@ -90,7 +90,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function requestString($name, $filter = 'cmd')
 	{
-		$value = $this->getApplication()->input->get($name, '', $filter);
+		$value = $this->getApplication()->getInput()->get($name, '', $filter);
 		return is_string($value) ? $value : "\0";
 	}
 
