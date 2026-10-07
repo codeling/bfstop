@@ -36,6 +36,10 @@ should never ship an outdated copy.
   * How to update:  composer update maxmind-db/reader && composer vendor-geoip,
     review the diff, run the tests, release plugin and component.
   * The GeoLite2/GeoIP2 *database* (.mmdb) is separate: you download it and
-    configure its path in the component's settings. Keep it current as well
-    (MaxMind's licence requires updates; monthly at least), e.g. with
-    geoipupdate.
+    configure its path in the component's settings. MaxMind publishes new
+    versions of GeoLite2 twice a week (Tuesdays and Fridays), and the
+    addresses of the internet move around, so an old file gets less and less
+    accurate - it only feeds the risk score and the address information, it is
+    not a security boundary. Update it regularly (geoipupdate can do that from
+    cron), and check the licence terms of the database you use: they may
+    require you to keep it current.
