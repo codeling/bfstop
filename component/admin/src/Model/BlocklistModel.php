@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\ListModel;
 
@@ -33,7 +32,7 @@ class BlocklistModel extends ListModel
 
 	protected function getListQuery()
 	{
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->select('b.id, b.ipaddress, b.crdate, b.duration, b.attempts, b.last_attempt, u.crdate as unblocked');
 		$query->from('#__bfstop_bannedip b left join #__bfstop_unblock u on b.id=u.block_id');
@@ -58,7 +57,7 @@ class BlocklistModel extends ListModel
 
 	public function unblock($ids, $logger)
 	{
-		if (UnblockHelper::unblockDB(Factory::getDbo(), $ids, 0, $logger))
+		if (UnblockHelper::unblockDB($this->getDatabase(), $ids, 0, $logger))
 		{
 			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
 		}

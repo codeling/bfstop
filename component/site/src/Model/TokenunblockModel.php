@@ -62,10 +62,11 @@ class TokenunblockModel extends BaseDatabaseModel
 	{
 		try
 		{
-			$this->_db->setQuery('SELECT b.ipaddress FROM #__bfstop_unblock_token t '.
+			$db = $this->getDatabase();
+			$db->setQuery('SELECT b.ipaddress FROM #__bfstop_unblock_token t '.
 				'INNER JOIN #__bfstop_bannedip b ON b.id = t.block_id '.
-				'WHERE t.token='.$this->_db->quote(DatabaseHelper::hashToken($token)));
-			$ip = $this->_db->loadResult();
+				'WHERE t.token='.$db->quote(DatabaseHelper::hashToken($token)));
+			$ip = $db->loadResult();
 			return ($ip === null || $ip === false) ? null : (string) $ip;
 		}
 		catch (\RuntimeException $e)
@@ -127,30 +128,31 @@ class TokenunblockModel extends BaseDatabaseModel
 
 	private function unblockWithResult($token, $logger)
 	{
+		$db = $this->getDatabase();
 		// prune old tokens:
 		try
 		{
 			// cutoff computed in PHP, as DATE_ADD is MySQL-only (issue bfstop#206)
-			$this->_db->setQuery('DELETE FROM #__bfstop_unblock_token '.
+			$db->setQuery('DELETE FROM #__bfstop_unblock_token '.
 				'WHERE crdate < '.
-				$this->_db->quote(date('Y-m-d H:i:s', time() - self::TokenValidDays * 86400)));
-			$this->_db->execute();
+				$db->quote(date('Y-m-d H:i:s', time() - self::TokenValidDays * 86400)));
+			$db->execute();
 			// get token:
 			// only the hash of a token is stored, see DatabaseHelper::hashToken()
 			$stored = DatabaseHelper::hashToken($token);
-			$this->_db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
-				$this->_db->quote($stored));
-			$unblockTokenEntry = $this->_db->loadObject();
+			$db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
+				$db->quote($stored));
+			$unblockTokenEntry = $db->loadObject();
 			if ($unblockTokenEntry == null)
 			{
 				$logger->log("com_bfstop-tokenunblock: Token not found.", Log::ERROR);
 				return self::ResultNotFound;
 			}
-			UnblockHelper::unblockDB($this->_db, array($unblockTokenEntry->block_id), 1, $logger);
+			UnblockHelper::unblockDB($db, array($unblockTokenEntry->block_id), 1, $logger);
 			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE token='.
-					$this->_db->quote($stored);
-			$this->_db->setQuery($sql);
-			$success = $this->_db->execute();
+					$db->quote($stored);
+			$db->setQuery($sql);
+			$success = $db->execute();
 		}
 		catch (\RuntimeException $e)
 		{

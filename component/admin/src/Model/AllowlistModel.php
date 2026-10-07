@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\ListModel;
@@ -29,7 +28,7 @@ class AllowlistModel extends ListModel
 
 	protected function getListQuery()
 	{
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->select('a.id, a.ipaddress, a.notes');
 		$query->from('#__bfstop_allowlist a');
@@ -55,7 +54,7 @@ class AllowlistModel extends ListModel
 		}
 		try
 		{
-			$db = Factory::getDbo();
+			$db = $this->getDatabase();
 			$query = $db->getQuery(true);
 			$conditions = array(
 				$db->quoteName('id').' IN ('.implode(", ", $ids).')'

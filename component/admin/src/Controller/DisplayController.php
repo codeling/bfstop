@@ -18,6 +18,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
 use Joomla\CMS\Router\Route;
+use Joomla\Database\DatabaseInterface;
 
 class DisplayController extends BaseController
 {
@@ -42,7 +43,7 @@ class DisplayController extends BaseController
 	{
 		try
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(DatabaseInterface::class);
 			// LOWER: also catch "Admin" etc. on PostgreSQL, which (unlike
 			// MySQL's default collations) compares case-sensitively
 			$query = "SELECT COUNT(*) FROM #__users u WHERE LOWER(u.username)='admin'";
@@ -101,7 +102,7 @@ class DisplayController extends BaseController
 	{
 		try
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(DatabaseInterface::class);
 			$query = "SELECT manifest_cache,enabled FROM #__extensions WHERE name='plg_system_bfstop'";
 			$db->setQuery($query);
 			$plugin = $db->loadObject();
