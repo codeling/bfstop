@@ -170,6 +170,14 @@
 				<option value="64">PLG_SYSTEM_BFSTOP_INFO</option>
 				<option value="128">PLG_SYSTEM_BFSTOP_DEBUG</option>
 			</field>
+			<field name="logMaxSize" type="number" default="5"
+				min="1" max="1024" step="1" filter="integer"
+				label="COM_BFSTOP_SETTINGS_LOG_MAX_SIZE_LABEL"
+				description="COM_BFSTOP_SETTINGS_LOG_MAX_SIZE_DESC" />
+			<field name="logKeepDays" type="number" default="28"
+				min="0" max="3650" step="1" filter="integer"
+				label="COM_BFSTOP_SETTINGS_LOG_KEEP_DAYS_LABEL"
+				description="COM_BFSTOP_SETTINGS_LOG_KEEP_DAYS_DESC" />
 			<field name="unknownUsernameMode" type="list" default="hash"
 				label="COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_LABEL"
 				description="COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_DESC">
