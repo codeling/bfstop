@@ -102,3 +102,67 @@ The report is written to `$BENCH_DIR/results/<time>/report.md` (with
   deliberate cost to a bot, but it would swamp everything else here. Likewise
   every failed login uses another user name: repeating one would trigger the
   account-level throttle, a 5 second delay after 20 failures within an hour.
+
+## Results
+
+One run of `tests/performance/run.sh` with the default options, on a 4 CPU
+container (shared by client, web server and database), on 2026-10-07:
+
+| | |
+| --- | --- |
+| compared | tag `1.5.2` (`5dfb9cc0a7d0034afdcad37aa2a400d8adc0c2dd`) and `main` at `f85336be01c6c8c796f1de26d196dcd313d45ce7` (plugin version 2.0.0) |
+| software | Joomla 5.4.8, PHP 8.3.6 (OPcache on), MariaDB 10.11.14 |
+| load | 200 requests per scenario after 20 warm-up requests; tables with 0 and 100,000 failed logins (and a tenth of that many blocks); throughput with 8 clients and 4 PHP workers, median of 3 rounds of 400 requests |
+
+Overhead is the median of the plugin's site minus the median of the same
+request on a site without bfstop; "1.5.2 / current" in each cell. Times
+differing by a millisecond or two are noise, the other columns don't vary.
+
+| | 1.5.2 | current |
+| --- | ---: | ---: |
+| **Installed** | | |
+| release zip | 85 KiB | 131 KiB |
+| files / PHP lines | 59 / 1,550 | 73 / 4,488 |
+| database tables | 5 | 8 |
+| **Page view** (front page, login form, administrator login) | | |
+| extra SQL queries | +5 | +3 |
+| extra PHP files | +7 | +6 |
+| extra peak memory | +10 to +35 KiB | +10 to +34 KiB |
+| extra time, empty tables | +0.9 to +2.4 ms | +1.1 to +1.3 ms |
+| extra time, 100,000 failed logins | +8.0 to +9.6 ms | +8.5 to +10.0 ms |
+| **Failed login** | | |
+| extra SQL queries | +12 | +13 |
+| extra PHP files | +7 | +9 |
+| extra peak memory | +64 KiB | +48 KiB |
+| extra time, empty tables | +6.3 ms | +7.1 ms |
+| extra time, 100,000 failed logins | +57.7 ms | +66.9 ms |
+| stored per failed login | 74 bytes | 352 bytes |
+| **Blocked client** (answered by bfstop, a normal page takes 29.5 ms) | | |
+| time, empty tables | 13.9 ms | 15.1 ms |
+| time, 100,000 failed logins | 18.6 ms | 20.8 ms |
+| **Throughput** (requests/s; without bfstop in brackets) | | |
+| front page, empty tables | 153.5 (170.9) | 157.7 |
+| front page, 100,000 failed logins | 131.0 (167.5) | 126.5 |
+| failed login, empty tables | 45.5 (48.6) | 45.0 |
+| failed login, 100,000 failed logins | 30.4 (49.5) | 29.4 |
+| blocked client, empty tables | 314.4 | 315.6 |
+| blocked client, 100,000 failed logins | 241.8 | 205.0 |
+
+What stands out:
+
+- With small tables neither version costs much: a few queries per page view,
+  and no measurable difference in time between them.
+- The cost of both grows with the size of the failed login and block tables
+  (the lookups scan them): with 100,000 failed logins a failed login takes
+  about 60 ms more than without bfstop, and the throughput of failed logins
+  drops by 40%.
+- The current version stores about five times as much per failed login (an
+  index on the failed logins, and the user name statistics table).
+- The current version needs 2 queries instead of 4 to check a page view, but
+  also counts each request of a blocked client (an `UPDATE`); with big tables
+  it answers blocked clients more slowly than 1.5.2 (205 against 242
+  requests/s here). The cause was not investigated.
+
+The delays which the current version adds on purpose (to failed logins without
+a `User-Agent`, and to repeated failures for one user name) are not part of
+these numbers, see above.
