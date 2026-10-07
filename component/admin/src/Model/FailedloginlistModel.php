@@ -53,7 +53,7 @@ class FailedloginlistModel extends ListModel
 		// set when coming from the username statistics view; deliberately not
 		// persisted in the user state, so the full list shows otherwise
 		$this->setState('filter.username',
-			Factory::getApplication()->input->getString('filter_username', ''));
+			Factory::getApplication()->getInput()->getString('filter_username', ''));
 	}
 
 	/**

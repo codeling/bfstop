@@ -28,7 +28,7 @@ class LogModel extends ListModel
 	private function getLogFilePath()
 	{
 		$application = Factory::getApplication();
-		$log_path = $application->getCfg('log_path');
+		$log_path = $application->get('log_path');
 		return $log_path."/plg_system_bfstop.log.php";
 	}
 

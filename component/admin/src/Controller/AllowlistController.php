@@ -37,7 +37,7 @@ class AllowlistController extends AdminController
 			return;
 		}
 		$logger = LogHelper::getLogger();
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$ids = $input->post->get('cid', array(), 'array');
 		ArrayHelper::toInteger($ids);
 		$model = $this->getModel('allowlist');

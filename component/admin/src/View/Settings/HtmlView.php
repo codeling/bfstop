@@ -39,12 +39,12 @@ class HtmlView extends BaseHtmlView
 		// plugin's own language file; that file isn't auto-loaded for us.
 		// the strings live in the .sys.ini, not the plain .ini - see
 		// InstallerAdapter::doLoadLanguage() for the same load pattern.
-		$language = Factory::getLanguage();
+		$language = Factory::getApplication()->getLanguage();
 		$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
 			|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS . '/system/bfstop');
 
-		$this->form = $this->get('Form');
-		$this->item = $this->get('Item');
+		$this->form = $this->getModel()->getForm();
+		$this->item = $this->getModel()->getItem();
 
 		$user = Factory::getApplication()->getIdentity();
 		$this->canSave = $user && $user->authorise('core.admin', 'com_bfstop');

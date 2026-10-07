@@ -24,7 +24,7 @@ class DisplayController extends BaseController
 {
 	function display($cachable = false, $urlparams = false)
 	{
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$view = $input->getCmd('view', 'blocklist');
 
 		$pluginInstalled = $this->checkWhetherPluginInstalled();

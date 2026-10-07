@@ -22,7 +22,7 @@ class HtmlView extends BaseHtmlView
 {
 	public function display($tpl = null)
 	{
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$this->ipAddress = $input->getString("ipaddress");
 
 		// looked up locally via a MaxMind .mmdb database (see GeoHelper) -

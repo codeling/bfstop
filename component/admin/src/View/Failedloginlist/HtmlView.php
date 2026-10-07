@@ -21,9 +21,9 @@ class HtmlView extends BaseHtmlView
 {
 	function display($tpl = null)
 	{
-		$this->items      = $this->get('Items');
-		$this->pagination = $this->get('Pagination');
-		$state            = $this->get('State');
+		$this->items      = $this->getModel()->getItems();
+		$this->pagination = $this->getModel()->getPagination();
+		$state            = $this->getModel()->getState();
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
 		$this->filterUsername = (string) $state->get('filter.username', '');

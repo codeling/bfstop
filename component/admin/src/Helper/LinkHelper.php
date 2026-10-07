@@ -16,7 +16,7 @@ class LinkHelper
 {
 	public static function getIpInfoLink($ipaddress)
 	{
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$menuId = $input->get('Itemid', 0, 'INTEGER');
 		$link = 'index.php?option=com_bfstop&Itemid='.$menuId.'&view=ipinfo&ipaddress='.rawurlencode($ipaddress);
 		return $link;

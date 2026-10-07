@@ -34,10 +34,9 @@ class HtmlView extends BaseHtmlView
 	function display($tpl = null)
 	{
 		// clear the messages still enqueued from the invalid login attempt:
-		$session = Factory::getSession();
-		$session->set('application.queue', null);
 		$app = Factory::getApplication();
-		$input = $app->input;
+		$app->getSession()->set('application.queue', null);
+		$input = $app->getInput();
 		$this->token = $input->getString('token', '');
 		$this->showConfirmation = false;
 		$logger = LogHelper::getLogger();

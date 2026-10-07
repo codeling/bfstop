@@ -57,7 +57,7 @@ class HtblockController extends FormController
 		$htaccess = new HtaccessHelper($htaccessPath, null);
 		$model = $this->getModel('block');
 		$form = $model->getForm(null, false);
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$data  = $input->post->get('jform', array(), 'array');
 		$validData = $model->validate($form, $data);
 		if ($validData === false)
