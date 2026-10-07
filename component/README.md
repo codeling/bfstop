@@ -34,8 +34,7 @@ For any further questions, don't hesitate to contact me under bfstop@bfroehler.i
   .htaccess and GeoIP database path settings are validated.
 - Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.
 - The "Blocked IPs (database)" list now shows whether expired blocks are deleted
-  automatically ("Prune old attempts" setting), and the log view explains that
-  the log file is rotated at 5 MB.
+  automatically ("Prune old attempts" setting).
 
 ## 2.0.0: Joomla 5/6 migration
 
