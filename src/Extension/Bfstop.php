@@ -310,7 +310,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function init()
 	{
-		$this->logger = new LoggerHelper($this->getIntParam('logLevel', LoggerHelper::Disabled));
+		$this->logger = new LoggerHelper($this->getIntParam('logLevel', LoggerHelper::Disabled),
+			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->mydb = new DatabaseHelper($this->logger);
 		$this->notifier = new NotifierHelper($this->logger, $this->mydb,
 			$this->params->get('emailaddress', ''),
@@ -627,6 +628,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->trimUsernameStats();
 			$this->mydb->pruneKnownIps();
 			$this->mydb->purgeExpiredUnblockTokens();
+			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);
 		}
