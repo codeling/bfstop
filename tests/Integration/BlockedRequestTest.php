@@ -259,6 +259,42 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('ef', 20));
 	}
 
+	/**
+	 * The pass a valid token gives is for the unblock view and nothing else:
+	 * whatever else a request carries (another task or component, in any
+	 * spelling - Joomla matches the task case-insensitively, and the backend
+	 * decides on the component itself - or a token which isn't a plain
+	 * string) must still be rejected. The one request which gets through is
+	 * the unblock view itself.
+	 */
+	public function testUnblockTokenPassIsLimitedToTheUnblockView()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option=com_users&task=user.LOGIN&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_login&task=login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&task=user.login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=COM_BFSTOP&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=TOKENUNBLOCK&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token[]='.$token);
+		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	/**
+	 * A token is bound to the blocks it was issued for: a valid token of
+	 * another address's block doesn't open the unblock view, whatever the
+	 * request looks like otherwise.
+	 */
+	public function testUnblockTokenOfAnotherAddressIsNoPassForTheUnblockView()
+	{
+		$this->configure();
+		$this->block();
+		$otherBlockId = $this->block('203.0.113.99');
+		$otherToken = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$otherToken);
+	}
+
 	public function testRejectedRequestsAreCounted()
 	{
 		$this->configure();
