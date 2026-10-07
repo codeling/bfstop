@@ -22,6 +22,9 @@ the site only needs to be set up again when the database schema changes.
 - `lint/`: checks of the language files (`check-language.php`) and of the
   release zip built by `deploy.sh zip` (`check-zip.php`); both scripts are
   kept identical in the com_bfstop repository.
+- `performance/`: not a test, a comparison of what two versions of the plugin
+  (by default 1.5.2 and the checkout) cost a Joomla site, see its README. Not
+  run by phpunit or CI.
 
 GitHub Actions runs everything on each push and pull request, on Joomla 5 and
 6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`.
