@@ -128,6 +128,11 @@
     and made Apache reject the whole file); the 403 message is escaped; and
     changes of the file are done while holding a lock, so that clients
     getting blocked at the same time don't overwrite each other's lines
+  - Log file (#185): besides being rotated once it exceeds a configurable size
+    (default 5 MB), entries older than a configurable number of days (default
+    28) are now deleted from it once a day, also when logging was disabled in
+    the meantime; the log files are removed when the plugin is uninstalled, and
+    the component's log view got buttons to prune or clear the log
   - Security: the plugin's log file is rotated at 5 MB, and the username
     statistics (which aren't purged by age) are limited to 10000 usernames,
     removing those with the fewest attempts first, so a visitor can't fill up

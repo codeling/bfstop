@@ -32,7 +32,25 @@ class PlgsystembfstopInstallerScript
 		$db->execute();
 	}
 
-	public function uninstall(InstallerAdapter $adapter) {}
+	public function uninstall(InstallerAdapter $adapter)
+	{
+		// the log file holds IP addresses and usernames; don't leave it behind
+		try
+		{
+			$logPath = Factory::getApplication()->get('log_path');
+			foreach (array('plg_system_bfstop.log.php', 'plg_system_bfstop.1.log.php') as $file)
+			{
+				if ($logPath && is_file($logPath.'/'.$file))
+				{
+					@unlink($logPath.'/'.$file);
+				}
+			}
+		}
+		catch (\Throwable $e)
+		{
+			// a leftover log must not make the uninstallation fail
+		}
+	}
 	public function preflight($type, InstallerAdapter $adapter) {}
 
 	public function postflight($type, InstallerAdapter $adapter)
