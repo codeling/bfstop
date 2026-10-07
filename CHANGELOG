@@ -1,3 +1,10 @@
+2.0.1 (unreleased)
+  - Security: the bundled MaxMind DB reader is updated from 1.13.0 to 1.14.0
+    (limits for the decoding of malformed or hostile database files). Its
+    version is now tracked in composer.json/composer.lock; src/Helper/Geo is
+    generated from it (tools/vendor-geoip.php), CI verifies that, and
+    Dependabot plus a weekly job report new releases and advisories
+
 2.0.0 (2026-08-24)
   - Migrate to Joomla 5/6: PSR-4 namespaced classes (Codeling\Plugin\System\Bfstop),
     service provider, SubscriberInterface event handling
