@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Log;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
+use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -24,6 +25,8 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->get('State');
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
+		$this->maxLogSizeMb = intdiv(LoggerHelper::MaxLogFileBytes, 1048576);
+		$this->previousLogFile = str_replace('.log.php', '.1.log.php', LoggerHelper::LogFile);
 		$this->addToolBar();
 		parent::display($tpl);
 	}

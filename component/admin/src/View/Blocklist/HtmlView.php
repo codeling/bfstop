@@ -29,6 +29,7 @@ class HtmlView extends BaseHtmlView
 		// with .htaccess blocking, blocked requests never reach Joomla,
 		// so attempts can't be counted
 		$this->attemptsTracked = ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess';
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', 0);
 		$this->addToolBar();
 		parent::display($tpl);
 	}
