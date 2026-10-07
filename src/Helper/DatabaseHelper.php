@@ -27,6 +27,16 @@ class DatabaseHelper
 	// TokenunblockModel::TokenValidDays must stay in sync with this
 	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
 
+	// failed logins are purged after this many weeks unless the administrator
+	// chose another time (0 = never). Keeping them for ever is not needed to
+	// protect anything, and they are personal data (addresses, usernames)
+	public static $DEFAULT_PURGE_WEEKS = 4;
+
+	// upper bound for the rows of the failed logins, however the purge age is
+	// set: a visitor can add one for every request, from as many addresses as
+	// they like
+	public static $FAILED_LOGIN_MAX_ROWS = 200000;
+
 	// upper bound for the rows of the username statistics, which (unlike
 	// the failed logins) are not purged by age: an attacker can make up as
 	// many usernames as they like
@@ -926,6 +936,43 @@ class DatabaseHelper
 					return;
 				}
 				$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE id IN ('.
+					implode(',', array_map('intval', $ids)).')');
+				$this->db->execute();
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Keeps the failed logins below $maxRows by deleting the oldest ones.
+	 */
+	public function trimFailedLogins($maxRows = null)
+	{
+		$maxRows = $maxRows ?? self::$FAILED_LOGIN_MAX_ROWS;
+		try
+		{
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_failedlogin');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('id'))
+					->from($this->db->quoteName('#__bfstop_failedlogin'))
+					->order($this->db->quoteName('id').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 5000));
+				$ids = $this->db->loadColumn();
+				if (count($ids) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE id IN ('.
 					implode(',', array_map('intval', $ids)).')');
 				$this->db->execute();
 			}

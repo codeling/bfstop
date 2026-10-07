@@ -344,12 +344,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * per-IP threshold can ever detect on its own. The account itself is
 	 * never locked - only wrong attempts get progressively expensive, so a
 	 * correct password still logs the real owner in immediately.
+	 *
+	 * @return int the seconds to delay the response by
 	 */
-	private function accountThrottleIfNeeded($logEntry)
+	private function accountThrottleDelay($logEntry)
 	{
 		if (!$this->getBoolParam('accountThrottleEnabled', true))
 		{
-			return;
+			return 0;
 		}
 		$checkInterval = $this->getIntParam('accountCheckInterval', 60);
 		$accountBlockNumber = $this->getIntParam('accountBlockNumber', 20);
@@ -357,17 +359,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$checkInterval, $logEntry->username, $logEntry->logtime);
 		if ($numberOfFailedLogins < $accountBlockNumber)
 		{
-			return;
+			return 0;
 		}
-		$throttleDelay = $this->getIntParam('accountThrottleDelay', 5);
+		$throttleDelay = max(0, $this->getIntParam('accountThrottleDelay', 5));
 		if ($throttleDelay > 0)
 		{
 			$this->logger->log('Account-level throttle triggered for username \''.
 				$logEntry->username.'\' ('.$numberOfFailedLogins.
 				' failed attempts across all IPs within '.$checkInterval.
 				' minutes), adding '.$throttleDelay.'s delay', Log::INFO);
-			sleep($throttleDelay);
 		}
+		return $throttleDelay;
 	}
 
 	private function init()
@@ -550,10 +552,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
 		$this->notifier->failedLogin($logEntry, $maxNumber);
 		$this->blockIfTooManyAttempts($logEntry, $riskScore);
-		$this->accountThrottleIfNeeded($logEntry);
 
-		$delayDuration = $this->determineDelayDuration($riskScore);
-		if ($delayDuration != 0)
+		$delayDuration = $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
+		if ($delayDuration > 0)
 		{
 			// a blocked address gets nothing more out of a slow response;
 			// don't let it hold on to a worker (attackers could otherwise use
@@ -565,9 +566,27 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 			else
 			{
-				sleep((int) round($delayDuration));
+				$seconds = self::cappedDelay($delayDuration);
+				if ($seconds < (int) round($delayDuration))
+				{
+					$this->logger->log('Delay of '.round($delayDuration).'s cut to '.
+						$seconds.'s', Log::WARNING);
+				}
+				sleep($seconds);
 			}
 		}
+	}
+
+	/**
+	 * Every second of delay occupies a PHP worker, which is what an attacker
+	 * with many addresses would like to run out of - so however the delays of
+	 * the settings add up, one response is never held back longer than this.
+	 */
+	public const MaxDelaySeconds = 60;
+
+	public static function cappedDelay($seconds)
+	{
+		return max(0, min((int) round($seconds), self::MaxDelaySeconds));
 	}
 
 	public function onUserLogin($event)
@@ -678,12 +697,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$now = time();
 		if ($now > ($lastPurge + $purgeInterval))
 		{
-			$purgeAge = $this->getIntParam('deleteOld', 0);
+			$purgeAge = $this->getIntParam('deleteOld', DatabaseHelper::$DEFAULT_PURGE_WEEKS);
 			if ($purgeAge > 0)
 			{
 				$this->mydb->purgeOldEntries($purgeAge);
 			}
 			// regardless of the purge age setting: these are not deleted by age
+			$this->mydb->trimFailedLogins();
 			$this->mydb->trimUsernameStats();
 			$this->mydb->pruneKnownIps();
 			$this->mydb->purgeExpiredUnblockTokens();

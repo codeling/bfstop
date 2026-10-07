@@ -377,4 +377,19 @@ class DatabaseHelperTest extends IntegrationTestCase
 		sort($addresses);
 		$this->assertSame(array('203.0.113.1', '203.0.113.4'), $addresses);
 	}
+
+	public function testFailedLoginsAreLimited()
+	{
+		for ($i = 0; $i < 12; ++$i)
+		{
+			$this->failedLogin('203.0.113.5', 'user'.$i, 100 - $i);
+		}
+		$this->helper->trimFailedLogins(20);
+		$this->assertSame(12, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		$this->helper->trimFailedLogins(5);
+		$this->assertSame(5, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		// the newest are kept
+		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY id');
+		$this->assertSame(array('user7', 'user8', 'user9', 'user10', 'user11'), $this->db->loadColumn());
+	}
 }

@@ -7,6 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Factory;
 
 /**
@@ -130,6 +131,31 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->failedLogin('Admin');
 		$this->assertLessThan(4.0, microtime(true) - $start, 'a request that got its address blocked must not wait for the delay');
 		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+	}
+
+	public function testAccountThrottleDoesNotDelayABlockedAddress()
+	{
+		// the account has been attacked from elsewhere: every further failed
+		// login for it would be delayed, but this one got its address blocked
+		$this->configure(array('blockNumber' => 1, 'accountThrottleEnabled' => 1, 'accountBlockNumber' => 2,
+			'accountThrottleDelay' => 5));
+		foreach (array('203.0.113.60', '203.0.113.61', '203.0.113.62') as $ip)
+		{
+			$this->insert('#__bfstop_failedlogin', array('username' => 'Admin', 'ipaddress' => $ip,
+				'logtime' => self::minutesAgo(1), 'origin' => 0, 'handled' => 0));
+		}
+		$start = microtime(true);
+		$this->failedLogin('Admin');
+		$this->assertLessThan(4.0, microtime(true) - $start);
+		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+	}
+
+	public function testDelaysAreCapped()
+	{
+		$this->assertSame(0, Bfstop::cappedDelay(0));
+		$this->assertSame(0, Bfstop::cappedDelay(-5));
+		$this->assertSame(7, Bfstop::cappedDelay(6.6));
+		$this->assertSame(Bfstop::MaxDelaySeconds, Bfstop::cappedDelay(100000));
 	}
 
 	public function testExistingAndCommonUsernamesAreStoredReadably()
