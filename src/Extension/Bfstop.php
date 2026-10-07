@@ -11,6 +11,7 @@ namespace Codeling\Plugin\System\Bfstop\Extension;
 defined('_JEXEC') or die;
 
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
@@ -155,11 +156,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 		}
 		$usehtaccess = $this->getStringParam('blockMode', 'full') === 'htaccess';
-		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
-		if ($htaccessPath === "")
+		$htaccessPath = $this->getHtaccessPath();
+		if ($usehtaccess)
 		{
-			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, Log::INFO);
-			$htaccessPath = JPATH_ROOT;
+			// the file only holds what is still blocked
+			$this->removeLiftedHtaccessBlocks();
 		}
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
@@ -252,6 +253,45 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
 			? null
 			: 'the user has never logged in from this IP address';
+	}
+
+	private function getHtaccessPath()
+	{
+		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
+		if ($htaccessPath === "")
+		{
+			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, Log::INFO);
+			$htaccessPath = JPATH_ROOT;
+		}
+		return $htaccessPath;
+	}
+
+	/**
+	 * With blocking through .htaccess the web server holds back a blocked
+	 * address; it doesn't know that a block has run out or was lifted, so the
+	 * entry has to be taken out of the file here, or the block would be
+	 * permanent (and the file would grow with every address ever blocked).
+	 * Entries without a block in the database - the ones an administrator
+	 * added to the file by hand - are left alone.
+	 */
+	private function removeLiftedHtaccessBlocks()
+	{
+		$addresses = $this->mydb->getAddressesWithoutActiveBlock();
+		if (count($addresses) === 0)
+		{
+			return;
+		}
+		$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
+		$present = $htaccess->getDeniedIPs();
+		foreach ($addresses as $address)
+		{
+			if (in_array($address, $present, true))
+			{
+				$this->logger->log('Block of '.$address.' is over, removing it from '.
+					$htaccess->getFileName(), Log::INFO);
+				$htaccess->undenyIP($address);
+			}
+		}
 	}
 
 	private function getRealDurationFromDBDuration($duration)
@@ -647,6 +687,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->trimUsernameStats();
 			$this->mydb->pruneKnownIps();
 			$this->mydb->purgeExpiredUnblockTokens();
+			if ($this->getStringParam('blockMode', 'full') === 'htaccess')
+			{
+				$this->removeLiftedHtaccessBlocks();
+			}
 			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);

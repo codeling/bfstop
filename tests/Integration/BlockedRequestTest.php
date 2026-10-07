@@ -9,6 +9,7 @@ namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 
 /**
@@ -131,6 +132,30 @@ class BlockedRequestTest extends IntegrationTestCase
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
+	}
+
+	public function testMaintenanceTakesLiftedBlocksOutOfTheHtaccessFile()
+	{
+		$dir = sys_get_temp_dir().'/bfstop-maintenance-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		try
+		{
+			$this->configure(array('blockMode' => 'htaccess', 'htaccessPath' => $dir));
+			$this->block('203.0.113.50', 120, 60);   // ran out
+			$this->block('203.0.113.51', 10, 60);    // still active
+			$helper = new HtaccessHelper($dir, $this->logger);
+			foreach (array('203.0.113.50', '203.0.113.51', '203.0.113.52') as $ip)
+			{
+				$helper->denyIP($ip);                // .52: added by hand, no block in the database
+			}
+			$this->assertNotBlocked();
+			$this->assertSame(array('203.0.113.51', '203.0.113.52'), (new HtaccessHelper($dir, $this->logger))->getDeniedIPs());
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
 	}
 
 	public function testMaintenanceRunsOnlyOncePerDay()

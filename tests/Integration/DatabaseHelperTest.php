@@ -358,4 +358,23 @@ class DatabaseHelperTest extends IntegrationTestCase
 		// header, separator and the one entry
 		$this->assertCount(3, array_filter(explode("\n", $list), 'strlen'));
 	}
+
+	public function testAddressesWithoutActiveBlock()
+	{
+		$block = function ($ip, $minutesAgo, $duration)
+		{
+			return $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip,
+				'crdate' => self::minutesAgo($minutesAgo), 'duration' => $duration), 'id');
+		};
+		$block('203.0.113.1', 120, 60);                  // ran out
+		$block('203.0.113.2', 10, 60);                   // active
+		$block('203.0.113.3', 5000, 0);                  // permanent
+		$lifted = $block('203.0.113.4', 10, 60);         // lifted by an administrator
+		$this->insert('#__bfstop_unblock', array('block_id' => $lifted, 'source' => 0, 'crdate' => self::minutesAgo(1)));
+		$block('203.0.113.5', 120, 60);                  // ran out, but blocked again since
+		$block('203.0.113.5', 10, 60);
+		$addresses = $this->helper->getAddressesWithoutActiveBlock();
+		sort($addresses);
+		$this->assertSame(array('203.0.113.1', '203.0.113.4'), $addresses);
+	}
 }

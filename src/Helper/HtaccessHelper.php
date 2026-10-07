@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 
 /**
@@ -29,6 +30,15 @@ class HtaccessHelper
 	private $logger;
 
 	public const BlockPrefix = 'Require not ip ';
+
+	/**
+	 * The most addresses the block section holds. Apache reads the file again
+	 * for every request, and a visitor with many addresses can get many of
+	 * them blocked: without a limit, that slows down the whole site. Blocks
+	 * beyond it still apply in the database - for requests that get as far as
+	 * Joomla.
+	 */
+	public const MaxBlockLines = 2000;
 
 	/**
 	 * Construct class with given $path.
@@ -97,12 +107,20 @@ class HtaccessHelper
 	{
 		$lines = $this->getLines(self::BlockPrefix);
 
-		foreach ($lines as $key => $line)
+		$addresses = array();
+		foreach ($lines as $line)
 		{
-			$lines[$key] = substr($line, strlen(self::BlockPrefix));
+			// the list is shown in the backend, and what it holds is whatever
+			// somebody wrote into the file: only addresses and subnets are
+			// passed on
+			$address = substr($line, strlen(self::BlockPrefix));
+			if (IpHelper::isValidIpOrSubnet($address))
+			{
+				$addresses[] = $address;
+			}
 		}
 
-		return $lines;
+		return $addresses;
 	}
 
 	/**
@@ -205,7 +223,7 @@ class HtaccessHelper
 	 */
 	private function locked(callable $change)
 	{
-		$lockFile = sys_get_temp_dir().'/bfstop-htaccess-'.md5($this->path).'.lock';
+		$lockFile = $this->lockDirectory().'/bfstop-htaccess-'.md5($this->path).'.lock';
 		$handle = @fopen($lockFile, 'c');
 		if ($handle === false || !flock($handle, LOCK_EX))
 		{
@@ -228,6 +246,28 @@ class HtaccessHelper
 			flock($handle, LOCK_UN);
 			fclose($handle);
 		}
+	}
+
+	/**
+	 * Joomla's own temporary directory if there is one we can use, not the
+	 * system's: that one is shared with other users of the machine on many
+	 * hosts, who could then hold the lock (or plant a link under its name).
+	 */
+	private function lockDirectory()
+	{
+		try
+		{
+			$tmp = (string) Factory::getApplication()->get('tmp_path');
+			if ($tmp !== '' && is_dir($tmp) && is_writable($tmp))
+			{
+				return rtrim($tmp, '/\\');
+			}
+		}
+		catch (\Throwable $e)
+		{
+			// no application (e.g. in a script): use the system's
+		}
+		return sys_get_temp_dir();
 	}
 
 	/**
@@ -283,7 +323,17 @@ class HtaccessHelper
 	 */
 	private function addLine($line)
 	{
-		$insertion = array_merge($this->getHeader(), $this->getLines(false, true), array($line), $this->getFooter());
+		$existing = $this->getLines(false, true);
+		if (!in_array($line, $existing, true) && count($existing) >= self::MaxBlockLines)
+		{
+			if (!is_null($this->logger))
+			{
+				$this->logger->log("Not adding '$line' to .htaccess: it holds ".count($existing).
+					" lines already", Log::ERROR);
+			}
+			return false;
+		}
+		$insertion = array_merge($this->getHeader(), $existing, array($line), $this->getFooter());
 
 		return $this->insert(array_unique($insertion));
 	}
@@ -325,6 +375,30 @@ class HtaccessHelper
 		unset($insertion[$lineKey]);
 
 		return $this->insert($insertion);
+	}
+
+	/**
+	 * Replaces the file as a whole: the new content is written next to it and
+	 * renamed over it. Writing into the file itself would truncate it first,
+	 * and a request served (or a crash) in between would see a part of it - for
+	 * a configuration file of the web server, an error page for the whole site.
+	 * Falls back to writing into the file if the directory doesn't allow
+	 * creating files, which hosts which only make the file itself writable need.
+	 */
+	private function write($content)
+	{
+		$target = is_link($this->path) ? (realpath($this->path) ?: $this->path) : $this->path;
+		$temporary = $target.'.bfstop-'.bin2hex(random_bytes(6));
+		if (@file_put_contents($temporary, $content) === strlen($content))
+		{
+			@chmod($temporary, file_exists($target) ? (fileperms($target) & 0777) : 0644);
+			if (@rename($temporary, $target))
+			{
+				return true;
+			}
+		}
+		@unlink($temporary);
+		return file_put_contents($target, $content, LOCK_EX) !== false;
 	}
 
 	private static $marker = 'BFStop Blocks';
@@ -454,7 +528,7 @@ class HtaccessHelper
 				$newContent = $beginContent . $newContent;
 			}
 
-			return file_put_contents($this->path, $newContent, LOCK_EX);
+			return $this->write($newContent);
 		}
 		if (!is_null($this->logger))
 		{

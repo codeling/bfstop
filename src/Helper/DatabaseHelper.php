@@ -254,6 +254,30 @@ class DatabaseHelper
 		return $ids;
 	}
 
+	/**
+	 * The addresses which have been blocked, but are not any more: the block
+	 * has run out or was lifted, and no other block of the same address is
+	 * active. For blocking through the web server's configuration, which
+	 * knows nothing about durations.
+	 */
+	public function getAddressesWithoutActiveBlock()
+	{
+		try
+		{
+			$now = $this->db->quote(date("Y-m-d H:i:s"));
+			$active = "(c.duration=0 OR ".$this->addMinutesSql('c.crdate', 'c.duration')." >= $now)".
+				" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock cu WHERE cu.block_id = c.id)";
+			$this->db->setQuery("SELECT DISTINCT b.ipaddress FROM #__bfstop_bannedip b WHERE NOT EXISTS ".
+				"(SELECT 1 FROM #__bfstop_bannedip c WHERE c.ipaddress = b.ipaddress AND $active)");
+			return $this->db->loadColumn();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return array();
+		}
+	}
+
 	public function isIPBlocked($ipaddress)
 	{
 		return (count($this->getActiveBlockIds($ipaddress)) > 0);
