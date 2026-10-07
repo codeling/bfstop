@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\ListModel;
 
@@ -47,6 +48,11 @@ class AllowlistModel extends ListModel
 
 	public function remove($ids, $logger)
 	{
+		$ids = array_values(array_filter(array_map('intval', (array) $ids)));
+		if (count($ids) === 0)
+		{
+			return Text::_('COM_BFSTOP_ALLOWLIST_NOTHING_REMOVED');
+		}
 		try
 		{
 			$db = Factory::getDbo();
@@ -58,10 +64,12 @@ class AllowlistModel extends ListModel
 			$query->where($conditions);
 			$db->setQuery($query);
 			$db->execute();
+			return Text::_('COM_BFSTOP_ALLOWLIST_REMOVED');
 		}
 		catch (\RuntimeException $e)
 		{
 			$logger->log($e->getMessage(), Log::ERROR);
+			return Text::_('COM_BFSTOP_ALLOWLIST_REMOVE_FAILED');
 		}
 	}
 }

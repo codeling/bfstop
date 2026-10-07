@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -27,6 +28,13 @@ class HtmlView extends BaseHtmlView
 
 	public function display($tpl = null)
 	{
+		// the settings show where the plugin writes files, which proxy it
+		// trusts and who gets the notifications: not for everybody who may
+		// merely look at the lists
+		if (!Factory::getApplication()->getIdentity()->authorise('core.admin', 'com_bfstop'))
+		{
+			throw new NotAllowed(Text::_('JERROR_ALERTNOAUTHOR'), 403);
+		}
 		// the form field labels/descriptions are reused verbatim from the
 		// plugin's own language file; that file isn't auto-loaded for us.
 		// the strings live in the .sys.ini, not the plain .ini - see

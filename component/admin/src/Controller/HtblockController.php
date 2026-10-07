@@ -66,16 +66,11 @@ class HtblockController extends FormController
 			$msg = "";
 			foreach ($errors as $error)
 			{
-				if ($error instanceof \Exception)
-				{
-					$msg .= $error->getMessage();
-				}
-				else
-				{
-					$msg .= $error;
-				}
+				// the messages have been escaped where they were made (they may
+				// contain what was typed in), see IpValidateHelper
+				$msg .= ($error instanceof \Exception) ? $error->getMessage() : $error;
 			}
-			$this->returnToFormWithMessage($data['ipaddress'], $msg);
+			$this->returnToFormWithMessage(is_string($data['ipaddress'] ?? null) ? $data['ipaddress'] : '', $msg);
 			return false;
 		}
 		$ipaddress = $validData['ipaddress'];

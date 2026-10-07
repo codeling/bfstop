@@ -13,6 +13,7 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -22,6 +23,12 @@ class HtmlView extends BaseHtmlView
 {
 	function display($tpl = null)
 	{
+		// the log holds addresses and usernames of failed logins and details
+		// of how the plugin is set up
+		if (!Factory::getApplication()->getIdentity()->authorise('core.admin', 'com_bfstop'))
+		{
+			throw new NotAllowed(Text::_('JERROR_ALERTNOAUTHOR'), 403);
+		}
 		$this->items      = $this->get('Items');
 		$this->pagination = $this->get('Pagination');
 		$state            = $this->get('State');

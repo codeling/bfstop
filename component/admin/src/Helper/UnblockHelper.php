@@ -47,6 +47,7 @@ class UnblockHelper
 		$unblockDate = date('Y-m-d H:i:s');
 		foreach ($ids as $id)
 		{
+			$curResult = false;
 			try
 			{
 				$id = (int) $id;

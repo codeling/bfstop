@@ -40,7 +40,7 @@ class FailedloginlistModel extends ListModel
 				->bind(':username', $username);
 		}
 		$ordering  = $this->getState('list.ordering', 'l.id');
-		$ordering  = (strcmp($ordering, '') == 0) ? 'b.id' : $ordering;
+		$ordering  = (strcmp($ordering, '') == 0) ? 'l.id' : $ordering;
 		$direction = $this->getState('list.direction', 'ASC');
 		$direction = (strcmp($direction, '') == 0) ? 'ASC' : $direction;
 		$query->order($db->escape($ordering).' '.$db->escape($direction));
