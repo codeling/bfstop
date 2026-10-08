@@ -5,12 +5,14 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
  *
- * This file is vendored from maxmind-db/reader
+ * This file is vendored from maxmind-db/reader 1.14.0
  * (https://github.com/maxmind/MaxMind-DB-Reader-php), used here as a small,
  * dependency-free (core PHP only) reader for MaxMind .mmdb GeoIP databases,
  * so BFStop can look up an IP's country/city locally instead of relying on a
- * third-party web API (see issues #76 and #169). Only the namespace has been
- * changed; the decoding logic is unmodified.
+ * third-party web API (see issues #76 and #169). Only the namespace, this
+ * header and the _JEXEC guard have been changed; the decoding logic is
+ * unmodified. Do not edit by hand: tools/vendor-geoip.php regenerates it from
+ * composer.lock (see README, "GeoIP reader").
  *
  * Original work Copyright (C) MaxMind, Inc., licensed under the
  * Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
@@ -62,6 +64,11 @@ class Reader
      * @var resource
      */
     private $fileHandle;
+
+    /**
+     * @var bool
+     */
+    private $lookupInProgress = false;
 
     /**
      * @var int
@@ -136,7 +143,7 @@ class Reader
      *
      * @param string $ipAddress the IP address to look up
      *
-     * @throws \BadMethodCallException   if this method is called on a closed database
+     * @throws \BadMethodCallException   if the database is closed or another lookup is in progress
      * @throws \InvalidArgumentException if something other than a single IP address is passed to the method
      * @throws InvalidDatabaseException
      *                                   if the database is invalid or there is an error reading
@@ -161,7 +168,7 @@ class Reader
      *
      * @param string $ipAddress the IP address to look up
      *
-     * @throws \BadMethodCallException   if this method is called on a closed database
+     * @throws \BadMethodCallException   if the database is closed or another lookup is in progress
      * @throws \InvalidArgumentException if something other than a single IP address is passed to the method
      * @throws InvalidDatabaseException
      *                                   if the database is invalid or there is an error reading
@@ -184,12 +191,25 @@ class Reader
             );
         }
 
-        [$pointer, $prefixLen] = $this->findAddressInTree($ipAddress);
-        if ($pointer === 0) {
-            return [null, $prefixLen];
+        if ($this->lookupInProgress) {
+            throw new \BadMethodCallException(
+                'A lookup is already in progress on this reader. Use a separate reader for nested lookups.'
+            );
         }
+        // A stream wrapper can call back into this reader during a read.
+        // Reject nested lookups before they can move the shared stream.
+        $this->lookupInProgress = true;
 
-        return [$this->resolveDataPointer($pointer), $prefixLen];
+        try {
+            [$pointer, $prefixLen] = $this->findAddressInTree($ipAddress);
+            if ($pointer === 0) {
+                return [null, $prefixLen];
+            }
+
+            return [$this->resolveDataPointer($pointer), $prefixLen];
+        } finally {
+            $this->lookupInProgress = false;
+        }
     }
 
     /**

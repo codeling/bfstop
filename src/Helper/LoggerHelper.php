@@ -201,6 +201,16 @@ class LoggerHelper
 		return $deleted;
 	}
 
+	/**
+	 * $text with control characters (line breaks above all) replaced by spaces:
+	 * values a visitor chooses - like the username of a failed login - must not
+	 * be able to forge further lines in the log or in a mail.
+	 */
+	public static function singleLine($text)
+	{
+		return preg_replace('/[\x00-\x1f\x7f]+/', ' ', (string) $text);
+	}
+
 	public function isEnabled($priority = Log::ERROR)
 	{
 		return $priority <= $this->log_level;
@@ -210,7 +220,7 @@ class LoggerHelper
 	{
 		if ($this->isEnabled($priority))
 		{
-			Log::add($msg, $priority, self::LogCategory);
+			Log::add(self::singleLine($msg), $priority, self::LogCategory);
 		}
 	}
 }

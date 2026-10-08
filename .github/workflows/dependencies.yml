@@ -1,0 +1,43 @@
+name: Dependency check
+
+# The plugin ships a copy of the MaxMind DB reader (src/Helper/Geo, see README).
+# This weekly job reports a newer release, and security advisories against the
+# locked version, even if Dependabot is switched off.
+
+on:
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  geoip-reader:
+    name: maxmind-db/reader is current and free of advisories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - run: composer install --no-interaction --no-progress
+      - name: Vendored copy is the locked version
+        run: composer check-geoip
+      - name: Security advisories
+        run: composer audit
+      - name: Newer release available?
+        run: |
+          composer outdated --direct --strict maxmind-db/reader
+      - name: Open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Update the vendored GeoIP reader (maxmind-db/reader)"
+          if [ -z "$(gh issue list --state open --search "in:title $title" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$title" --label dependencies \
+              --body "The weekly dependency check failed: maxmind-db/reader has a newer release, a security advisory, or src/Helper/Geo differs from composer.lock. See the run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. To update: \`composer update maxmind-db/reader && composer vendor-geoip\`, review the diff, run the tests, release both extensions."
+          fi

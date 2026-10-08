@@ -19,3 +19,27 @@ https://github.com/codeling/bfstop
 For any further questions, don't hesitate to contact me under
 info@bfstop.de
 
+GeoIP reader (third-party code, keep it up to date!)
+----------------------------------------------------
+The optional GeoIP features (country risk score, "Information for IP Address")
+use a copy of the MaxMind DB reader (maxmind-db/reader, Apache-2.0), shipped in
+src/Helper/Geo, because a Joomla! extension cannot rely on composer at install
+time. It parses a database file with untrusted-format binary data, so it has to
+be updated whenever MaxMind publishes a new release - releases of this plugin
+should never ship an outdated copy.
+
+  * Which version is shipped:  composer.lock (package maxmind-db/reader); the
+    header of src/Helper/Geo/Reader.php names it too.
+  * How it is kept current:  Dependabot and a weekly GitHub Actions job
+    (.github/workflows/dependencies.yml) report new releases and security
+    advisories; CI fails if src/Helper/Geo is not exactly the locked version.
+  * How to update:  composer update maxmind-db/reader && composer vendor-geoip,
+    review the diff, run the tests, release plugin and component.
+  * The GeoLite2/GeoIP2 *database* (.mmdb) is separate: you download it and
+    configure its path in the component's settings. MaxMind publishes new
+    versions of GeoLite2 twice a week (Tuesdays and Fridays), and the
+    addresses of the internet move around, so an old file gets less and less
+    accurate - it only feeds the risk score and the address information, it is
+    not a security boundary. Update it regularly (geoipupdate can do that from
+    cron), and check the licence terms of the database you use: they may
+    require you to keep it current.

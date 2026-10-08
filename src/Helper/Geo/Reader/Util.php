@@ -5,7 +5,7 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
  *
- * Vendored from maxmind-db/reader (see Geo/Reader.php for details).
+ * Vendored from maxmind-db/reader 1.14.0 (see Geo/Reader.php for details).
  * Original work Copyright (C) MaxMind, Inc., licensed under the
  * Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
 **/
@@ -30,10 +30,8 @@ class Util
         if (fseek($stream, $offset) === 0) {
             $value = fread($stream, $numberOfBytes);
 
-            // We check that the number of bytes read is equal to the number
-            // asked for. We use ftell as getting the length of $value is
-            // much slower.
-            if ($value !== false && ftell($stream) - $offset === $numberOfBytes) {
+            // Check that the number of bytes read is the number asked for.
+            if ($value !== false && \strlen($value) === $numberOfBytes) {
                 return $value;
             }
         }

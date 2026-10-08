@@ -14,6 +14,7 @@ use Joomla\CMS\Cache\CacheControllerFactoryInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
+use Joomla\Database\DatabaseInterface;
 
 class DatabaseHelper
 {
@@ -26,6 +27,16 @@ class DatabaseHelper
 	// how long an emailed unblock token can be used; com_bfstop's
 	// TokenunblockModel::TokenValidDays must stay in sync with this
 	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
+
+	// failed logins are purged after this many weeks unless the administrator
+	// chose another time (0 = never). Keeping them for ever is not needed to
+	// protect anything, and they are personal data (addresses, usernames)
+	public static $DEFAULT_PURGE_WEEKS = 4;
+
+	// upper bound for the rows of the failed logins, however the purge age is
+	// set: a visitor can add one for every request, from as many addresses as
+	// they like
+	public static $FAILED_LOGIN_MAX_ROWS = 200000;
 
 	// upper bound for the rows of the username statistics, which (unlike
 	// the failed logins) are not purged by age: an attacker can make up as
@@ -72,17 +83,8 @@ class DatabaseHelper
 
 	public function __construct(LoggerHelper $logger)
 	{
-		$this->db = Factory::getDbo();
+		$this->db = Factory::getContainer()->get(DatabaseInterface::class);
 		$this->logger = $logger;
-	}
-
-	public function myCheckDBError()
-	{
-		$errNum = $this->db->getErrorNum();
-		if ($errNum != 0)
-		{
-			$this->logger->log("Database error (#$errNum) occured: ".$this->db->getErrorMsg(), Log::ERROR);
-		}
 	}
 
 	public function eventsInInterval(
@@ -188,7 +190,7 @@ class DatabaseHelper
 					str_repeat("-", 97)."\n";
 			foreach ($entries as $entry)
 			{
-				$result .= str_pad($entry->username, 25)." ".
+				$result .= str_pad(LoggerHelper::singleLine($entry->username), 25)." ".
 					str_pad($entry->ipaddress, 15)." ".
 					str_pad($entry->logtime, 20)." ".
 					str_pad($this->getClientString($entry->origin), 8)."\n";
@@ -263,6 +265,30 @@ class DatabaseHelper
 		return $ids;
 	}
 
+	/**
+	 * The addresses which have been blocked, but are not any more: the block
+	 * has run out or was lifted, and no other block of the same address is
+	 * active. For blocking through the web server's configuration, which
+	 * knows nothing about durations.
+	 */
+	public function getAddressesWithoutActiveBlock()
+	{
+		try
+		{
+			$now = $this->db->quote(date("Y-m-d H:i:s"));
+			$active = "(c.duration=0 OR ".$this->addMinutesSql('c.crdate', 'c.duration')." >= $now)".
+				" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock cu WHERE cu.block_id = c.id)";
+			$this->db->setQuery("SELECT DISTINCT b.ipaddress FROM #__bfstop_bannedip b WHERE NOT EXISTS ".
+				"(SELECT 1 FROM #__bfstop_bannedip c WHERE c.ipaddress = b.ipaddress AND $active)");
+			return $this->db->loadColumn();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return array();
+		}
+	}
+
 	public function isIPBlocked($ipaddress)
 	{
 		return (count($this->getActiveBlockIds($ipaddress)) > 0);
@@ -310,7 +336,7 @@ class DatabaseHelper
 			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
 			{
 				$this->logger->log('Insert block entry failed!', Log::ERROR);
-				$blockEntry->id = -1;
+				return -1;
 			}
 			$this->setFailedLoginHandled($logEntry, false);
 			if ($usehtaccess)
@@ -329,14 +355,28 @@ class DatabaseHelper
 	}
 
 	/**
+	 * What is stored of an unblock token. The token itself is a secret which
+	 * only the mail holds: whoever reads the table (a backup, an SQL injection
+	 * somewhere else on the site) must not get working links out of it. The
+	 * token has 160 random bits, so a plain hash is enough; it is cut to the
+	 * 40 characters of the column. com_bfstop's TokenunblockModel uses this too.
+	 */
+	public static function hashToken($token)
+	{
+		return substr(hash('sha256', (string) $token), 0, 40);
+	}
+
+	/**
+	 * @param string      $token    the token to put into the link; only its hash is stored
 	 * @param string|null $username the user the link is sent to, if any
+	 * @return string|null $token, or null if it could not be stored
 	 */
 	public function getNewUnblockToken($id, $token, $username = null)
 	{
 		try
 		{
 			$tokenEntry = new \stdClass();
-			$tokenEntry->token = $token;
+			$tokenEntry->token = self::hashToken($token);
 			$tokenEntry->block_id = $id;
 			$tokenEntry->crdate = date("Y-m-d H:i:s");
 			$tokenEntry->username = $username;
@@ -344,9 +384,9 @@ class DatabaseHelper
 			{
 				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
 				$this->logger->log('Insert unblock token failed!', Log::ERROR);
-				$tokenEntry->token = null;
+				return null;
 			}
-			return $tokenEntry->token;
+			return $token;
 		}
 		catch (\Exception $e)
 		{
@@ -370,7 +410,7 @@ class DatabaseHelper
 		try
 		{
 			$sql = "SELECT block_id, crdate FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote($token);
+				$this->db->quote(self::hashToken($token));
 			$this->db->setQuery($sql);
 			$row = $this->db->loadAssoc();
 			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
@@ -414,7 +454,7 @@ class DatabaseHelper
 		try
 		{
 			$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote($token);
+				$this->db->quote(self::hashToken($token));
 			$this->db->setQuery($sql);
 			$result = $this->db->loadResult();
 			return $result != null;
@@ -911,6 +951,43 @@ class DatabaseHelper
 					return;
 				}
 				$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE id IN ('.
+					implode(',', array_map('intval', $ids)).')');
+				$this->db->execute();
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Keeps the failed logins below $maxRows by deleting the oldest ones.
+	 */
+	public function trimFailedLogins($maxRows = null)
+	{
+		$maxRows = $maxRows ?? self::$FAILED_LOGIN_MAX_ROWS;
+		try
+		{
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_failedlogin');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('id'))
+					->from($this->db->quoteName('#__bfstop_failedlogin'))
+					->order($this->db->quoteName('id').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 5000));
+				$ids = $this->db->loadColumn();
+				if (count($ids) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE id IN ('.
 					implode(',', array_map('intval', $ids)).')');
 				$this->db->execute();
 			}

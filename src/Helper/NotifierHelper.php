@@ -13,6 +13,7 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
+use Joomla\CMS\Mail\MailerFactoryInterface;
 use Joomla\CMS\Uri\Uri;
 
 class NotifierHelper
@@ -50,12 +51,7 @@ class NotifierHelper
 
 	public function getSiteName()
 	{
-		$config = Factory::getConfig();
-		$siteName = $config->get('sitename');	// Joomla! 3.x
-		$siteName = (strcmp($siteName, '') == 0)
-			? $config->get('config.sitename')
-			: $siteName;
-		return $siteName;
+		return (string) Factory::getApplication()->get('sitename');
 	}
 
 	public function isNotificationAllowed($logtime, $maxNumber,
@@ -95,7 +91,7 @@ class NotifierHelper
 			$this->getSiteName(),
 			Uri::root())."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":", 15).
-			$logEntry->username."\n";
+			LoggerHelper::singleLine($logEntry->username)."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":", 15).
 			$logEntry->ipaddress."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":", 15).
@@ -112,7 +108,7 @@ class NotifierHelper
 			$this->logger->log("sendMail called with invalid argument: ".print_r($emailAddresses, true), Log::ERROR);
 			return false;
 		}
-		$mail = Factory::getMailer();
+		$mail = Factory::getContainer()->get(MailerFactoryInterface::class)->createMailer();
 		$mail->setSubject($subject);
 		$mail->setBody($body);
 		foreach ($emailAddresses as $recipient)

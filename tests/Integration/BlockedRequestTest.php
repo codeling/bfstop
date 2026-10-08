@@ -9,6 +9,7 @@ namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 
 /**
@@ -26,7 +27,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	public static function setUpBeforeClass(): void
 	{
 		parent::setUpBeforeClass();
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
@@ -35,7 +36,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		if (self::$originalParams !== null)
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();
@@ -127,10 +128,34 @@ class BlockedRequestTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(60)));
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
-		$this->assertSame(array(str_repeat('cd', 20)), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
+		$this->assertSame(array(DatabaseHelper::hashToken(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
+	}
+
+	public function testMaintenanceTakesLiftedBlocksOutOfTheHtaccessFile()
+	{
+		$dir = sys_get_temp_dir().'/bfstop-maintenance-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		try
+		{
+			$this->configure(array('blockMode' => 'htaccess', 'htaccessPath' => $dir));
+			$this->block('203.0.113.50', 120, 60);   // ran out
+			$this->block('203.0.113.51', 10, 60);    // still active
+			$helper = new HtaccessHelper($dir, $this->logger);
+			foreach (array('203.0.113.50', '203.0.113.51', '203.0.113.52') as $ip)
+			{
+				$helper->denyIP($ip);                // .52: added by hand, no block in the database
+			}
+			$this->assertNotBlocked();
+			$this->assertSame(array('203.0.113.51', '203.0.113.52'), (new HtaccessHelper($dir, $this->logger))->getDeniedIPs());
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
 	}
 
 	public function testMaintenanceRunsOnlyOncePerDay()
@@ -257,6 +282,58 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('ef', 20),
 			'block_id' => $blockId, 'crdate' => self::minutesAgo(4 * 24 * 60)));
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('ef', 20));
+	}
+
+	/**
+	 * The pass a valid token gives is for the unblock view and nothing else:
+	 * whatever else a request carries (another task or component, in any
+	 * spelling - Joomla matches the task case-insensitively, and the backend
+	 * decides on the component itself - or a token which isn't a plain
+	 * string) must still be rejected. The one request which gets through is
+	 * the unblock view itself.
+	 */
+	public function testUnblockTokenPassIsLimitedToTheUnblockView()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option=com_users&task=user.LOGIN&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_login&task=login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&task=user.login&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=COM_BFSTOP&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=TOKENUNBLOCK&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token[]='.$token);
+		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+	}
+
+	/**
+	 * A token is bound to the blocks it was issued for: a valid token of
+	 * another address's block doesn't open the unblock view, whatever the
+	 * request looks like otherwise.
+	 */
+	public function testUnblockTokenOfAnotherAddressIsNoPassForTheUnblockView()
+	{
+		$this->configure();
+		$this->block();
+		$otherBlockId = $this->block('203.0.113.99');
+		$otherToken = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$otherToken);
+	}
+
+	/**
+	 * Parameters given as arrays ("option[]=x") are no valid values: they must
+	 * neither break the plugin nor get a request past the block.
+	 */
+	public function testArrayParametersDoNotBreakTheBlock()
+	{
+		$this->configure();
+		$blockId = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$this->assertBlocked('option[]=com_bfstop&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view[]=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&task[]=display&token='.$token);
+		$this->assertBlocked('option[]=com_users&view[]=reset');
+		$this->assertBlocked('option[]=com_users&task[]=user.login');
 	}
 
 	public function testRejectedRequestsAreCounted()

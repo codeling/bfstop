@@ -152,6 +152,35 @@
     are validated (no stream wrappers like phar://, a .mmdb file name)
   - Added SECURITY.md with the supported versions and how to report
     vulnerabilities
+  - Security: the bundled MaxMind DB reader (maxmind-db/reader, now 1.14.0,
+    which limits the decoding of malformed or hostile database files) is
+    tracked in composer.json/composer.lock; src/Helper/Geo is generated from
+    it (tools/vendor-geoip.php), CI verifies that, and Dependabot plus a
+    weekly job report new releases and security advisories
+  - Security: blocking through .htaccess removes blocks that ran out or were
+    lifted from the file (a timed block used to stay there for ever, and the
+    file grew with every blocked address); at most 2000 lines are kept; the
+    file is replaced atomically instead of being rewritten in place; the lock
+    file lives in Joomla's tmp directory instead of the system's
+  - Security: failed logins are purged after 4 weeks by default (set the
+    purge age to 0 for the old behaviour) and limited to 200000 rows
+  - Security: a response is delayed by 60 seconds at most, however the delay
+    settings add up, and the account throttle no longer delays an address
+    that was just blocked
+  - Security: unblock tokens are stored as hashes; links sent before the
+    update stop working (they are valid for 3 days only)
+  - Security: usernames in log entries and in mails can no longer contain
+    line breaks; array-valued request parameters ("option[]=x") no longer
+    cause a TypeError in the check of blocked requests
+  - Settings which have not been saved yet now have the values the settings
+    page shows (block after 10 attempts, ...)
+  - Component: all list settings are validated against their options, the
+    notification addresses against the email format; messages escape what was
+    typed in; the settings and log views need the core.admin permission
+  - Internal: the Joomla! APIs deprecated in 4.3-5.3 and removed in Joomla! 7
+    are no longer used (Factory::getDbo/getConfig/getSession/getLanguage/
+    getDocument/getMailer, $_db, Table::getInstance, View::get(),
+    addStyleSheet(), getCfg()); a test fails if one comes back
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

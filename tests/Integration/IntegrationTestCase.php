@@ -7,6 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
@@ -78,7 +79,7 @@ abstract class IntegrationTestCase extends TestCase
 
 	protected function setUp(): void
 	{
-		$this->db = Factory::getDbo();
+		$this->db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$this->logger = new RecordingLogger();
 		$this->emptyTables();
 	}
@@ -108,9 +109,17 @@ abstract class IntegrationTestCase extends TestCase
 		return date('Y-m-d H:i:s', time() - $minutes * 60);
 	}
 
-	/** inserts a row, returns the new id if $key is given */
+	/**
+	 * inserts a row, returns the new id if $key is given. For unblock tokens
+	 * the row is given with the token as it is in the mail; what the table
+	 * holds is its hash (see DatabaseHelper::hashToken())
+	 */
 	protected function insert($table, array $row, $key = null)
 	{
+		if ($table === '#__bfstop_unblock_token' && isset($row['token']))
+		{
+			$row['token'] = DatabaseHelper::hashToken($row['token']);
+		}
 		$object = (object) $row;
 		$this->db->insertObject($table, $object, $key);
 		return $key ? (int) $object->$key : null;

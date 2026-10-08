@@ -35,3 +35,13 @@ Settings are changed by users with the `core.admin` permission for
 `com_bfstop`. They can, among other things, choose the directory in which the
 plugin writes its `.htaccess` file, so grant that permission only to people
 you trust with the web server's configuration for your site.
+
+## Third-party code
+
+The plugin ships a copy of MaxMind's `maxmind-db/reader` in `src/Helper/Geo`
+(the exact version is pinned in `composer.lock`). A weekly CI job and
+Dependabot report new releases and security advisories, and CI fails if the
+copy deviates from the pinned version. Releases are only made with the latest
+reader; see the "GeoIP reader" section of the README for how to update it. If
+you notice that the shipped version is behind, please report it like any other
+vulnerability.

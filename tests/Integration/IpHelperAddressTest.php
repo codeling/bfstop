@@ -26,7 +26,7 @@ class IpHelperAddressTest extends IntegrationTestCase
 	public static function setUpBeforeClass(): void
 	{
 		parent::setUpBeforeClass();
-		$db = \Joomla\CMS\Factory::getDbo();
+		$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
@@ -35,7 +35,7 @@ class IpHelperAddressTest extends IntegrationTestCase
 	{
 		if (self::$originalParams !== null)
 		{
-			$db = \Joomla\CMS\Factory::getDbo();
+			$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();

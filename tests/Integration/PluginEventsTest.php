@@ -35,7 +35,7 @@ class PluginEventsTest extends IntegrationTestCase
 	public static function setUpBeforeClass(): void
 	{
 		parent::setUpBeforeClass();
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		self::$originalParams = $db->loadResult();
 		$db->setQuery('UPDATE #__extensions SET params='.$db->quote(json_encode(self::Params)).
@@ -51,7 +51,7 @@ class PluginEventsTest extends IntegrationTestCase
 	{
 		if (self::$originalParams !== null)
 		{
-			$db = Factory::getDbo();
+			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
 				" WHERE type='plugin' AND element='bfstop'");
 			$db->execute();
@@ -105,6 +105,15 @@ class PluginEventsTest extends IntegrationTestCase
 		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('203.0.113.22'));
 
 		$this->assertSame($logErrorsBefore, $this->pluginLogErrors(), 'plugin logged errors');
+	}
+
+	public function testFailedLoginWithoutUsernameIsRecorded()
+	{
+		// some authentication flows hand over credentials without a username
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.23';
+		$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0';
+		$this->dispatch('onUserLoginFailure', array(array('status' => 4), array()));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE ipaddress='203.0.113.23'"));
 	}
 
 	public function testSubnetBlockAndAllowList()

@@ -225,4 +225,56 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertTrue($logger->hasMessage(Log::ERROR, 'not writable'));
 		$logger->errors = array(); // expected
 	}
+
+	public function testWritingReplacesTheFileWithoutLeavingTemporaryFiles()
+	{
+		file_put_contents($this->dir.'/.htaccess', "RewriteEngine On\n");
+		chmod($this->dir.'/.htaccess', 0640);
+		$this->assertTrue($this->helper()->denyIP('203.0.113.5'));
+		$this->assertStringContainsString('Require not ip 203.0.113.5', $this->content());
+		$this->assertStringContainsString('RewriteEngine On', $this->content());
+		$this->assertSame(0640, fileperms($this->dir.'/.htaccess') & 0777, 'the permissions are kept');
+		$this->assertSame(array('.htaccess'), array_values(array_diff(scandir($this->dir), array('.', '..'))));
+	}
+
+	public function testWritingKeepsASymbolicLink()
+	{
+		$real = $this->dir.'/real-htaccess';
+		file_put_contents($real, "RewriteEngine On\n");
+		symlink($real, $this->dir.'/.htaccess');
+		try
+		{
+			$this->assertTrue($this->helper()->denyIP('203.0.113.5'));
+			$this->assertTrue(is_link($this->dir.'/.htaccess'));
+			$this->assertStringContainsString('Require not ip 203.0.113.5', file_get_contents($real));
+		}
+		finally
+		{
+			unlink($this->dir.'/.htaccess');
+			unlink($real);
+		}
+	}
+
+	public function testTheBlockSectionHasALimit()
+	{
+		$lines = array('<RequireAll>', 'Require all granted');
+		for ($i = 0; $i < HtaccessHelper::MaxBlockLines; ++$i)
+		{
+			$lines[] = 'Require not ip 10.'.intdiv($i, 250).'.'.($i % 250).'.1';
+		}
+		$lines[] = '</RequireAll>';
+		file_put_contents($this->dir.'/.htaccess', "# BEGIN BFStop Blocks\n".implode("\n", $lines)."\n# END BFStop Blocks\n");
+		$this->assertFalse($this->helper(new RecordingLogger())->denyIP('203.0.113.5'));
+		$this->assertStringNotContainsString('203.0.113.5', $this->content());
+		// an address which is in there already is no new line
+		$this->assertTrue($this->helper()->denyIP('10.0.0.1'));
+	}
+
+	public function testOnlyAddressesAreListed()
+	{
+		file_put_contents($this->dir.'/.htaccess', "# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\n".
+			"Require not ip 203.0.113.5\nRequire not ip \"><script>alert(1)</script>\nRequire not ip 2001:db8::/32\n".
+			"Require not ip 203.0.113.0/99\n</RequireAll>\n# END BFStop Blocks\n");
+		$this->assertSame(array('203.0.113.5', '2001:db8::/32'), $this->helper()->getDeniedIPs());
+	}
 }

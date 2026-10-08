@@ -8,6 +8,8 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Component\Bfstop\Administrator\Controller\DisplayController;
+use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Model\AllowModel;
 use Codeling\Component\Bfstop\Administrator\Model\AllowlistModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlockModel;
@@ -218,7 +220,10 @@ class ComponentTest extends IntegrationTestCase
 
 	private function formRuleResult($ruleFile, $class, $value, $blockMode = 'full')
 	{
-		require_once getenv('COM_BFSTOP_ROOT').'/admin/rules/'.$ruleFile;
+		if (!class_exists($class, false))
+		{
+			require_once getenv('COM_BFSTOP_ROOT').'/admin/rules/'.$ruleFile;
+		}
 		$rule = new $class();
 		return $rule->test(new \SimpleXMLElement('<field name="x" />'), $value, null,
 			new \Joomla\Registry\Registry(array('params' => array('blockMode' => $blockMode))));
@@ -259,5 +264,162 @@ class ComponentTest extends IntegrationTestCase
 		$controller = new DisplayController(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'), new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
 		$controller->warnIfAdminUserExists();
 		$this->assertCount(1, $app->getMessageQueue(true));
+	}
+
+	public function testMessagesEscapeWhatWasTypedIn()
+	{
+		// Joomla shows the messages as HTML
+		$app = Factory::getApplication();
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		$app->getMessageQueue(true);
+		$evil = '<script>alert(1)</script>';
+		$this->assertFalse(IpValidateHelper::validIPRange($evil));
+		$this->assertFalse(IpValidateHelper::validIPRange('203.0.113.0/'.$evil));
+		IpValidateHelper::validIPRange('10.0.0.1'); // private: a warning with the address
+		$messages = '';
+		foreach ($app->getMessageQueue(true) as $message)
+		{
+			$messages .= $message['message'];
+		}
+		$this->assertStringNotContainsString('<script>', $messages);
+		$this->assertStringContainsString('&lt;script&gt;', $messages);
+	}
+
+	private function settingsForm()
+	{
+		$form = new \Joomla\CMS\Form\Form('com_bfstop.settings');
+		$form->addRulePath(getenv('COM_BFSTOP_ROOT').'/admin/rules');
+		$form->loadFile(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		return $form;
+	}
+
+	public function testSettingsOnlyTakeTheValuesTheyOffer()
+	{
+		$form = $this->settingsForm();
+		$this->assertTrue($form->validate(array('params' => array('blockMode' => 'htaccess', 'blockNumber' => '10',
+			'delayDuration' => '20', 'emailaddress' => 'a@example.org; b@example.org'))));
+		foreach (array('blockMode' => 'everything', 'delayDuration' => '100000', 'blockNumber' => '-3',
+			'ipv6PrefixLength' => '0', 'unknownUsernameMode' => 'x', 'maxBlocksBefore' => '7') as $name => $value)
+		{
+			$this->assertFalse($this->settingsForm()->validate(array('params' => array($name => $value))), "$name=$value");
+		}
+	}
+
+	public function testEveryListAndIntegerSettingIsValidatedAgainstItsOptions()
+	{
+		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$fields = $xml->xpath('//field[@type="list" or @type="integer"]');
+		$this->assertGreaterThan(30, count($fields));
+		foreach ($fields as $field)
+		{
+			$this->assertSame('options', (string) $field['validate'], (string) $field['name']);
+		}
+		// no two options of a list with the same value
+		foreach ($xml->xpath('//field[@type="list"]') as $field)
+		{
+			$values = array();
+			foreach ($field->option as $option)
+			{
+				$values[] = (string) $option['value'];
+			}
+			$this->assertSame($values, array_values(array_unique($values)), (string) $field['name']);
+		}
+	}
+
+	public function testNotificationAddressesAreChecked()
+	{
+		$test = fn ($value) => $this->formRuleResult('emaillist.php', 'JFormRuleEmaillist', $value);
+		$this->assertTrue($test(''));
+		$this->assertTrue($test('a@example.org'));
+		$this->assertTrue($test(' a@example.org ; b@example.org '));
+		foreach (array('a@example.org;', 'nobody', "a@example.org\r\nBcc: x@example.org", 'a@example.org,b@example.org') as $value)
+		{
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($value), $value);
+		}
+		$message = $test('<b>x</b>')->getMessage();
+		$this->assertStringNotContainsString('<b>', $message);
+	}
+
+	public function testRemovingFromTheAllowlist()
+	{
+		$a = $this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.1', 'notes' => ''), 'id');
+		$b = $this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.2', 'notes' => ''), 'id');
+		$model = $this->model(AllowlistModel::class);
+		// whatever the request sent in cid[] is made into numbers: only $a is meant
+		$message = $model->remove(array((string) $a, 'x', '0; DELETE FROM #__bfstop_allowlist'), $this->logger);
+		$this->assertNotSame('', $message);
+		$this->assertSame(array('203.0.113.2'), $this->db->setQuery('SELECT ipaddress FROM #__bfstop_allowlist')->loadColumn());
+		$this->assertNotSame($message, $model->remove(array(), $this->logger));
+	}
+
+	public function testUnblockWithoutResultStillReportsFailure()
+	{
+		// an exception while unblocking must not leave the result undefined
+		$this->assertFalse(UnblockHelper::unblockDB($this->db, array(), 0, $this->logger));
+		$this->assertTrue($this->logger->hasMessage(\Joomla\CMS\Log\Log::ERROR, 'Invalid parameter'));
+		$this->logger->errors = array();
+	}
+
+	public function testSettingsAndLogViewsNeedTheAdminPermission()
+	{
+		if (!defined('JPATH_COMPONENT'))
+		{
+			// the base class of Joomla's views still needs it
+			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		}
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$guest = new \Joomla\CMS\User\User();
+		$app->loadIdentity($guest);
+		try
+		{
+			foreach (array(\Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::class,
+				\Codeling\Component\Bfstop\Administrator\View\Log\HtmlView::class) as $class)
+			{
+				$view = new $class();
+				try
+				{
+					$view->display();
+					$this->fail($class.' was shown to a user without permission');
+				}
+				catch (\Joomla\CMS\Access\Exception\NotAllowed $e)
+				{
+					$this->assertSame(403, $e->getCode());
+				}
+			}
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+		}
+	}
+
+	public function testUnsavedSettingsAreWhatTheSettingsPageShows()
+	{
+		// the plugin is enabled by the installation: until the settings are
+		// saved it must behave like the page says
+		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		foreach (\Codeling\Plugin\System\Bfstop\Extension\Bfstop::DefaultSettings as $name => $default)
+		{
+			$field = $xml->xpath('//field[@name="'.$name.'"]');
+			$this->assertCount(1, $field, $name);
+			$this->assertSame((string) $default, (string) $field[0]['default'], $name);
+		}
+	}
+
+	public function testEditViewsRegisterTheirStylesheetsAsRealFiles()
+	{
+		// a path with a leading slash would become "//administrator/...", a link to another host
+		foreach (array('Allow' => 'block', 'Block' => 'block', 'Htblock' => 'htblock') as $view => $folder)
+		{
+			$source = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/src/View/'.$view.'/HtmlView.php');
+			$this->assertSame(1, preg_match("#registerAndUseStyle\(\s*'([\w.]+)',\s*'([^']+)'\)#", $source, $m), $view);
+			$this->assertFileExists(getenv('COM_BFSTOP_ROOT').'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
+			$wa = new \Joomla\CMS\WebAsset\WebAssetManager(new \Joomla\CMS\WebAsset\WebAssetRegistry());
+			$wa->registerAndUseStyle($m[1], $m[2]);
+			$uri = $wa->getAsset('style', $m[1])->getUri();
+			$this->assertStringStartsWith('/administrator/components/com_bfstop/tmpl/', $uri, $view);
+			$this->assertStringEndsWith('/edit.css', $uri, $view);
+		}
 	}
 }

@@ -167,7 +167,10 @@ class DatabaseHelperTest extends IntegrationTestCase
 	public function testUnblockToken()
 	{
 		$this->assertSame('tokenA', $this->helper->getNewUnblockToken(1, 'tokenA'));
-		$this->assertNull($this->queryValue("SELECT username FROM #__bfstop_unblock_token WHERE token='tokenA'"));
+		$this->assertNull($this->queryValue("SELECT username FROM #__bfstop_unblock_token WHERE token='".DatabaseHelper::hashToken('tokenA')."'"));
+		// only the hash is stored: the table doesn't hold what the link needs
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE token='tokenA'"));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE block_id=1'));
 		$this->assertFalse($this->helper->hasCurrentUnblockToken('Someone'));
 		$this->assertSame('tokenU', $this->helper->getNewUnblockToken(2, 'tokenU', 'Someone'));
 		$this->assertTrue($this->helper->hasCurrentUnblockToken('someone'), 'case-insensitive');
@@ -177,6 +180,17 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertFalse($this->helper->hasCurrentUnblockToken('Expired'), 'an expired token is not current');
 		$this->assertTrue($this->helper->unblockTokenExists('tokenA'));
 		$this->assertFalse($this->helper->unblockTokenExists('tokenB'));
+	}
+
+	public function testTokenHashFitsTheColumnAndIsStable()
+	{
+		$hash = DatabaseHelper::hashToken('abc');
+		$this->assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $hash);
+		$this->assertSame($hash, DatabaseHelper::hashToken('abc'));
+		$this->assertNotSame($hash, DatabaseHelper::hashToken('abd'));
+		// a stored hash is no token which unblocks: it would be hashed again
+		$this->helper->getNewUnblockToken(1, 'tokenA');
+		$this->assertFalse($this->helper->unblockTokenExists(DatabaseHelper::hashToken('tokenA')));
 	}
 
 	public function testKnownIpUsername()
@@ -279,7 +293,7 @@ class DatabaseHelperTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(3 * 24 * 60 - 5)));
 		$this->helper->purgeExpiredUnblockTokens();
 		$this->db->setQuery('SELECT token FROM #__bfstop_unblock_token');
-		$this->assertSame(array('tokenNew'), $this->db->loadColumn());
+		$this->assertSame(array(DatabaseHelper::hashToken('tokenNew')), $this->db->loadColumn());
 	}
 
 	public function testDnsCache()
@@ -349,5 +363,47 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->helper->trimUsernameStats(3);
 		$this->db->setQuery('SELECT username FROM #__bfstop_username_stats ORDER BY username');
 		$this->assertSame(array('few-recent', 'many-old', 'some'), $this->db->loadColumn());
+	}
+
+	public function testLineBreaksInUsernamesDoNotForgeLinesInTheMailedList()
+	{
+		$this->failedLogin('203.0.113.5', "bob\n[forged] 203.0.113.99", 1);
+		$list = $this->helper->getFormattedFailedList('203.0.113.5', self::minutesAgo(0), 60);
+		// header, separator and the one entry
+		$this->assertCount(3, array_filter(explode("\n", $list), 'strlen'));
+	}
+
+	public function testAddressesWithoutActiveBlock()
+	{
+		$block = function ($ip, $minutesAgo, $duration)
+		{
+			return $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip,
+				'crdate' => self::minutesAgo($minutesAgo), 'duration' => $duration), 'id');
+		};
+		$block('203.0.113.1', 120, 60);                  // ran out
+		$block('203.0.113.2', 10, 60);                   // active
+		$block('203.0.113.3', 5000, 0);                  // permanent
+		$lifted = $block('203.0.113.4', 10, 60);         // lifted by an administrator
+		$this->insert('#__bfstop_unblock', array('block_id' => $lifted, 'source' => 0, 'crdate' => self::minutesAgo(1)));
+		$block('203.0.113.5', 120, 60);                  // ran out, but blocked again since
+		$block('203.0.113.5', 10, 60);
+		$addresses = $this->helper->getAddressesWithoutActiveBlock();
+		sort($addresses);
+		$this->assertSame(array('203.0.113.1', '203.0.113.4'), $addresses);
+	}
+
+	public function testFailedLoginsAreLimited()
+	{
+		for ($i = 0; $i < 12; ++$i)
+		{
+			$this->failedLogin('203.0.113.5', 'user'.$i, 100 - $i);
+		}
+		$this->helper->trimFailedLogins(20);
+		$this->assertSame(12, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		$this->helper->trimFailedLogins(5);
+		$this->assertSame(5, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		// the newest are kept
+		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY id');
+		$this->assertSame(array('user7', 'user8', 'user9', 'user10', 'user11'), $this->db->loadColumn());
 	}
 }

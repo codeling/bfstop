@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # the vendored GeoIP reader (src/Helper/Geo): a new release of
+  # maxmind-db/reader gets a pull request; its CI run fails until
+  # `composer install && composer vendor-geoip` has been run and the result
+  # committed - see README, "GeoIP reader"
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies, geoip-reader]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]
