@@ -36,7 +36,7 @@ class BlocklistController extends AdminController
 			return;
 		}
 		$logger = LogHelper::getLogger();
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$ids = $input->post->get('cid', array(), 'array');
 		$model = $this->getModel('blocklist');
 		$message = $model->unblock($ids, $logger);

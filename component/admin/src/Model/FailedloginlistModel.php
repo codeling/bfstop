@@ -29,7 +29,7 @@ class FailedloginlistModel extends ListModel
 
 	protected function getListQuery()
 	{
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->select('l.id, l.username, l.ipaddress, l.logtime, l.origin');
 		$query->from('#__bfstop_failedlogin l');
@@ -40,7 +40,7 @@ class FailedloginlistModel extends ListModel
 				->bind(':username', $username);
 		}
 		$ordering  = $this->getState('list.ordering', 'l.id');
-		$ordering  = (strcmp($ordering, '') == 0) ? 'b.id' : $ordering;
+		$ordering  = (strcmp($ordering, '') == 0) ? 'l.id' : $ordering;
 		$direction = $this->getState('list.direction', 'ASC');
 		$direction = (strcmp($direction, '') == 0) ? 'ASC' : $direction;
 		$query->order($db->escape($ordering).' '.$db->escape($direction));
@@ -53,7 +53,7 @@ class FailedloginlistModel extends ListModel
 		// set when coming from the username statistics view; deliberately not
 		// persisted in the user state, so the full list shows otherwise
 		$this->setState('filter.username',
-			Factory::getApplication()->input->getString('filter_username', ''));
+			Factory::getApplication()->getInput()->getString('filter_username', ''));
 	}
 
 	/**
@@ -68,7 +68,7 @@ class FailedloginlistModel extends ListModel
 		// logtime is written with PHP's date() by the plugin, so compute the
 		// cutoff with the same clock instead of the database's NOW()
 		$cutoff = date('Y-m-d H:i:s', time() - $days * 86400);
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->delete($db->quoteName('#__bfstop_failedlogin'))
 			->where($db->quoteName('logtime').' < :cutoff')

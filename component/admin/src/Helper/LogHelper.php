@@ -19,8 +19,10 @@ class LogHelper
 {
 	public static function getLogger()
 	{
+		// false if the plugin is disabled: the page of an unblock link and
+		// the lists still work then
 		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		$params = new Registry($plugin->params);
+		$params = new Registry($plugin ? $plugin->params : null);
 		$loglevel = $params->get('logLevel', Log::ERROR);
 		return new LoggerHelper($loglevel);
 	}

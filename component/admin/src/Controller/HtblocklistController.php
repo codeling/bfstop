@@ -36,7 +36,7 @@ class HtblocklistController extends AdminController
 			return;
 		}
 		$logger = LogHelper::getLogger();
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$ips = $input->post->get('cid', array(), 'array');
 		$model = $this->getModel('htblocklist');
 		$message = $model->unblock($ips, $logger);

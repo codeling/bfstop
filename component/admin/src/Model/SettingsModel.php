@@ -12,13 +12,14 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Model\AdminModel;
-use Joomla\CMS\Table\Table;
+use Joomla\CMS\Table\Extension;
 
 class SettingsModel extends AdminModel
 {
-	public function getTable($type = 'Extension', $prefix = '\\Joomla\\CMS\\Table\\', $config = array())
+	// the settings are the plugin's row of Joomla's extensions table
+	public function getTable($name = '', $prefix = '', $options = array())
 	{
-		return Table::getInstance($type, $prefix, $config);
+		return new Extension($this->getDatabase());
 	}
 
 	public function getForm($data = array(), $loadData = true)

@@ -16,6 +16,15 @@ use Joomla\CMS\Language\Text;
 
 class IpValidateHelper
 {
+	/**
+	 * Joomla shows the messages it is given as HTML, so what was typed into
+	 * a form must not be put into one as it is.
+	 */
+	private static function e($text)
+	{
+		return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8');
+	}
+
 	public static function validIPRange($address)
 	{
 		$ip = $address;
@@ -31,18 +40,18 @@ class IpValidateHelper
 			// up (e.g. the web server's configuration)
 			if (preg_match('/^[0-9]{1,3}\z/', $subnet) !== 1 || (int) $subnet > $maxBits)
 			{
-				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', $subnet), 'warning');
+				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', self::e($subnet)), 'warning');
 				return false;
 			}
 		}
 		if (!filter_var($ip, FILTER_VALIDATE_IP))
 		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_ADDRESS', $ip), 'warning');
+			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_ADDRESS', self::e($ip)), 'warning');
 			return false;
 		}
 		if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))
 		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', $ip), 'warning');
+			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', self::e($ip)), 'warning');
 		}
 		return true;
 	}
@@ -86,7 +95,7 @@ class IpValidateHelper
 		$result = self::cidrMatch($curIP, $range);
 		if ($result)
 		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_BLOCKS_USER', $range, $curIP), 'warning');
+			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_BLOCKS_USER', self::e($range), self::e($curIP)), 'warning');
 		}
 		return $result;
 	}

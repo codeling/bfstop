@@ -14,24 +14,24 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
-use Joomla\CMS\Uri\Uri;
 
 class HtmlView extends BaseHtmlView
 {
 	public function display($tpl = null)
 	{
-		$this->form = $this->get('Form');
-		$this->item = $this->get('Item');
+		$this->form = $this->getModel()->getForm();
+		$this->item = $this->getModel()->getItem();
 		$this->addToolbar();
-		$document = Factory::getDocument();
-		$document->addStyleSheet(Uri::base(true).
-			'/components/com_bfstop/tmpl/block/edit.css');
+		// the stylesheet is in the component's template folder, not in media/: a
+		// path from the site's root, Joomla adds the prefix of a sub-folder install
+		$this->getDocument()->getWebAssetManager()->registerAndUseStyle(
+			'com_bfstop.block.edit', 'administrator/components/com_bfstop/tmpl/block/edit.css');
 		parent::display($tpl);
 	}
 
 	protected function addToolbar()
 	{
-		$input = Factory::getApplication()->input;
+		$input = Factory::getApplication()->getInput();
 		$input->set('hidemainmenu', true);
 		$isNew = ($this->item->id == 0);
 		ToolbarHelper::title($isNew

@@ -34,7 +34,7 @@ class UsernamestatsController extends AdminController
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return;
 		}
-		$age = Factory::getApplication()->input->post->getInt('age', 0);
+		$age = Factory::getApplication()->getInput()->post->getInt('age', 0);
 		if ($age < 1)
 		{
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_USERNAMESTATS_PURGE_INVALID_AGE'), 'error');

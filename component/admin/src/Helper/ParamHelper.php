@@ -11,12 +11,13 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
+use Joomla\Database\DatabaseInterface;
 
 class ParamHelper
 {
 	public static function get($name, $column, $defaultValue)
 	{
-		$db = Factory::getDbo();
+		$db = Factory::getContainer()->get(DatabaseInterface::class);
 		$sql = "SELECT $column FROM #__extensions WHERE name = 'plg_system_bfstop'";
 		$db->setQuery($sql);
 		$rawSettings = $db->loadResult();

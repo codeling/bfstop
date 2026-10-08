@@ -44,7 +44,7 @@ class com_bfstopInstallerScript
 	}
 	function postflight($type, InstallerAdapter $adapter)
 	{
-		$lang = Factory::getLanguage();
+		$lang = Factory::getApplication()->getLanguage();
 		$lang->load('com_bfstop', JPATH_ADMINISTRATOR);
 		Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_INSTALL_HINT',
 			Route::_('index.php?option=com_plugins&view=plugins', false),

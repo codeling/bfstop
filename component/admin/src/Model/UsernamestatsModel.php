@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Model\ListModel;
 
 /**
@@ -33,7 +32,7 @@ class UsernamestatsModel extends ListModel
 
 	protected function getListQuery()
 	{
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->select('s.username, s.attempts, s.first_attempt, s.last_attempt, u.id AS user_id');
 		$query->from('#__bfstop_username_stats s');
@@ -57,7 +56,7 @@ class UsernamestatsModel extends ListModel
 	 */
 	public function getMaxAttempts()
 	{
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->select('MAX(attempts)')
 			->from($db->quoteName('#__bfstop_username_stats'));
@@ -76,7 +75,7 @@ class UsernamestatsModel extends ListModel
 		// last_attempt is written with PHP's date() by the plugin, so compute
 		// the cutoff with the same clock instead of the database's NOW()
 		$cutoff = date('Y-m-d H:i:s', time() - $days * 86400);
-		$db = Factory::getDbo();
+		$db = $this->getDatabase();
 		$query = $db->getQuery(true);
 		$query->delete($db->quoteName('#__bfstop_username_stats'))
 			->where($db->quoteName('last_attempt').' < :cutoff')
