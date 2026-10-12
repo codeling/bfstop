@@ -15,6 +15,11 @@
     adjusts the delay and allowed-attempts threshold; optional progressive
     (exponential) block duration for repeat offenders; password reset/
     username reminder now stay reachable even for a blocked IP
+  - Notifications of failed logins only for existing accounts (#172): the new
+    setting "Failed msgs only for existing accounts" restricts the failed
+    login notification to attempts with a username or email address which
+    belongs to a registered account; attempts with other names are still
+    recorded and counted towards blocking
   - Local GeoIP lookup (issue #169): "Information for IP Address" in the
     component now shows real country/region/city/coordinates again via a
     locally-configured MaxMind .mmdb database, instead of the discontinued

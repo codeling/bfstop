@@ -565,8 +565,18 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
 
-		$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
-		$this->notifier->failedLogin($logEntry, $maxNumber);
+		// $username is what was typed; the entry only holds a hash of it if
+		// it isn't an account (see usernameForStorage())
+		if ($this->getBoolParam('notifyFailedOnlyExisting', false) &&
+			!$this->mydb->accountExists($username))
+		{
+			$this->logger->log('Not notifying of failed login: the username does not belong to an account', Log::DEBUG);
+		}
+		else
+		{
+			$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
+			$this->notifier->failedLogin($logEntry, $maxNumber);
+		}
 		$this->blockIfTooManyAttempts($logEntry, $riskScore);
 
 		$delayDuration = $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
