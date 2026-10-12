@@ -76,6 +76,12 @@
 				<option value="4">4</option>
 				<option value="5">5</option>
 			</field>
+			<field name="notifyFailedOnlyExisting" type="list" validate="options" default="0"
+				label="PLG_SYSTEM_BFSTOP_NOTIFY_FAILED_ONLY_EXISTING_LABEL"
+				description="PLG_SYSTEM_BFSTOP_NOTIFY_FAILED_ONLY_EXISTING_DESC">
+				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
+				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
+			</field>
 		</fieldset>
 		<fieldset name="proxy" label="PLG_SYSTEM_BFSTOP_PROXY_FIELDSET_LABEL">
 			<field name="useProxy" type="list" validate="options" default="0"
