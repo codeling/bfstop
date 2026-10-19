@@ -61,3 +61,9 @@ INSERT INTO `#__bfstop_username_stats` (username, attempts, first_attempt, last_
 
 -- speeds up the per-username (account-level) throttle query
 ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime);
+
+-- every request looks up the visitor's address in the block and allow list;
+-- addresses and networks are stored in canonical form (the plugin brings
+-- existing entries into it once, IpHelper::canonicalEntry())
+ALTER TABLE `#__bfstop_bannedip` ADD INDEX ipaddress (ipaddress);
+ALTER TABLE `#__bfstop_allowlist` ADD INDEX ipaddress (ipaddress);

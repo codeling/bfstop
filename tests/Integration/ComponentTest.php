@@ -422,4 +422,16 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertStringEndsWith('/edit.css', $uri, $view);
 		}
 	}
+
+	public function testEntriesOfTheEditFormsAreStoredInCanonicalForm()
+	{
+		$blockId = $this->saveNew(BlockModel::class,
+			array('ipaddress' => '203.0.113.77/24', 'crdate' => '2026-01-02', 'duration' => '0'));
+		$allowId = $this->saveNew(AllowModel::class, array('ipaddress' => '2001:DB8::ABCD', 'notes' => ''));
+		$this->assertSame('203.0.113.0/24', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$blockId));
+		$this->assertSame('2001:db8::abcd', $this->queryValue('SELECT ipaddress FROM #__bfstop_allowlist WHERE id='.$allowId));
+		$helper = new DatabaseHelper($this->logger);
+		$this->assertTrue($helper->isIPBlocked('203.0.113.200'));
+		$this->assertTrue($helper->isIPOnAllowList('2001:db8::ABCD'));
+	}
 }

@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 -- latest one (issue #219); NULL = no attempt since the block started
 	attempts int unsigned NOT NULL DEFAULT 0,
 	last_attempt datetime NULL DEFAULT NULL,
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+-- looked up for every request: addresses and networks are stored in
+-- canonical form (IpHelper::canonicalEntry())
+	KEY ipaddress (ipaddress)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
@@ -56,7 +59,8 @@ CREATE TABLE IF NOT EXISTS #__bfstop_allowlist (
 	id int(10) NOT NULL auto_increment,
 	ipaddress varchar(45) NOT NULL,
 	notes varchar(255) NOT NULL DEFAULT '',
-	PRIMARY KEY (id)
+	PRIMARY KEY (id),
+	KEY ipaddress (ipaddress)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 

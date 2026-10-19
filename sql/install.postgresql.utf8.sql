@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_bannedip" (
   "last_attempt" timestamp without time zone DEFAULT NULL,
   PRIMARY KEY ("id")
 );
+-- looked up for every request: addresses and networks are stored in canonical
+-- form (IpHelper::canonicalEntry())
+CREATE INDEX IF NOT EXISTS "#__bfstop_bannedip_ipaddress" ON "#__bfstop_bannedip" ("ipaddress");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_unblock" (
@@ -56,6 +59,7 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_allowlist" (
   "notes" varchar(255) NOT NULL DEFAULT '',
   PRIMARY KEY ("id")
 );
+CREATE INDEX IF NOT EXISTS "#__bfstop_allowlist_ipaddress" ON "#__bfstop_allowlist" ("ipaddress");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_knownip" (
