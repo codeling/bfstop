@@ -20,10 +20,8 @@ build_dir="$(mktemp -d)"
 
 if [ ! -f "$JOOMLA_ROOT/index.php" ]; then
 	: "${JOOMLA_VERSION:?}"
-	echo "Downloading Joomla $JOOMLA_VERSION"
-	mkdir -p "$JOOMLA_ROOT"
-	curl -fsSL "https://github.com/joomla/joomla-cms/releases/download/$JOOMLA_VERSION/Joomla_$JOOMLA_VERSION-Stable-Full_Package.tar.gz" \
-		| tar -xz -C "$JOOMLA_ROOT"
+	# verifies the package against tests/ci/joomla-checksums.sha256
+	"$plugin_root/tests/ci/download-joomla.sh" "$JOOMLA_VERSION" "$JOOMLA_ROOT"
 fi
 
 echo "Installing Joomla ($DB_TYPE on $DB_HOST)"

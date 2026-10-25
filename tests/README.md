@@ -40,7 +40,9 @@ Unit tests only:
 For the integration tests, create an empty database, then let
 `tests/ci/install-joomla.sh` set up a Joomla site with bfstop in it (it
 downloads Joomla, installs it, then installs plugin and component from the
-checkouts). **Everything in that database will be overwritten.** For example,
+checkouts). The download is only unpacked if its SHA-256 is the one in
+`tests/ci/joomla-checksums.sha256`; for a version that isn't listed, add it
+there (the file says how to check it) or pass the hash as `JOOMLA_SHA256`. **Everything in that database will be overwritten.** For example,
 with PostgreSQL:
 
     export JOOMLA_VERSION=5.4.8 JOOMLA_ROOT=/tmp/bfstop-joomla \

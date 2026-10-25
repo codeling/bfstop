@@ -1,0 +1,16 @@
+# SHA-256 of the Joomla! full packages the integration tests install
+# (tests/ci/download-joomla.sh refuses a package that doesn't match). The same
+# versions have to be listed here as in the matrix of .github/workflows/ci.yml
+# (checked by tests/lint/check-joomla-checksums.php). The workflow of com_bfstop
+# installs through the same script, so a version it uses has to be listed here.
+#
+# Adding a version: download the package from the GitHub release, compute its
+# SHA-256 and compare MD5/SHA1 with the ones on https://downloads.joomla.org
+# (the page of the version lists them; it has no SHA-256), then add the line
+# and say below how it was checked.
+#
+#  5.4.8  MD5 and SHA1 equal those on downloads.joomla.org/cms/joomla5/5-4-8
+#  6.1.3  taken from the GitHub release asset (Joomla's page for the version
+#         could not be consulted); check it against downloads.joomla.org
+2c9dc7e6f451c83c43bbb7eb5c9348cb889ba802b72915c5bbd899f9d2de3f3d  Joomla_5.4.8-Stable-Full_Package.tar.gz
+184f8c582cde5981693de7c28547c6e834c48c50cb377c7b8421bbfd33bbdf6f  Joomla_6.1.3-Stable-Full_Package.tar.gz

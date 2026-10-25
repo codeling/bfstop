@@ -166,7 +166,7 @@ class IpHelperTest extends TestCase
 			'0 means per address'        => array('2001:db8:1:2::1', 0, '2001:db8:1:2::1'),
 			'absurdly short prefix'      => array('2001:db8:1:2::1', 16, '2001:db8:1:2::1'),
 			'IPv4-mapped stays'          => array('::ffff:192.0.2.7', 64, '::ffff:192.0.2.7'),
-			'NAT64 stays'                => array('64:ff9b::192.0.2.7', 64, '64:ff9b::192.0.2.7'),
+			'NAT64 stays (canonical form)' => array('64:ff9b::192.0.2.7', 64, '64:ff9b::c000:207'),
 			'6to4 stays'                 => array('2002:c000:207::1', 64, '2002:c000:207::1'),
 			'Teredo stays'               => array('2001:0:4136:e378:8000:63bf:3fff:fdd2', 64, '2001:0:4136:e378:8000:63bf:3fff:fdd2'),
 			'unique local stays'         => array('fd00::1', 64, 'fd00::1'),
@@ -190,5 +190,89 @@ class IpHelperTest extends TestCase
 		$this->assertTrue(IpHelper::isInSubnet('2001:db8:1:2::99', $tracked));
 		$this->assertFalse(IpHelper::isInSubnet('2001:db8:1:3::99', $tracked));
 		$this->assertTrue(IpHelper::isValidIpOrSubnet($tracked));
+	}
+
+	public static function canonicalEntryProvider()
+	{
+		return array(
+			'IPv4' => array('203.0.113.5', '203.0.113.5'),
+			'IPv4 network' => array('203.0.113.0/24', '203.0.113.0/24'),
+			'host bits are masked' => array('203.0.113.77/24', '203.0.113.0/24'),
+			'not on a byte border' => array('203.0.113.77/27', '203.0.113.64/27'),
+			'/32 stays a network' => array('203.0.113.5/32', '203.0.113.5/32'),
+			'everything' => array('1.2.3.4/0', '0.0.0.0/0'),
+			'IPv6 in upper case' => array('2001:DB8::1', '2001:db8::1'),
+			'IPv6 written out' => array('2001:0db8:0000:0000:0000:0000:0000:0001', '2001:db8::1'),
+			'IPv6 network' => array('2001:DB8:AB:1:2:3:4:5/48', '2001:db8:ab::/48'),
+			'IPv6 not on a border' => array('2001:db8:1:ff7f::1/56', '2001:db8:1:ff00::/56'),
+			'IPv4-mapped' => array('::FFFF:1.2.3.4', '::ffff:1.2.3.4'),
+			'surrounding space' => array(' 203.0.113.5 ', '203.0.113.5'),
+			'prefix too long' => array('203.0.113.0/33', null),
+			'prefix too long (IPv6)' => array('2001:db8::/129', null),
+			'prefix is no number' => array('203.0.113.0/abc', null),
+			'prefix is hexadecimal' => array('203.0.113.0/0x8', null),
+			'no address' => array('not-an-ip', null),
+			'empty' => array('', null),
+			'two slashes' => array('203.0.113.0/24/1', null),
+		);
+	}
+
+	#[DataProvider('canonicalEntryProvider')]
+	public function testCanonicalEntry($value, $expected)
+	{
+		$this->assertSame($expected, IpHelper::canonicalEntry($value));
+		if ($expected !== null)
+		{
+			$this->assertSame($expected, IpHelper::canonicalEntry($expected), 'stable');
+		}
+	}
+
+	public function testLookupCandidatesIPv4()
+	{
+		$candidates = IpHelper::lookupCandidates('203.0.113.77');
+		$this->assertCount(34, $candidates);
+		$this->assertSame('203.0.113.77', $candidates[0]);
+		foreach (array('203.0.113.77/32', '203.0.113.64/27', '203.0.113.0/24', '203.0.112.0/23', '0.0.0.0/0') as $network)
+		{
+			$this->assertContains($network, $candidates);
+		}
+		$this->assertContains('203.0.113.0/25', $candidates);
+		$this->assertNotContains('203.0.113.128/25', $candidates);
+	}
+
+	public function testLookupCandidatesIPv6()
+	{
+		$candidates = IpHelper::lookupCandidates('2001:DB8:1:2::99');
+		$this->assertCount(130, $candidates);
+		$this->assertSame('2001:db8:1:2::99', $candidates[0]);
+		foreach (array('2001:db8:1:2::99/128', '2001:db8:1:2::/64', '2001:db8:1::/48', '2000::/3', '::/0') as $network)
+		{
+			$this->assertContains($network, $candidates);
+		}
+		$this->assertNotContains('2001:db8:1:3::/64', $candidates);
+	}
+
+	public function testLookupCandidatesOfNoAddress()
+	{
+		$this->assertSame(array(), IpHelper::lookupCandidates(''));
+		$this->assertSame(array(), IpHelper::lookupCandidates('203.0.113.0/24'));
+		$this->assertSame(array(), IpHelper::lookupCandidates('not-an-ip'));
+	}
+
+	public function testEveryCandidateIsACanonicalEntryContainingTheAddress()
+	{
+		// the lookup is by string comparison: what it looks for has to be
+		// what canonicalEntry() writes, and has to contain the address
+		foreach (array('203.0.113.77', '2001:db8:1:2:aaaa:bbbb:cccc:dddd', '::ffff:10.0.0.1', '::1') as $ip)
+		{
+			foreach (IpHelper::lookupCandidates($ip) as $candidate)
+			{
+				$this->assertSame($candidate, IpHelper::canonicalEntry($candidate), $candidate);
+				if (strpos($candidate, '/') !== false)
+				{
+					$this->assertTrue(IpHelper::isInSubnet($ip, $candidate), "$candidate contains $ip");
+				}
+			}
+		}
 	}
 }
