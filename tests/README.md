@@ -19,9 +19,11 @@ The classes under test are always loaded from this checkout (and the
 component checkout), not from the copies installed into the Joomla site, so
 the site only needs to be set up again when the database schema changes.
 
-- `lint/`: checks of the language files (`check-language.php`) and of the
-  release zip built by `deploy.sh zip` (`check-zip.php`); both scripts are
-  kept identical in the com_bfstop repository.
+- `lint/`: checks of the language files (`check-language.php`), of the
+  release zip built by `deploy.sh zip` (`check-zip.php`) and of the GitHub
+  Actions workflows (`check-workflows.php`: every action pinned to a commit
+  SHA, with its release in a comment; Dependabot proposes the updates); the
+  scripts are kept identical in the com_bfstop repository.
 - `performance/`: not a test, a comparison of what two versions of the plugin
   (by default 1.5.2 and the checkout) cost a Joomla site, see its README. Not
   run by phpunit or CI.
