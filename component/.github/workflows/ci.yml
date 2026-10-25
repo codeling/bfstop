@@ -17,8 +17,8 @@ jobs:
     name: Manifest, language and package checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.4'
           coverage: none
@@ -29,6 +29,8 @@ jobs:
             sudo apt-get install -y -q libxml2-utils > /dev/null
           }
           find . -name '*.xml' -not -path './.git/*' -print0 | xargs -0 xmllint --noout
+      - name: Actions are pinned to commit SHAs
+        run: php tests/lint/check-workflows.php
       - name: Language files
         run: php tests/lint/check-language.php bfstop.xml COM_BFSTOP
       - name: Release zip contains everything the manifest references
@@ -44,8 +46,8 @@ jobs:
       matrix:
         php: ['8.1', '8.4']
     steps:
-      - uses: actions/checkout@v7
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
           coverage: none
@@ -76,7 +78,7 @@ jobs:
             echo "COM_BFSTOP_ROOT=$GITHUB_WORKSPACE"
             echo "PLUGIN_ROOT=$RUNNER_TEMP/bfstop"
           } >> "$GITHUB_ENV"
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # use the plugin's branch of the same name if there is one (for changes
       # spanning both), else main
@@ -89,7 +91,7 @@ jobs:
           else
             echo "ref=main" >> "$GITHUB_OUTPUT"
           fi
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: codeling/bfstop
           ref: ${{ steps.plugin.outputs.ref }}
@@ -97,7 +99,7 @@ jobs:
       - name: Move bfstop checkout out of the component's
         run: mv bfstop "$PLUGIN_ROOT"
 
-      - uses: shivammathur/setup-php@v2
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: mysqli, pdo_mysql, pgsql, pdo_pgsql, zip, mbstring, intl, gd
