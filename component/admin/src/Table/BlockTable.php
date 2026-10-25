@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Table;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Table\Table;
 use Joomla\Database\DatabaseDriver;
 
@@ -29,6 +30,14 @@ class BlockTable extends Table
 		if (empty($this->id))
 		{
 			$this->id = 0;
+		}
+		// addresses and networks are looked up by their canonical spelling, see
+		// IpHelper::canonicalEntry() ("2001:DB8::1" and "203.0.113.5/24" are
+		// kept as "2001:db8::1" and "203.0.113.0/24")
+		$canonical = IpHelper::canonicalEntry($this->ipaddress);
+		if ($canonical !== null)
+		{
+			$this->ipaddress = $canonical;
 		}
 		return parent::check();
 	}
