@@ -31,6 +31,35 @@ the site only needs to be set up again when the database schema changes.
 GitHub Actions runs everything on each push and pull request, on Joomla 5 and
 6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`.
 
+Plugin and component are tested together, and each repository's workflow checks
+out the other one: the branch of the same name if that exists **and has commits
+`main` doesn't** (for a change spanning both repositories), else `main`. A
+branch that was merged and not deleted is therefore ignored, not tested against.
+
+### Joomla versions of the CI matrix
+
+The matrix runs one Joomla version per major version, each with its SHA-256 in
+`tests/ci/joomla-checksums.sha256`. Dependabot can't follow those, so
+`.github/workflows/joomla-versions.yml` looks at the releases of
+`joomla/joomla-cms` every week (and on demand: Actions, "Joomla versions", Run
+workflow):
+
+- a newer **patch release** of a version in the matrix gets a pull request
+  (branch `joomla-versions`) that raises the matrix and adds the checksum. The
+  hash is the one of the downloaded package, which must equal the digest GitHub
+  lists for the release asset. Compare MD5/SHA1 with downloads.joomla.org
+  before merging; that is the check against Joomla's own page. A push with the
+  workflow's token doesn't start `pull_request` workflows, so the job starts
+  `ci.yml` on the branch itself.
+- a release of a **newer minor/major line** (e.g. 6.2 when the matrix has 6.1)
+  only gets an issue: whether to support it is a decision.
+
+For the pull requests, the repository setting "Allow GitHub Actions to create
+and approve pull requests" has to be on. The planning and the edits are
+`tests/ci/joomla-updates.php` (unit-tested in `tests/Unit/JoomlaUpdatesTest.php`).
+Entries of old versions stay in the checksum file as long as com_bfstop's
+matrix, which installs through the same file, may still use them.
+
 ## Running locally
 
 Unit tests only:
