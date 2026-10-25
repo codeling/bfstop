@@ -80,17 +80,26 @@ jobs:
           } >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # use the plugin's branch of the same name if there is one (for changes
-      # spanning both), else main
+      # use the plugin's branch of the same name if there is one and it
+      # has commits main hasn't (for changes spanning both), else main: a
+      # branch which was merged and not deleted is a stale copy of an old main
       - name: Determine bfstop branch
         id: plugin
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          if git ls-remote --exit-code --heads https://github.com/codeling/bfstop.git "$branch" > /dev/null; then
-            echo "ref=$branch" >> "$GITHUB_OUTPUT"
-          else
-            echo "ref=main" >> "$GITHUB_OUTPUT"
+          ref=main
+          ahead=none
+          if [[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]] \
+            && git ls-remote --exit-code --heads https://github.com/codeling/bfstop.git "$branch" > /dev/null; then
+            ahead="$(gh api "repos/codeling/bfstop/compare/main...$branch" --jq .ahead_by)"
+            if [ "$ahead" -gt 0 ]; then
+              ref="$branch"
+            fi
           fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Using bfstop $ref (a branch '$branch' there is ahead of main by: $ahead)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: codeling/bfstop
