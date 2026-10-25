@@ -105,6 +105,9 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->block('192.0.2.0/abc', 0, 0);
 		$unblocked = $this->block('203.0.113.8', 0, 0);
 		$this->insert('#__bfstop_unblock', array('block_id' => $unblocked, 'source' => 0, 'crdate' => self::minutesAgo(0)));
+		// entries of earlier versions (and typed by hand) are not in the canonical
+		// form the lookup relies on: the upper case ones are the two IPv6 entries
+		$this->assertSame(2, $this->helper->canonicalizeStoredAddresses());
 
 		$this->assertSame(array($exact, $net4small), $this->activeBlocks('203.0.113.5'));
 		$this->assertSame(array(), $this->activeBlocks('203.0.113.6'), 'expired');
@@ -156,6 +159,7 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '10.1.0.0/16', 'notes' => ''));
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:DB8:FFFF::1', 'notes' => ''));
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.3', 'notes' => ''));
+		$this->assertSame(1, $this->helper->canonicalizeStoredAddresses());
 
 		$this->assertTrue($this->helper->isIPOnAllowList('10.1.2.3'));
 		$this->assertFalse($this->helper->isIPOnAllowList('10.2.0.1'));
@@ -405,5 +409,63 @@ class DatabaseHelperTest extends IntegrationTestCase
 		// the newest are kept
 		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY id');
 		$this->assertSame(array('user7', 'user8', 'user9', 'user10', 'user11'), $this->db->loadColumn());
+	}
+
+	public function testCanonicalizeStoredAddresses()
+	{
+		$unaligned = $this->block('203.0.113.77/24', 0, 60);
+		$upper = $this->block('2001:DB8::ABCD', 0, 60);
+		$fine = $this->block('198.51.100.9', 0, 60);
+		$garbage = $this->block('203.0.113.0/abc', 0, 60);
+		$allow = $this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:0DB8:0:0:0:0:0:5/64', 'notes' => ''), 'id');
+
+		$this->assertSame(3, $this->helper->canonicalizeStoredAddresses());
+		$stored = function ($table, $id)
+		{
+			return $this->queryValue('SELECT ipaddress FROM '.$table.' WHERE id='.(int) $id);
+		};
+		$this->assertSame('203.0.113.0/24', $stored('#__bfstop_bannedip', $unaligned));
+		$this->assertSame('2001:db8::abcd', $stored('#__bfstop_bannedip', $upper));
+		$this->assertSame('198.51.100.9', $stored('#__bfstop_bannedip', $fine));
+		$this->assertSame('203.0.113.0/abc', $stored('#__bfstop_bannedip', $garbage), 'what is no entry is left alone');
+		$this->assertSame('2001:db8::/64', $stored('#__bfstop_allowlist', $allow));
+		$this->assertSame(0, $this->helper->canonicalizeStoredAddresses(), 'nothing left to do');
+		$this->assertTrue($this->helper->isIPOnAllowList('2001:db8:0:0:1::1'));
+	}
+
+	public function testCanonicalizeStoredAddressesInBatches()
+	{
+		// more entries than one batch of the migration
+		$values = array();
+		for ($i = 0; $i < 5100; ++$i)
+		{
+			$values[] = "('10.".intdiv($i, 250).'.'.($i % 250).".1/16', '".self::minutesAgo(0)."', 60)";
+		}
+		$this->db->setQuery('INSERT INTO #__bfstop_bannedip (ipaddress, crdate, duration) VALUES '.implode(',', $values));
+		$this->db->execute();
+		$this->assertSame(5100, $this->helper->canonicalizeStoredAddresses());
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress LIKE '%.1/16'"));
+		$this->assertSame(0, $this->helper->canonicalizeStoredAddresses());
+	}
+
+	public function testBlocksAreStoredInCanonicalForm()
+	{
+		$this->helper->blockIP((object) array('ipaddress' => '2001:DB8::5', 'logtime' => self::minutesAgo(0),
+			'username' => 'x', 'origin' => 0), 60, false, '');
+		$this->assertSame('2001:db8::5', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		$this->assertTrue($this->helper->isIPBlocked('2001:db8::5'));
+		$this->assertTrue($this->helper->isIPBlocked('2001:DB8:0:0:0:0:0:5'));
+	}
+
+	public function testLookupDoesNotLoadWhatCannotMatch()
+	{
+		// networks of the other address family, and of other prefixes, are no candidates
+		$this->block('2001:db8::/32', 0, 60);
+		$this->block('203.0.113.0/24', 0, 60);
+		$this->block('203.0.114.0/24', 0, 60);
+		$this->assertCount(1, $this->helper->getActiveBlockIds('203.0.113.9'));
+		$this->assertCount(1, $this->helper->getActiveBlockIds('2001:db8:5::1'));
+		$this->assertSame(array(), $this->helper->getActiveBlockIds(''));
+		$this->assertSame(array(), $this->helper->getActiveBlockIds('203.0.113.0/24'), 'a network is no client address');
 	}
 }

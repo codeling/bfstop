@@ -93,14 +93,65 @@ class IpHelper
 			(int) $parts[1] <= (strpos($parts[0], ':') !== false ? 128 : 32);
 	}
 
-	private static function prefixMask($bits)
+	private static function prefixMask($bits, $length = 16)
 	{
 		$mask = str_repeat("\xff", intdiv($bits, 8));
 		if ($bits % 8 > 0)
 		{
 			$mask .= chr((0xff << (8 - $bits % 8)) & 0xff);
 		}
-		return str_pad($mask, 16, "\x00");
+		return str_pad($mask, $length, "\x00");
+	}
+
+	/**
+	 * The one spelling in which addresses and networks are stored in the
+	 * block and allow list: an address in the compressed lower-case form of
+	 * inet_ntop(), a network as its masked network address and prefix length
+	 * ("2001:db8:1:2::/64", "203.0.113.0/24"). Lookups compare these strings
+	 * (see lookupCandidates()), so every writer has to use this form.
+	 *
+	 * @return string|null null if $value is neither an address nor a network
+	 */
+	public static function canonicalEntry($value)
+	{
+		$value = trim((string) $value);
+		if (!self::isValidIpOrSubnet($value))
+		{
+			return null;
+		}
+		$parts = explode('/', $value);
+		$bin = inet_pton($parts[0]);
+		if (count($parts) === 1)
+		{
+			return inet_ntop($bin);
+		}
+		$bits = (int) $parts[1];
+		return inet_ntop($bin & self::prefixMask($bits, strlen($bin))).'/'.$bits;
+	}
+
+	/**
+	 * All the entries (in canonical form) of the block or allow list which
+	 * contain $ip: the address itself and its network for every prefix length.
+	 * Fetching the rows whose address is one of these finds what the address is
+	 * blocked or allowed by, with an index and without looking at the other
+	 * entries - how many there are depends on what visitors made the plugin
+	 * block, and a request from any visitor has to look.
+	 *
+	 * @return string[] empty if $ip is not an address
+	 */
+	public static function lookupCandidates($ip)
+	{
+		$bin = @inet_pton(trim((string) $ip));
+		if ($bin === false)
+		{
+			return array();
+		}
+		$candidates = array(inet_ntop($bin));
+		for ($bits = 0; $bits <= strlen($bin) * 8; ++$bits)
+		{
+			$candidates[] = inet_ntop($bin & self::prefixMask($bits, strlen($bin))).'/'.$bits;
+		}
+		return $candidates;
 	}
 
 	/**
@@ -125,7 +176,9 @@ class IpHelper
 			substr($bin, 0, 2) === "\x20\x02" ||       // 6to4, 2002::/16
 			substr($bin, 0, 4) === "\x20\x01\x00\x00")  // Teredo, 2001::/32
 		{
-			return $ip;
+			// in the form the block list holds it in, whatever way the web
+			// server spells the address (garbage is returned as it is)
+			return self::canonicalEntry($ip) ?? $ip;
 		}
 		return inet_ntop($bin & self::prefixMask($prefixLength)).'/'.$prefixLength;
 	}

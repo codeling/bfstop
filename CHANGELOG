@@ -157,6 +157,15 @@
     are validated (no stream wrappers like phar://, a .mmdb file name)
   - Added SECURITY.md with the supported versions and how to report
     vulnerabilities
+  - Security: the check of each request against the block and allow list is
+    a lookup by index. It used to read all networks of both lists and test
+    each in PHP, for every request of every visitor: 65-70 ms with 170000
+    entries, now 1-2 ms. Addresses and networks are stored in a canonical
+    form (lower case, compressed, networks as their network address, like
+    "2001:db8:1::/48"); the component's forms do that, and the plugin
+    converts existing entries once, on the first request after the update.
+    Entries which are added to the tables by other means have to be in that
+    form as well
   - Security: the bundled MaxMind DB reader (maxmind-db/reader, now 1.14.0,
     which limits the decoding of malformed or hostile database files) is
     tracked in composer.json/composer.lock; src/Helper/Geo is generated from

@@ -206,37 +206,36 @@ class DatabaseHelper
 
 	/**
 	 * Loads the rows of $table (aliased t, needs id and ipaddress columns)
-	 * which match the given IP address, either literally or as part of a
-	 * stored IPv4/IPv6 subnet (CIDR notation). Only the literal match is done
-	 * in SQL; subnet entries are matched in PHP (IpHelper::isInSubnet), which
-	 * works the same on every database - the previous SQL implementation
-	 * relied on MySQL-only functions (INET_ATON, INET6_ATON, LOCATE, REGEXP,
-	 * ...), see issue #206, and was the source of #117, #134 and #142.
+	 * which contain the given IP address: the address itself or a network
+	 * (CIDR notation) it is part of. Addresses and networks are stored in
+	 * canonical form (IpHelper::canonicalEntry()), so the entries which can
+	 * match are known beforehand (IpHelper::lookupCandidates()), and the query
+	 * is a lookup by index. It used to read every network of the table and test
+	 * each in PHP, on every request of every visitor - slow once a few
+	 * thousand IPv6 clients were blocked, and a way for them to slow the site
+	 * down (the SQL was MySQL-only at first, see issue #206, and the source
+	 * of #117, #134 and #142).
 	 */
 	private function loadMatchingEntries($ipaddress, $table, $additionalWhere, $action)
 	{
+		$candidates = IpHelper::lookupCandidates($ipaddress);
+		if (count($candidates) === 0)
+		{
+			return array();
+		}
 		try
 		{
-			// LOWER: IPv6 addresses may be stored in upper case; MySQL's
-			// default collations compare case-insensitively, PostgreSQL doesn't
-			$sql = "SELECT t.id, t.ipaddress FROM ".$table." t WHERE ".
-				"((t.ipaddress NOT LIKE '%/%' AND LOWER(t.ipaddress) = LOWER(".$this->db->quote($ipaddress)."))".
-				" OR t.ipaddress LIKE '%/%')".
+			$sql = "SELECT t.id, t.ipaddress FROM ".$table." t WHERE t.ipaddress IN (".
+				implode(', ', array_map(array($this->db, 'quote'), $candidates)).")".
 				$additionalWhere;
 			$this->db->setQuery($sql);
-			$entries = array();
-			foreach ($this->db->loadObjectList() as $entry)
+			$entries = $this->db->loadObjectList();
+			foreach ($entries as $entry)
 			{
-				if (strpos($entry->ipaddress, '/') !== false &&
-					!IpHelper::isInSubnet($ipaddress, $entry->ipaddress))
-				{
-					continue;
-				}
 				$this->logger->log($action." because of entry: ".
 					"id=".$entry->id.", ".
 					"ipaddress=".$entry->ipaddress,
 					Log::DEBUG);
-				$entries[] = $entry;
 			}
 			return $entries;
 		}
@@ -245,6 +244,57 @@ class DatabaseHelper
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			return array();
 		}
+	}
+
+	/**
+	 * Brings the addresses in the block and allow list into canonical form
+	 * (IpHelper::canonicalEntry()), which lookups depend on: entries written by
+	 * earlier versions, or by hand, may be spelled differently ("2001:DB8::1",
+	 * "203.0.113.5/24"). Entries which are no address or network are left alone.
+	 *
+	 * @return int the number of entries changed
+	 */
+	public function canonicalizeStoredAddresses()
+	{
+		$changed = 0;
+		try
+		{
+			foreach (array('#__bfstop_bannedip', '#__bfstop_allowlist') as $table)
+			{
+				$lastId = 0;
+				do
+				{
+					$query = $this->db->getQuery(true)
+						->select($this->db->quoteName(array('id', 'ipaddress')))
+						->from($this->db->quoteName($table))
+						->where($this->db->quoteName('id').' > '.(int) $lastId)
+						->order($this->db->quoteName('id').' ASC');
+					$this->db->setQuery($query, 0, 5000);
+					$rows = $this->db->loadObjectList();
+					foreach ($rows as $row)
+					{
+						$lastId = (int) $row->id;
+						$canonical = IpHelper::canonicalEntry($row->ipaddress);
+						if ($canonical !== null && $canonical !== $row->ipaddress)
+						{
+							$update = $this->db->getQuery(true)
+								->update($this->db->quoteName($table))
+								->set($this->db->quoteName('ipaddress').' = '.$this->db->quote($canonical))
+								->where($this->db->quoteName('id').' = '.(int) $row->id);
+							$this->db->setQuery($update);
+							$this->db->execute();
+							++$changed;
+						}
+					}
+				}
+				while (count($rows) === 5000);
+			}
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+		return $changed;
 	}
 
 	/**
@@ -330,7 +380,7 @@ class DatabaseHelper
 		try
 		{
 			$blockEntry = new \stdClass();
-			$blockEntry->ipaddress = $logEntry->ipaddress;
+			$blockEntry->ipaddress = IpHelper::canonicalEntry($logEntry->ipaddress) ?? $logEntry->ipaddress;
 			$blockEntry->crdate = date("Y-m-d H:i:s");
 			$blockEntry->duration = $duration;
 			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
@@ -854,13 +904,22 @@ class DatabaseHelper
 
 	/**
 	 * Remembers when the periodic maintenance last ran.
+	 */
+	public function saveLastPurge($timestamp)
+	{
+		$this->savePluginSetting('lastPurge', (int) $timestamp);
+	}
+
+	/**
+	 * Stores one value in the plugin's settings (bookkeeping of the plugin,
+	 * not set on the settings page).
 	 *
 	 * Only this one value is changed in the plugin's stored settings, which
 	 * are read from the database right now: writing back the settings the
 	 * request was started with would undo whatever an administrator saved in
 	 * the meantime.
 	 */
-	public function saveLastPurge($timestamp)
+	public function savePluginSetting($name, $value)
 	{
 		try
 		{
@@ -880,7 +939,7 @@ class DatabaseHelper
 			{
 				$params = array();
 			}
-			$params['lastPurge'] = (int) $timestamp;
+			$params[$name] = $value;
 			// no table alias here: PostgreSQL doesn't allow qualified column
 			// names in the SET clause (issue #206)
 			$query = $where($this->db->getQuery(true)

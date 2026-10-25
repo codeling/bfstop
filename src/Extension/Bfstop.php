@@ -717,6 +717,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
+		// lookups of the block and allow list need the addresses in canonical
+		// form, which entries of earlier versions are not in: once, before the
+		// first lookup of this version (every request has one, later). The
+		// installer script can't do this reliably - the class of the previous
+		// version may be loaded still
+		if (!$this->getBoolParam('addressesCanonical', false))
+		{
+			$this->mydb->canonicalizeStoredAddresses();
+			$this->mydb->savePluginSetting('addressesCanonical', 1);
+			$this->params->set('addressesCanonical', 1);
+		}
 		// periodic maintenance, at most once a day
 		$purgeInterval = 86400; // = 24*60*60 => one day
 		$lastPurge = $this->params->get('lastPurge', 0);
