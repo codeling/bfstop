@@ -1,0 +1,118 @@
+name: Joomla versions
+
+# The integration tests of ci.yml run on one Joomla! version per major version
+# (the matrix), each with a SHA-256 in tests/ci/joomla-checksums.sha256. Dependabot
+# can't follow those, so this weekly job looks at the releases of joomla/joomla-cms:
+#
+# - a newer patch release of a version in the matrix: a pull request that raises
+#   the matrix and adds the checksum (branch joomla-versions, rewritten by this
+#   job while the pull request is open)
+# - a release of a newer minor/major line than the matrix has: an issue, because
+#   whether BFStop supports it is a decision, not a version bump
+#
+# See tests/README.md, "Joomla versions of the CI matrix".
+
+on:
+  schedule:
+    - cron: '41 5 * * 2'
+  workflow_dispatch:
+
+permissions:
+  contents: write       # the branch joomla-versions
+  pull-requests: write
+  issues: write
+  actions: write        # to start ci.yml on that branch (see below)
+
+concurrency: joomla-versions
+
+jobs:
+  check:
+    name: Newer Joomla! releases
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Look at the releases of joomla/joomla-cms
+        run: |
+          set -euo pipefail
+          gh api "repos/joomla/joomla-cms/releases?per_page=100" > "$RUNNER_TEMP/releases.json"
+          php tests/ci/joomla-updates.php plan "$RUNNER_TEMP/releases.json" | tee "$RUNNER_TEMP/plan.json"
+      - name: Issue for a newer minor/major line
+        run: |
+          set -euo pipefail
+          while read -r row; do
+            line="$(jq -r .line <<< "$row")"
+            version="$(jq -r .version <<< "$row")"
+            title="Joomla $line is available: add it to the CI matrix?"
+            known="$(gh issue list --state all --search "in:title Joomla $line" --json number,title \
+              | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
+            if [ -z "$known" ]; then
+              gh issue create --title "$title" --label dependencies --body "Joomla! $version (line $line) is released and newer than the versions the CI matrix tests. To support it: raise or extend the matrix in \`.github/workflows/ci.yml\` (and in com_bfstop), add the package's SHA-256 to \`tests/ci/joomla-checksums.sha256\` (the file says how to check it), and see what the tests say. Opened by the weekly job $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; it doesn't ask again for this line."
+            fi
+          done < <(jq -c '.new_lines[]' "$RUNNER_TEMP/plan.json")
+      - name: Pull request for newer patch releases
+        run: |
+          set -euo pipefail
+          if [ "$(jq '.bumps | length' "$RUNNER_TEMP/plan.json")" -eq 0 ]; then
+            echo "The matrix has the newest patch release of each of its versions."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B joomla-versions
+          body="$RUNNER_TEMP/body.md"
+          versions=""
+          {
+            echo "The matrix of the integration tests runs older patch releases than are available. This raises it and adds the SHA-256 of each package to \`tests/ci/joomla-checksums.sha256\`."
+            echo
+          } > "$body"
+          while read -r row; do
+            from="$(jq -r .from <<< "$row")"
+            to="$(jq -r .to <<< "$row")"
+            digest="$(jq -r .digest <<< "$row")"
+            package="Joomla_${to}-Stable-Full_Package.tar.gz"
+            curl -fsSL -o "$RUNNER_TEMP/$package" "https://github.com/joomla/joomla-cms/releases/download/$to/$package"
+            actual="$(sha256sum "$RUNNER_TEMP/$package" | cut -d' ' -f1)"
+            if [ -n "$digest" ] && [ "$digest" != "$actual" ]; then
+              echo "::error::The download of $package has SHA-256 $actual, but the GitHub API lists $digest for the asset. Not touching the matrix."
+              exit 1
+            fi
+            php tests/ci/joomla-updates.php apply "$from" "$to" "$actual"
+            versions="${versions:+$versions, }$to"
+            if [ -n "$digest" ]; then
+              echo "- **$from -> $to**: SHA-256 \`$actual\`, the same as the digest GitHub lists for the release asset." >> "$body"
+            else
+              echo "- **$from -> $to**: SHA-256 \`$actual\` of the downloaded package (GitHub listed no digest for the asset)." >> "$body"
+            fi
+          done < <(jq -c '.bumps[]' "$RUNNER_TEMP/plan.json")
+          {
+            echo
+            echo "**Before merging, please compare the MD5/SHA1 of each package with the ones on https://downloads.joomla.org** (the page of the version lists them): the SHA-256 comes from the GitHub release, not from Joomla's own page."
+            echo
+            echo "- The entries of the previous versions stay in the checksum file: the com_bfstop workflow installs through the same file. Remove them once both repositories have moved on."
+            echo "- com_bfstop has its own matrix; raise it there if you want the same versions."
+            echo "- This branch (\`joomla-versions\`) is rewritten by the weekly job while the pull request is open. A push made with the workflow's token doesn't start the \`pull_request\` workflows, so the job starts \`ci.yml\` on the branch itself; its runs are listed on the branch's latest commit."
+            echo
+            echo "Opened by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } >> "$body"
+          git commit -a -q -m "CI: Joomla $versions"
+          # nothing new since the last run (the matrix and checksum file are what differs)?
+          if git fetch -q origin joomla-versions 2> /dev/null \
+            && git diff --quiet FETCH_HEAD HEAD -- .github/workflows/ci.yml tests/ci/joomla-checksums.sha256; then
+            echo "The branch joomla-versions has these versions already."
+            exit 0
+          fi
+          git push --force origin joomla-versions
+          number="$(gh pr list --head joomla-versions --state open --json number --jq '.[0].number // empty')"
+          if [ -z "$number" ]; then
+            gh pr create --base main --head joomla-versions --title "CI: Joomla $versions" --body-file "$body"
+            gh pr edit joomla-versions --add-label dependencies || true
+          else
+            gh pr edit "$number" --title "CI: Joomla $versions" --body-file "$body"
+          fi
+          gh workflow run ci.yml --ref joomla-versions
