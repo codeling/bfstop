@@ -29,6 +29,11 @@ the site only needs to be set up again when the database schema changes.
 GitHub Actions runs everything on each push and pull request, on Joomla 5 and
 6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`.
 
+Plugin and component are tested together, and each repository's workflow checks
+out the other one: the branch of the same name if that exists **and has commits
+`main` doesn't** (for a change spanning both repositories), else `main`. A
+branch that was merged and not deleted is therefore ignored, not tested against.
+
 ### Joomla versions of the CI matrix
 
 The matrix runs one Joomla version per major version, each with its SHA-256 in
