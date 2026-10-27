@@ -10,8 +10,10 @@
 // The integration tests only install a Joomla! package whose SHA-256 is in
 // tests/ci/joomla-checksums.sha256 (see tests/ci/download-joomla.sh). This
 // checks that the file is well-formed and lists every Joomla! version of the
-// matrix of .github/workflows/ci.yml, so that raising a version without its
-// checksum fails here, not in half a dozen integration jobs.
+// matrix of the integration tests (tests/ci/matrix.json, read by
+// .github/workflows/ci.yml; also checked for being well-formed), so that
+// raising a version without its checksum fails here, not in half a dozen
+// integration jobs.
 //
 // Exits with status 1 on an error.
 
@@ -41,24 +43,47 @@ foreach (file($root.'/tests/ci/joomla-checksums.sha256') as $number => $line)
 }
 
 $used = array();
-preg_match_all('/\bjoomla:\s*(\d+\.\d+\.\d+)\b/', file_get_contents($root.'/.github/workflows/ci.yml'), $matches);
-foreach (array_unique($matches[1]) as $version)
+$matrix = json_decode(file_get_contents($root.'/tests/ci/matrix.json'), true);
+if (!is_array($matrix) || !is_array($matrix['include'] ?? null) || count($matrix['include']) === 0)
 {
+	echo "ERROR: tests/ci/matrix.json is not JSON with a non-empty \"include\" list\n";
+	++$errors;
+	$matrix = array('include' => array());
+}
+foreach ($matrix['include'] as $number => $entry)
+{
+	$where = "tests/ci/matrix.json: entry ".($number + 1);
+	foreach (array('joomla', 'php', 'db') as $key)
+	{
+		if (!is_array($entry) || !isset($entry[$key]) || !is_string($entry[$key]) || $entry[$key] === '')
+		{
+			echo "ERROR: $where has no \"$key\" (string)\n";
+			++$errors;
+			continue 2;
+		}
+	}
+	$version = $entry['joomla'];
+	if (!preg_match('/^\d+\.\d+\.\d+$/', $version))
+	{
+		echo "ERROR: $where: \"$version\" is not a Joomla version like 5.4.8\n";
+		++$errors;
+		continue;
+	}
 	$used[$version] = true;
 	if (!isset($listed[$version]))
 	{
-		echo "ERROR: Joomla $version is in the matrix of .github/workflows/ci.yml, but has no checksum in tests/ci/joomla-checksums.sha256\n";
+		echo "ERROR: Joomla $version is in tests/ci/matrix.json, but has no checksum in tests/ci/joomla-checksums.sha256\n";
 		++$errors;
 	}
 }
 if (count($used) === 0)
 {
-	echo "ERROR: no Joomla version found in the matrix of .github/workflows/ci.yml\n";
+	echo "ERROR: no Joomla version found in tests/ci/matrix.json\n";
 	++$errors;
 }
 foreach (array_diff_key($listed, $used) as $version => $unused)
 {
-	echo "NOTE: Joomla $version has a checksum, but is not in the matrix of ci.yml\n";
+	echo "NOTE: Joomla $version has a checksum, but is not in tests/ci/matrix.json\n";
 }
 echo count($used)." version(s) of the matrix checked against ".count($listed)." checksum(s), $errors error(s)\n";
 exit($errors > 0 ? 1 : 0);

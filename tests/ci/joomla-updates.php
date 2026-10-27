@@ -5,8 +5,9 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
-// Finds newer Joomla! releases for the matrix of .github/workflows/ci.yml and
-// applies them; used by .github/workflows/joomla-versions.yml.
+// Finds newer Joomla! releases for the matrix of the integration tests
+// (tests/ci/matrix.json, read by .github/workflows/ci.yml) and applies them;
+// used by .github/workflows/joomla-versions.yml.
 //
 //   php tests/ci/joomla-updates.php plan RELEASES.json
 //       RELEASES.json is the answer of the GitHub API for
@@ -24,11 +25,20 @@
 
 const JoomlaUpdatesPackage = 'Joomla_%s-Stable-Full_Package.tar.gz';
 
-/** @return string[] the Joomla! versions of the matrix, ascending */
-function matrixVersions($workflow)
+/** @return string[] the Joomla! versions of the matrix (the text of tests/ci/matrix.json), ascending */
+function matrixVersions($matrixJson)
 {
-	preg_match_all('/\bjoomla:\s*(\d+\.\d+\.\d+)\b/', $workflow, $matches);
-	$versions = array_values(array_unique($matches[1]));
+	$matrix = json_decode($matrixJson, true);
+	$entries = is_array($matrix) && is_array($matrix['include'] ?? null) ? $matrix['include'] : array();
+	$versions = array();
+	foreach ($entries as $entry)
+	{
+		if (is_array($entry) && isset($entry['joomla']) && preg_match('/^\d+\.\d+\.\d+$/', $entry['joomla']))
+		{
+			$versions[$entry['joomla']] = true;
+		}
+	}
+	$versions = array_keys($versions);
 	usort($versions, 'version_compare');
 	return $versions;
 }
@@ -104,8 +114,8 @@ function plan(array $matrix, array $stable)
 	return array('matrix' => $matrix, 'bumps' => $bumps, 'new_lines' => $newLines);
 }
 
-/** @return array(string, string) workflow and checksum file with $to instead of $from */
-function apply($workflow, $checksums, $from, $to, $sha256)
+/** @return array(string, string) matrix and checksum file with $to instead of $from */
+function apply($matrixJson, $checksums, $from, $to, $sha256)
 {
 	foreach (array($from, $to) as $version)
 	{
@@ -122,7 +132,7 @@ function apply($workflow, $checksums, $from, $to, $sha256)
 	{
 		throw new InvalidArgumentException("$to is not a newer release of the $from line");
 	}
-	$workflow = preg_replace('/\bjoomla:(\s*)'.preg_quote($from, '/').'\b/', 'joomla:${1}'.$to, $workflow, -1, $count);
+	$matrixJson = preg_replace('/("joomla":\s*")'.preg_quote($from, '/').'(")/', '${1}'.$to.'${2}', $matrixJson, -1, $count);
 	if ($count === 0)
 	{
 		throw new InvalidArgumentException("Joomla $from is not in the matrix");
@@ -144,13 +154,13 @@ function apply($workflow, $checksums, $from, $to, $sha256)
 	$note = "#  $to  taken from the GitHub release asset by the joomla-versions workflow;\n"
 		."#         compare with downloads.joomla.org/cms/joomla$major/".str_replace('.', '-', $to);
 	$checksums = preg_replace('/^(?!#)/m', $note."\n", $checksums, 1);
-	return array($workflow, $checksums);
+	return array($matrixJson, $checksums);
 }
 
 function main(array $argv)
 {
 	$root = dirname(__DIR__, 2);
-	$workflowFile = $root.'/.github/workflows/ci.yml';
+	$matrixFile = $root.'/tests/ci/matrix.json';
 	$checksumFile = $root.'/tests/ci/joomla-checksums.sha256';
 	$command = $argv[1] ?? '';
 	if ($command === 'plan' && count($argv) === 3)
@@ -161,14 +171,14 @@ function main(array $argv)
 			fwrite(STDERR, "$argv[2] is not a list of releases\n");
 			return 2;
 		}
-		echo json_encode(plan(matrixVersions(file_get_contents($workflowFile)), stableReleases($releases)), JSON_PRETTY_PRINT)."\n";
+		echo json_encode(plan(matrixVersions(file_get_contents($matrixFile)), stableReleases($releases)), JSON_PRETTY_PRINT)."\n";
 		return 0;
 	}
 	if ($command === 'apply' && count($argv) === 5)
 	{
 		try
 		{
-			list($workflow, $checksums) = apply(file_get_contents($workflowFile), file_get_contents($checksumFile),
+			list($matrix, $checksums) = apply(file_get_contents($matrixFile), file_get_contents($checksumFile),
 				$argv[2], $argv[3], $argv[4]);
 		}
 		catch (InvalidArgumentException $e)
@@ -176,7 +186,7 @@ function main(array $argv)
 			fwrite(STDERR, $e->getMessage()."\n");
 			return 1;
 		}
-		file_put_contents($workflowFile, $workflow);
+		file_put_contents($matrixFile, $matrix);
 		file_put_contents($checksumFile, $checksums);
 		return 0;
 	}
