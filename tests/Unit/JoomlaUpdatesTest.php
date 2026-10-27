@@ -20,10 +20,11 @@ require_once dirname(__DIR__).'/ci/joomla-updates.php';
  */
 class JoomlaUpdatesTest extends TestCase
 {
-	private const Workflow = "      matrix:\n        include:\n"
-		."          - { joomla: 5.4.8, php: '8.2', db: 'mysql:8.0' }\n"
-		."          - { joomla: 5.4.8, php: '8.2', db: 'postgres:12' }\n"
-		."          - { joomla: 6.1.3, php: '8.4', db: 'mysql:8.4' }\n";
+	private const Matrix = "{\n  \"_\": \"note\",\n  \"include\": [\n"
+		."    { \"joomla\": \"5.4.8\", \"php\": \"8.2\", \"db\": \"mysql:8.0\" },\n"
+		."    { \"joomla\": \"5.4.8\", \"php\": \"8.2\", \"db\": \"postgres:12\" },\n"
+		."    { \"joomla\": \"6.1.3\", \"php\": \"8.4\", \"db\": \"mysql:8.4\" }\n"
+		."  ]\n}\n";
 
 	private const Hash8 = '2c9dc7e6f451c83c43bbb7eb5c9348cb889ba802b72915c5bbd899f9d2de3f3d';
 	private const Hash13 = '184f8c582cde5981693de7c28547c6e834c48c50cb377c7b8421bbfd33bbdf6f';
@@ -54,7 +55,14 @@ class JoomlaUpdatesTest extends TestCase
 
 	public function testMatrixVersions()
 	{
-		$this->assertSame(array('5.4.8', '6.1.3'), matrixVersions(self::Workflow));
+		$this->assertSame(array('5.4.8', '6.1.3'), matrixVersions(self::Matrix));
+	}
+
+	public function testMatrixVersionsOfUnusableFiles()
+	{
+		$this->assertSame(array(), matrixVersions('not json'));
+		$this->assertSame(array(), matrixVersions('{"include": "x"}'));
+		$this->assertSame(array('5.4.8'), matrixVersions('{"include": [{"joomla": "5.4.8"}, {"joomla": "5.x"}, {"php": "8.2"}, 7]}'));
 	}
 
 	public function testStableReleasesIgnoreDraftsPrereleasesOddTagsAndMissingPackages()
@@ -100,10 +108,12 @@ class JoomlaUpdatesTest extends TestCase
 
 	public function testApplyReplacesTheVersionAndAddsTheChecksum()
 	{
-		list($workflow, $checksums) = apply(self::Workflow, self::Checksums, '5.4.8', '5.4.9', self::Hash9);
-		$this->assertSame(0, substr_count($workflow, '5.4.8'));
-		$this->assertSame(2, substr_count($workflow, 'joomla: 5.4.9,'));
-		$this->assertSame(1, substr_count($workflow, 'joomla: 6.1.3,'));
+		list($matrix, $checksums) = apply(self::Matrix, self::Checksums, '5.4.8', '5.4.9', self::Hash9);
+		$this->assertSame(0, substr_count($matrix, '5.4.8'));
+		$this->assertSame(2, substr_count($matrix, '"joomla": "5.4.9"'));
+		$this->assertSame(1, substr_count($matrix, '"joomla": "6.1.3"'));
+		$this->assertSame(strtr(self::Matrix, array('5.4.8' => '5.4.9')), $matrix, 'nothing else changes, formatting included');
+		$this->assertIsArray(json_decode($matrix, true), 'still JSON');
 
 		$lines = explode("\n", rtrim($checksums));
 		$this->assertContains(self::Hash8.'  Joomla_5.4.8-Stable-Full_Package.tar.gz', $lines, 'the old entry stays');
@@ -120,8 +130,8 @@ class JoomlaUpdatesTest extends TestCase
 
 	public function testApplyKeepsWhatLintAndInstallerRead()
 	{
-		list($workflow, $checksums) = apply(self::Workflow, self::Checksums, '6.1.3', '6.1.4', self::Hash9);
-		$this->assertSame(array('5.4.8', '6.1.4'), matrixVersions($workflow));
+		list($matrix, $checksums) = apply(self::Matrix, self::Checksums, '6.1.3', '6.1.4', self::Hash9);
+		$this->assertSame(array('5.4.8', '6.1.4'), matrixVersions($matrix));
 		foreach (explode("\n", rtrim($checksums)) as $line)
 		{
 			$this->assertTrue($line === '' || $line[0] === '#'
@@ -133,7 +143,7 @@ class JoomlaUpdatesTest extends TestCase
 	public function testApplyRefusesWhatItCannotDoSafely($from, $to, $hash, $checksums = self::Checksums)
 	{
 		$this->expectException(InvalidArgumentException::class);
-		apply(self::Workflow, $checksums, $from, $to, $hash);
+		apply(self::Matrix, $checksums, $from, $to, $hash);
 	}
 
 	public static function badApplications()

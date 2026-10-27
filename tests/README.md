@@ -38,11 +38,14 @@ branch that was merged and not deleted is therefore ignored, not tested against.
 
 ### Joomla versions of the CI matrix
 
-The matrix runs one Joomla version per major version, each with its SHA-256 in
-`tests/ci/joomla-checksums.sha256`. Dependabot can't follow those, so
+The matrix runs one Joomla version per major version. It is `tests/ci/matrix.json`
+(which `ci.yml` reads in a first job), each version with its SHA-256 in
+`tests/ci/joomla-checksums.sha256`; raise a version in both files, the lint
+checks that they agree. Dependabot can't follow those, so
 `.github/workflows/joomla-versions.yml` looks at the releases of
 `joomla/joomla-cms` every week (and on demand: Actions, "Joomla versions", Run
-workflow):
+workflow - not "Re-run" of an old run, which uses the workflow file of that
+run):
 
 - a newer **patch release** of a version in the matrix gets a pull request
   (branch `joomla-versions`) that raises the matrix and adds the checksum. The

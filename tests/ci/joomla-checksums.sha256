@@ -1,6 +1,6 @@
 # SHA-256 of the Joomla! full packages the integration tests install
 # (tests/ci/download-joomla.sh refuses a package that doesn't match). The same
-# versions have to be listed here as in the matrix of .github/workflows/ci.yml
+# versions have to be listed here as in the matrix tests/ci/matrix.json
 # (checked by tests/lint/check-joomla-checksums.php). The workflow of com_bfstop
 # installs through the same script, so a version it uses has to be listed here.
 #
