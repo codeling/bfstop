@@ -52,10 +52,14 @@ jobs:
             known="$(gh issue list --state all --search "in:title Joomla $line" --json number,title \
               | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
             if [ -z "$known" ]; then
-              gh issue create --title "$title" --label dependencies --body "Joomla! $version (line $line) is released and newer than the versions the CI matrix tests. To support it: raise or extend the matrix in \`.github/workflows/ci.yml\` (and in com_bfstop), add the package's SHA-256 to \`tests/ci/joomla-checksums.sha256\` (the file says how to check it), and see what the tests say. Opened by the weekly job $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; it doesn't ask again for this line."
+              url="$(gh issue create --title "$title" --body "Joomla! $version (line $line) is released and newer than the versions the CI matrix tests. To support it: raise or extend the matrix in \`.github/workflows/ci.yml\` (and in com_bfstop), add the package's SHA-256 to \`tests/ci/joomla-checksums.sha256\` (the file says how to check it), and see what the tests say. Opened by the weekly job $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; it doesn't ask again for this line.")"
+              # the label is a nicety: the repository may not have it
+              gh issue edit "$url" --add-label dependencies || true
             fi
           done < <(jq -c '.new_lines[]' "$RUNNER_TEMP/plan.json")
       - name: Pull request for newer patch releases
+        # independent of the issue step: a failing issue must not hide the pull request
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           if [ "$(jq '.bumps | length' "$RUNNER_TEMP/plan.json")" -eq 0 ]; then
