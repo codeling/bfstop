@@ -38,6 +38,8 @@ jobs:
         run: |
           title="Update the vendored GeoIP reader (maxmind-db/reader)"
           if [ -z "$(gh issue list --state open --search "in:title $title" --json number --jq '.[0].number')" ]; then
-            gh issue create --title "$title" --label dependencies \
-              --body "The weekly dependency check failed: maxmind-db/reader has a newer release, a security advisory, or src/Helper/Geo differs from composer.lock. See the run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. To update: \`composer update maxmind-db/reader && composer vendor-geoip\`, review the diff, run the tests, release both extensions."
+            url="$(gh issue create --title "$title" \
+              --body "The weekly dependency check failed: maxmind-db/reader has a newer release, a security advisory, or src/Helper/Geo differs from composer.lock. See the run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. To update: \`composer update maxmind-db/reader && composer vendor-geoip\`, review the diff, run the tests, release both extensions.")"
+            # the label is a nicety: the repository may not have it
+            gh issue edit "$url" --add-label dependencies || true
           fi
