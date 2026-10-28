@@ -60,8 +60,12 @@ run):
 For the pull requests, the repository setting "Allow GitHub Actions to create
 and approve pull requests" has to be on. The planning and the edits are
 `tests/ci/joomla-updates.php` (unit-tested in `tests/Unit/JoomlaUpdatesTest.php`).
-Entries of old versions stay in the checksum file as long as com_bfstop's
-matrix, which installs through the same file, may still use them.
+The com_bfstop workflow does not have a matrix of its own: it reads
+`tests/ci/matrix.json` of the plugin checkout it tests with (the same branch
+choice as above) and installs through the same checksum file, so both
+repositories always run the same combinations. Entries of versions which are
+no longer in the matrix are harmless (the lint only notes them) and can be
+removed.
 
 ## Running locally
 
