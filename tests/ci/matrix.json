@@ -1,11 +1,11 @@
 {
   "_": "Matrix of the integration jobs in .github/workflows/ci.yml. The Joomla versions need a SHA-256 in tests/ci/joomla-checksums.sha256 (checked by tests/lint/check-joomla-checksums.php). .github/workflows/joomla-versions.yml raises the patch versions; keep one entry per line.",
   "include": [
-    { "joomla": "5.4.8", "php": "8.2", "db": "mysql:8.0" },
-    { "joomla": "5.4.8", "php": "8.2", "db": "mariadb:10.11" },
-    { "joomla": "5.4.8", "php": "8.2", "db": "postgres:12" },
-    { "joomla": "6.1.3", "php": "8.4", "db": "mysql:8.4" },
-    { "joomla": "6.1.3", "php": "8.4", "db": "mariadb:11.4" },
-    { "joomla": "6.1.3", "php": "8.4", "db": "postgres:17" }
+    { "joomla": "5.4.10", "php": "8.2", "db": "mysql:8.0" },
+    { "joomla": "5.4.10", "php": "8.2", "db": "mariadb:10.11" },
+    { "joomla": "5.4.10", "php": "8.2", "db": "postgres:12" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "mysql:8.4" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "mariadb:11.4" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "postgres:17" }
   ]
 }
