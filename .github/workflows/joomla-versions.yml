@@ -55,7 +55,7 @@ jobs:
             known="$(gh issue list --state all --search "in:title Joomla $line" --json number,title \
               | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')"
             if [ -z "$known" ]; then
-              url="$(gh issue create --title "$title" --body "Joomla! $version (line $line) is released and newer than the versions the CI matrix tests. To support it: raise or extend the matrix in \`tests/ci/matrix.json\` (and in com_bfstop's \`ci.yml\`), add the package's SHA-256 to \`tests/ci/joomla-checksums.sha256\` (the file says how to check it), and see what the tests say. Opened by the weekly job $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; it doesn't ask again for this line.")"
+              url="$(gh issue create --title "$title" --body "Joomla! $version (line $line) is released and newer than the versions the CI matrix tests. To support it: raise or extend the matrix in \`tests/ci/matrix.json\` (com_bfstop's workflow reads it from here), add the package's SHA-256 to \`tests/ci/joomla-checksums.sha256\` (the file says how to check it), and see what the tests say. Opened by the weekly job $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID; it doesn't ask again for this line.")"
               # the label is a nicety: the repository may not have it
               gh issue edit "$url" --add-label dependencies || true
             fi
@@ -101,8 +101,8 @@ jobs:
             echo
             echo "**Before merging, please compare the MD5/SHA1 of each package with the ones on https://downloads.joomla.org** (the page of the version lists them): the SHA-256 comes from the GitHub release, not from Joomla's own page."
             echo
-            echo "- The entries of the previous versions stay in the checksum file: the com_bfstop workflow installs through the same file. Remove them once both repositories have moved on."
-            echo "- com_bfstop has its own matrix; raise it there if you want the same versions."
+            echo "- The entries of the previous versions stay in the checksum file; they are unused once merged and can be removed."
+            echo "- com_bfstop needs no change: its workflow reads this matrix from the plugin repository."
             echo "- This branch (\`joomla-versions\`) is rewritten by the weekly job while the pull request is open. A push made with the workflow's token doesn't start the \`pull_request\` workflows, so the job starts \`ci.yml\` on the branch itself; its runs are listed on the branch's latest commit."
             echo
             echo "Opened by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
