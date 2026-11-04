@@ -47,6 +47,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'adaptiveDelayMax' => 0,
 		'adaptiveDelayThresholdMin' => 50,
 		'adaptiveDelayThresholdMax' => 200,
+		// failed logins are purged after this many weeks unless the
+		// administrator chose another time (0 = never). Keeping them for ever
+		// is not needed to protect anything, and they are personal data
+		// (addresses, usernames)
+		'deleteOld' => 4,
+		'logLevel' => 8, // Log::ERROR
+		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
 	);
 
 	private LoggerHelper $logger;
@@ -390,7 +397,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function init()
 	{
-		$this->logger = new LoggerHelper($this->getIntParam('logLevel', LoggerHelper::Disabled),
+		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
 			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->mydb = new DatabaseHelper($this->logger);
 		$this->notifier = new NotifierHelper($this->logger, $this->mydb,
@@ -794,7 +801,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$now = time();
 		if ($now > ($lastPurge + $purgeInterval))
 		{
-			$purgeAge = $this->getIntParam('deleteOld', DatabaseHelper::$DEFAULT_PURGE_WEEKS);
+			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
 			if ($purgeAge > 0)
 			{
 				$this->mydb->purgeOldEntries($purgeAge);
