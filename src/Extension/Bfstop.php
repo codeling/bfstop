@@ -663,6 +663,46 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	}
 
 	/**
+	 * The controller and the method of it which Joomla's component dispatcher
+	 * runs for this request, in lower case, as it determines them
+	 * (ComponentDispatcher::dispatch(), BaseController::execute()): "task" is
+	 * either "controller.method" - anything after a second dot is ignored - or
+	 * just the method, with the controller from the "controller" parameter;
+	 * the method's case doesn't matter. Both are '' if there is no task (which
+	 * shows a view). Checks of the task have to go by this, not by the raw
+	 * parameter, or "task=user.LOGIN" or "task=user.login.x" would not be
+	 * recognised as the login they are.
+	 *
+	 * @return string[] array(controller, method)
+	 */
+	private function requestedTask()
+	{
+		$task = strtolower($this->requestString('task'));
+		if ($task === '')
+		{
+			return array('', '');
+		}
+		if (strpos($task, '.') !== false)
+		{
+			$parts = explode('.', $task);
+			return array($parts[0], $parts[1]);
+		}
+		$controller = strtolower($this->requestString('controller'));
+		return array($controller === '' ? 'display' : $controller, $task);
+	}
+
+	// the tasks of com_users (controller.method) with which a user who forgot
+	// their password or username gets a new one: the forms of the reset and
+	// remind views post to them (index.php?task=reset.request, ...)
+	private const PasswordRecoveryTasks = array(
+		'reset.request',
+		'reset.confirm',
+		'reset.complete',
+		'remind.remind',
+		'user.remind',
+	);
+
+	/**
 	 * Password reset / username reminder must stay reachable even for a
 	 * blocked IP - otherwise a legitimate user who got blocked (and is told
 	 * by this very plugin to use password reset, see
@@ -670,17 +710,34 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * that advice, turning the block itself into a denial-of-service
 	 * against them (see OWASP Authentication Cheat Sheet guidance on
 	 * lockouts).
+	 *
+	 * That is: showing the reset and remind views, and submitting their
+	 * forms - nothing else. In particular not any task with view=reset: the
+	 * task is what Joomla runs, the view is ignored then, so that would let a
+	 * blocked IP log in (option=com_users&view=reset&task=user.login).
 	 */
 	private function isPasswordRecoveryRequest()
 	{
-		$option = $this->requestString('option');
-		$view = $this->requestString('view');
-		$result = (strcmp($option, 'com_users') == 0 &&
-			(strcmp($view, 'reset') == 0 || strcmp($view, 'remind') == 0));
+		if (strcasecmp($this->requestString('option'), 'com_users') != 0)
+		{
+			return false;
+		}
+		list($controller, $method) = $this->requestedTask();
+		if ($method === '' || ($controller === 'display' && $method === 'display'))
+		{
+			$view = strtolower($this->requestString('view'));
+			$result = ($view === 'reset' || $view === 'remind');
+			$what = 'view '.$view;
+		}
+		else
+		{
+			$result = in_array($controller.'.'.$method, self::PasswordRecoveryTasks, true);
+			$what = 'task '.$controller.'.'.$method;
+		}
 		if ($result)
 		{
 			$this->logger->log('Allowing blocked IP through to the '.
-				'password recovery view ('.$view.'), so a blocked '.
+				'password recovery ('.$what.'), so a blocked '.
 				'legitimate user can still recover their account',
 				Log::INFO);
 		}
