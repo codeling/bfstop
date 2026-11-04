@@ -1,10 +1,18 @@
 -- Update DB schema to version 2.0.0
 
+-- If an update stops halfway (e.g. a timeout converting a large table), the
+-- schema version stays at the previous one, and the next attempt runs this
+-- file again from the start: every statement has to work on tables which
+-- already have its change. Statements which can't be written that way in
+-- MySQL (ADD COLUMN, ADD INDEX) are marked "CAN FAIL" for Joomla's installer
+-- (Joomla 4.2+), which then goes on if they fail. Checked by
+-- tests/Unit/UpdateSqlTest.php and tests/Integration/UpdateSqlTest.php.
+
 -- number of requests rejected because of a block, and the time of the
 -- latest one (issue #219); existing blocks start with no data
-ALTER TABLE `#__bfstop_bannedip` ADD COLUMN attempts int unsigned NOT NULL DEFAULT 0;
+ALTER TABLE `#__bfstop_bannedip` ADD COLUMN attempts int unsigned NOT NULL DEFAULT 0 /** CAN FAIL **/;
 
-ALTER TABLE `#__bfstop_bannedip` ADD COLUMN last_attempt datetime NULL DEFAULT NULL;
+ALTER TABLE `#__bfstop_bannedip` ADD COLUMN last_attempt datetime NULL DEFAULT NULL /** CAN FAIL **/;
 
 
 -- use utf8mb4 like Joomla's own tables; with utf8 (3-byte), a failed login
@@ -18,7 +26,7 @@ ALTER TABLE `#__bfstop_unblock` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4
 ALTER TABLE `#__bfstop_unblock_token` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- the user an unblock link was sent to, to limit the links per user
-ALTER TABLE `#__bfstop_unblock_token` ADD COLUMN username varchar(150) NULL DEFAULT NULL;
+ALTER TABLE `#__bfstop_unblock_token` ADD COLUMN username varchar(150) NULL DEFAULT NULL /** CAN FAIL **/;
 
 ALTER TABLE `#__bfstop_allowlist` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -60,10 +68,10 @@ INSERT INTO `#__bfstop_username_stats` (username, attempts, first_attempt, last_
 	ON DUPLICATE KEY UPDATE attempts=attempts;
 
 -- speeds up the per-username (account-level) throttle query
-ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime);
+ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime) /** CAN FAIL **/;
 
 -- every request looks up the visitor's address in the block and allow list;
 -- addresses and networks are stored in canonical form (the plugin brings
 -- existing entries into it once, IpHelper::canonicalEntry())
-ALTER TABLE `#__bfstop_bannedip` ADD INDEX ipaddress (ipaddress);
-ALTER TABLE `#__bfstop_allowlist` ADD INDEX ipaddress (ipaddress);
+ALTER TABLE `#__bfstop_bannedip` ADD INDEX ipaddress (ipaddress) /** CAN FAIL **/;
+ALTER TABLE `#__bfstop_allowlist` ADD INDEX ipaddress (ipaddress) /** CAN FAIL **/;
