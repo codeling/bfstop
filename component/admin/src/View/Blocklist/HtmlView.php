@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -29,7 +30,7 @@ class HtmlView extends BaseHtmlView
 		// with .htaccess blocking, blocked requests never reach Joomla,
 		// so attempts can't be counted
 		$this->attemptsTracked = ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess';
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', 0);
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', Bfstop::DefaultSettings['deleteOld']);
 		$this->addToolBar();
 		parent::display($tpl);
 	}
