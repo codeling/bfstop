@@ -233,6 +233,25 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_login&task=login');
 	}
 
+	public function testLoginOnlyModeRecognisesEveryWayToLogIn()
+	{
+		// Joomla lowercases the method, ignores what follows a second dot and
+		// takes the controller from its own parameter if the task has no dot:
+		// each of these runs UserController::login()
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->block();
+		$this->assertBlocked('option=com_users&task=user.LOGIN');
+		$this->assertBlocked('option=com_users&task=User.Login');
+		$this->assertBlocked('option=com_users&task=user.login.x');
+		$this->assertBlocked('option=com_users&controller=user&task=login');
+		$this->assertBlocked('option=com_users&task=LOGIN');
+		$this->assertBlocked('option=com_login&task=LOGIN');
+		// still no login
+		$this->assertNotBlocked('option=com_users&task=user.logout');
+		$this->assertNotBlocked('option=com_users&view=login&task=display');
+		$this->assertNotBlocked('option=com_content&task=user.login');
+	}
+
 	public function testPasswordRecoveryStaysReachable()
 	{
 		// a blocked legitimate user must still be able to reset their password

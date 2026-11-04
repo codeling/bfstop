@@ -748,21 +748,24 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * Detects a request that actually submits login credentials, for
 	 * "Login Only" block mode (issue #187): on the frontend, credentials
 	 * are submitted to com_users (task=user.login), the backend login form
-	 * posts to com_login (task=login); com_users with task=login is kept
-	 * for backend entry URLs built that way - merely viewing the login
-	 * form (no task, or a display task) doesn't match, so it stays
-	 * reachable.
+	 * posts to com_login (task=login) - merely viewing the login form (no
+	 * task, or a display task) doesn't match, so it stays reachable.
+	 *
+	 * The task is compared as Joomla's dispatcher runs it (see
+	 * requestedTask()): the login method of whatever controller, in any case
+	 * - "task=user.LOGIN", "task=user.login.x" and
+	 * "controller=user&task=login" are all logins. Matching more than
+	 * Joomla would run only blocks a request which wouldn't do anything.
 	 */
 	private function isLoginAttemptRequest()
 	{
-		$option = $this->requestString('option');
-		$task = $this->requestString('task');
-		$result = (strcmp($option, 'com_users') == 0 &&
-			(strcmp($task, 'user.login') == 0 || strcmp($task, 'login') == 0)) ||
-			(strcmp($option, 'com_login') == 0 && strcmp($task, 'login') == 0);
+		$option = strtolower($this->requestString('option'));
+		list(, $method) = $this->requestedTask();
+		$result = ($option === 'com_users' || $option === 'com_login') && $method === 'login';
 		if ($result)
 		{
-			$this->logger->log('Detected a login-attempt request (task='.$task.')', Log::DEBUG);
+			$this->logger->log('Detected a login-attempt request (task='.
+				$this->requestString('task').')', Log::DEBUG);
 		}
 		return $result;
 	}
