@@ -15,6 +15,7 @@ use Codeling\Component\Bfstop\Administrator\Model\AllowlistModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlockModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\FailedloginlistModel;
+use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
@@ -391,6 +392,72 @@ class ComponentTest extends IntegrationTestCase
 		finally
 		{
 			$app->loadIdentity($original);
+		}
+	}
+
+	public function testSavingTheSettingsKeepsWhatThePluginStoresForItself()
+	{
+		// the form only has the settings; the plugin's own values must survive
+		// a save, or it would e.g. convert all stored addresses again
+		$original = $this->getPluginParams();
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockNumber' => 7, 'lastPurge' => 1700000000,
+				'addressesCanonical' => 1)));
+			$model = $this->model(SettingsModel::class);
+			$model->getState();
+			$this->assertTrue($model->save(array('params' => array('blockNumber' => 8, 'logLevel' => 8))),
+				implode(', ', $model->getErrors()));
+			$saved = json_decode($this->getPluginParams(), true);
+			$this->assertSame(8, (int) $saved['blockNumber']);
+			$this->assertSame(1700000000, $saved['lastPurge']);
+			$this->assertSame(1, $saved['addressesCanonical']);
+			$this->assertSame(\Codeling\Plugin\System\Bfstop\Extension\Bfstop::InternalSettings,
+				array_values(array_intersect(array_keys($saved), \Codeling\Plugin\System\Bfstop\Extension\Bfstop::InternalSettings)));
+			// a value given in the data wins (not that the form has them)
+			$this->assertSame(array('lastPurge' => 5), SettingsModel::keepInternalSettings(array('lastPurge' => 5),
+				array('lastPurge' => 1700000000)));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
+
+	public function testInstallerScriptHintAndVersionCheck()
+	{
+		require_once getenv('COM_BFSTOP_ROOT').'/installscript.php';
+		$app = \Joomla\CMS\Factory::getApplication();
+		$adapter = $this->createMock(\Joomla\CMS\Installer\InstallerAdapter::class);
+		$adapter->method('getName')->willReturn('com_bfstop');
+		$adapter->method('getManifest')->willReturn(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/bfstop.xml'));
+		$script = new \com_bfstopInstallerScript($adapter);
+		$app->getMessageQueue(true);
+
+		// the hint about the settings is for new installations; on an update,
+		// the plugin's script says what to look at, if anything
+		$script->postflight('update', $adapter);
+		$this->assertSame(array(), $app->getMessageQueue(true));
+		$script->postflight('install', $adapter);
+		$this->assertCount(1, $app->getMessageQueue(true));
+
+		$cache = $this->queryValue("SELECT manifest_cache FROM #__extensions WHERE type='component' AND element='com_bfstop'");
+		try
+		{
+			$this->assertTrue($script->preflight('update', $adapter));
+			$newer = json_decode((string) $cache, true) ?: array();
+			$newer['version'] = '99.0.0';
+			$this->db->setQuery('UPDATE #__extensions SET manifest_cache='.$this->db->quote(json_encode($newer)).
+				" WHERE type='component' AND element='com_bfstop'");
+			$this->db->execute();
+			$this->assertFalse($script->preflight('update', $adapter), 'replaced a newer version');
+		}
+		finally
+		{
+			$this->db->setQuery('UPDATE #__extensions SET manifest_cache='.$this->db->quote($cache).
+				" WHERE type='component' AND element='com_bfstop'");
+			$this->db->execute();
+			$app->getMessageQueue(true);
 		}
 	}
 
