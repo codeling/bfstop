@@ -39,6 +39,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * compares them). The plugin is enabled by the installation, so it runs
 	 * with these until an administrator opens the settings.
 	 */
+	/**
+	 * Values the plugin keeps among its settings for itself: they are not on
+	 * the settings page, so saving that page must keep them (see com_bfstop's
+	 * SettingsModel).
+	 */
+	public const InternalSettings = array('addressesCanonical', 'lastPurge');
+
 	public const DefaultSettings = array(
 		'blockNumber' => 10,
 		'checkInterval' => 10080,
@@ -791,9 +798,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// version may be loaded still
 		if (!$this->getBoolParam('addressesCanonical', false))
 		{
-			$this->mydb->canonicalizeStoredAddresses();
-			$this->mydb->savePluginSetting('addressesCanonical', 1);
-			$this->params->set('addressesCanonical', 1);
+			$this->canonicalizeStoredAddressesOnce();
 		}
 		// periodic maintenance, at most once a day
 		$purgeInterval = 86400; // = 24*60*60 => one day
@@ -818,6 +823,51 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);
+		}
+	}
+
+	/**
+	 * Brings the stored addresses into canonical form, if no other request
+	 * did or does: every request starts out with the settings as they were
+	 * when it began, so after the update all requests arriving before the
+	 * first of them is done would see the setting unset, and each would go
+	 * through the whole block and allow list (and update the same rows) - on
+	 * a busy site with a long list, many at once. The first takes a lock; the
+	 * others go on without waiting (their lookups may miss an entry which
+	 * isn't converted yet, as they would have before the update). Once it has
+	 * the lock, a request checks the stored setting again, as another one may
+	 * have finished in the meantime. If no lock can be taken (no writable
+	 * temporary directory), it is done without one: it can be run more than
+	 * once, it only costs time.
+	 */
+	private function canonicalizeStoredAddressesOnce()
+	{
+		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
+			md5((string) $this->getApplication()->get('db').(string) $this->getApplication()->get('dbprefix')).'.lock';
+		$handle = @fopen($lockFile, 'c');
+		if ($handle !== false && !flock($handle, LOCK_EX | LOCK_NB))
+		{
+			fclose($handle);
+			$this->logger->log('Another request is converting the stored addresses, not waiting for it', Log::DEBUG);
+			return;
+		}
+		try
+		{
+			if (!$this->mydb->getPluginSetting('addressesCanonical', false))
+			{
+				$changed = $this->mydb->canonicalizeStoredAddresses();
+				$this->mydb->savePluginSetting('addressesCanonical', 1);
+				$this->logger->log('Converted '.$changed.' stored address(es) to canonical form', Log::INFO);
+			}
+			$this->params->set('addressesCanonical', 1);
+		}
+		finally
+		{
+			if ($handle !== false)
+			{
+				flock($handle, LOCK_UN);
+				fclose($handle);
+			}
 		}
 	}
 

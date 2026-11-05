@@ -1,7 +1,9 @@
 2.0.0 (2026-08-24)
   - Migrate to Joomla 5/6: PSR-4 namespaced classes (Codeling\Plugin\System\Bfstop),
     service provider, SubscriberInterface event handling
-  - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6)
+  - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6 and PHP 8.1); the
+    installer refuses older Joomla and PHP versions, and replacing a newer
+    version of BFStop with an older one
   - Modernize token generation to use random_bytes()/random_int()
   - Consolidate all configuration into the component's Settings view
     (Components -> Brute Force Stop -> Settings); the plugin's Options tab
@@ -180,7 +182,9 @@
     purge age to 0 for the old behaviour) and limited to 200000 rows
   - Security: a response is delayed by 60 seconds at most, however the delay
     settings add up, and the account throttle no longer delays an address
-    that was just blocked
+    that was just blocked. "Delay Duration" and "Maximum Adaptive Delay" go
+    up to 60 seconds (before: 120); a larger value saved by an earlier
+    version has to be lowered the next time the settings are saved
   - Security: unblock tokens are stored as hashes; links sent before the
     update stop working (they are valid for 3 days only)
   - Security: usernames in log entries and in mails can no longer contain
