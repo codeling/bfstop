@@ -215,7 +215,7 @@
 		</fieldset>
 		<fieldset name="delay" label="PLG_SYSTEM_BFSTOP_DELAY_FIELDSET_LABEL">
 			<field name="delayDuration" type="integer" validate="options"
-				default="0" first="0" last="120" step="5"
+				default="0" first="0" last="60" step="5"
 				label="PLG_SYSTEM_BFSTOP_DELAY_DURATION_LABEL"
 				description="PLG_SYSTEM_BFSTOP_DELAY_DURATION_DESC" />
 			<field name="adaptiveDelay" type="list" validate="options" default="0"
@@ -225,7 +225,7 @@
 				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 			</field>
 			<field name="adaptiveDelayMax" type="integer" validate="options" default="0"
-				first="0" last="120" step="5"
+				first="0" last="60" step="5"
 				label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_MAX_LABEL"
 				description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_MAX_DESC" />
 			<field name="adaptiveDelayThresholdMin" type="integer" validate="options" default="50"

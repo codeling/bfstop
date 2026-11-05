@@ -1,6 +1,6 @@
 <?php
 /*
- * @package BFStop Component (com_bfstop) for Joomla! >= 3
+ * @package BFStop Component (com_bfstop) for Joomla!
  * @author Bernhard Froehler
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
@@ -9,12 +9,18 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
+use Joomla\CMS\Installer\InstallerScript;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Joomla\Filesystem\Folder;
 
-class com_bfstopInstallerScript
+class com_bfstopInstallerScript extends InstallerScript
 {
+	// InstallerScript::preflight() refuses to install on anything older (and
+	// to replace a newer version of the component with an older one)
+	protected $minimumJoomla = '5.0.0';
+	protected $minimumPhp = '8.1.0';
+
 	/**
 	 * @param   InstallerAdapter  $adapter  The object responsible for running this script
 	 */
@@ -42,12 +48,16 @@ class com_bfstopInstallerScript
 		}
 		return true;
 	}
-	function postflight($type, InstallerAdapter $adapter)
+	public function postflight($type, $adapter)
 	{
+		// on an update, the plugin says what there is to review (if anything)
+		if ($type !== 'install')
+		{
+			return;
+		}
 		$lang = Factory::getApplication()->getLanguage();
 		$lang->load('com_bfstop', JPATH_ADMINISTRATOR);
 		Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_INSTALL_HINT',
-			Route::_('index.php?option=com_plugins&view=plugins', false),
 			Route::_('index.php?option=com_bfstop&view=settings', false)
 		), 'warning');
 	}
