@@ -233,6 +233,25 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked('option=com_login&task=login');
 	}
 
+	public function testLoginOnlyModeRecognisesEveryWayToLogIn()
+	{
+		// Joomla lowercases the method, ignores what follows a second dot and
+		// takes the controller from its own parameter if the task has no dot:
+		// each of these runs UserController::login()
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->block();
+		$this->assertBlocked('option=com_users&task=user.LOGIN');
+		$this->assertBlocked('option=com_users&task=User.Login');
+		$this->assertBlocked('option=com_users&task=user.login.x');
+		$this->assertBlocked('option=com_users&controller=user&task=login');
+		$this->assertBlocked('option=com_users&task=LOGIN');
+		$this->assertBlocked('option=com_login&task=LOGIN');
+		// still no login
+		$this->assertNotBlocked('option=com_users&task=user.logout');
+		$this->assertNotBlocked('option=com_users&view=login&task=display');
+		$this->assertNotBlocked('option=com_content&task=user.login');
+	}
+
 	public function testPasswordRecoveryStaysReachable()
 	{
 		// a blocked legitimate user must still be able to reset their password
@@ -240,7 +259,44 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->block();
 		$this->assertNotBlocked('option=com_users&view=reset');
 		$this->assertNotBlocked('option=com_users&view=remind');
+		$this->assertNotBlocked('option=com_users&view=reset&layout=confirm');
+		$this->assertNotBlocked('option=com_users&view=reset&layout=complete');
 		$this->assertBlocked('option=com_users&view=login');
+	}
+
+	public function testPasswordRecoveryFormsCanBeSubmitted()
+	{
+		// the forms of the reset and remind views post a task, usually without
+		// view=reset (index.php?task=reset.request): without these the blocked
+		// user could see the form, but not get the mail
+		$this->configure();
+		$this->block();
+		$this->assertNotBlocked('option=com_users&task=reset.request');
+		$this->assertNotBlocked('option=com_users&task=reset.confirm');
+		$this->assertNotBlocked('option=com_users&task=reset.complete');
+		$this->assertNotBlocked('option=com_users&task=remind.remind');
+		$this->assertNotBlocked('option=com_users&task=user.remind');
+		$this->assertNotBlocked('option=com_users&view=reset&task=reset.request');
+		// spelled the way Joomla's dispatcher understands it as well
+		$this->assertNotBlocked('option=com_users&task=Reset.Request');
+		$this->assertNotBlocked('option=com_users&controller=reset&task=request');
+	}
+
+	public function testPasswordRecoveryViewIsNoPassForOtherTasks()
+	{
+		// Joomla runs the task, not the view: with view=reset in the request,
+		// a login (or anything else) must not get around the block
+		$this->configure();
+		$this->block();
+		$this->assertBlocked('option=com_users&view=reset&task=user.login');
+		$this->assertBlocked('option=com_users&view=remind&task=user.login');
+		$this->assertBlocked('option=com_users&view=reset&task=login&controller=user');
+		$this->assertBlocked('option=com_users&view=reset&task=user.LOGIN');
+		$this->assertBlocked('option=com_users&view=reset&task=registration.register');
+		$this->assertBlocked('option=com_users&view=reset&task[]=reset.request');
+		// "remind" is only a recovery task of the remind and user controllers
+		$this->assertBlocked('option=com_users&task=profile.remind');
+		$this->assertBlocked('option=com_content&task=reset.request');
 	}
 
 	public function testValidUnblockTokenGetsThrough()

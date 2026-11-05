@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Log\Log;
 use Joomla\Registry\Registry;
 
@@ -58,7 +59,7 @@ class RiskHelper
 	 */
 	public static function isCommonUsername(Registry $params, $username)
 	{
-		$list = (string) $params->get('riskCommonUsernames', '');
+		$list = (string) $params->get('riskCommonUsernames', Bfstop::DefaultSettings['riskCommonUsernames']);
 		$candidates = array_filter(array_map('trim', explode("\n", str_replace("\r", '', $list))));
 		foreach ($candidates as $candidate)
 		{

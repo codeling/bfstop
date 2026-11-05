@@ -47,6 +47,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'adaptiveDelayMax' => 0,
 		'adaptiveDelayThresholdMin' => 50,
 		'adaptiveDelayThresholdMax' => 200,
+		// failed logins are purged after this many weeks unless the
+		// administrator chose another time (0 = never). Keeping them for ever
+		// is not needed to protect anything, and they are personal data
+		// (addresses, usernames)
+		'deleteOld' => 4,
+		'logLevel' => 8, // Log::ERROR
+		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
 	);
 
 	private LoggerHelper $logger;
@@ -390,7 +397,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function init()
 	{
-		$this->logger = new LoggerHelper($this->getIntParam('logLevel', LoggerHelper::Disabled),
+		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
 			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->mydb = new DatabaseHelper($this->logger);
 		$this->notifier = new NotifierHelper($this->logger, $this->mydb,
@@ -663,6 +670,46 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	}
 
 	/**
+	 * The controller and the method of it which Joomla's component dispatcher
+	 * runs for this request, in lower case, as it determines them
+	 * (ComponentDispatcher::dispatch(), BaseController::execute()): "task" is
+	 * either "controller.method" - anything after a second dot is ignored - or
+	 * just the method, with the controller from the "controller" parameter;
+	 * the method's case doesn't matter. Both are '' if there is no task (which
+	 * shows a view). Checks of the task have to go by this, not by the raw
+	 * parameter, or "task=user.LOGIN" or "task=user.login.x" would not be
+	 * recognised as the login they are.
+	 *
+	 * @return string[] array(controller, method)
+	 */
+	private function requestedTask()
+	{
+		$task = strtolower($this->requestString('task'));
+		if ($task === '')
+		{
+			return array('', '');
+		}
+		if (strpos($task, '.') !== false)
+		{
+			$parts = explode('.', $task);
+			return array($parts[0], $parts[1]);
+		}
+		$controller = strtolower($this->requestString('controller'));
+		return array($controller === '' ? 'display' : $controller, $task);
+	}
+
+	// the tasks of com_users (controller.method) with which a user who forgot
+	// their password or username gets a new one: the forms of the reset and
+	// remind views post to them (index.php?task=reset.request, ...)
+	private const PasswordRecoveryTasks = array(
+		'reset.request',
+		'reset.confirm',
+		'reset.complete',
+		'remind.remind',
+		'user.remind',
+	);
+
+	/**
 	 * Password reset / username reminder must stay reachable even for a
 	 * blocked IP - otherwise a legitimate user who got blocked (and is told
 	 * by this very plugin to use password reset, see
@@ -670,17 +717,34 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * that advice, turning the block itself into a denial-of-service
 	 * against them (see OWASP Authentication Cheat Sheet guidance on
 	 * lockouts).
+	 *
+	 * That is: showing the reset and remind views, and submitting their
+	 * forms - nothing else. In particular not any task with view=reset: the
+	 * task is what Joomla runs, the view is ignored then, so that would let a
+	 * blocked IP log in (option=com_users&view=reset&task=user.login).
 	 */
 	private function isPasswordRecoveryRequest()
 	{
-		$option = $this->requestString('option');
-		$view = $this->requestString('view');
-		$result = (strcmp($option, 'com_users') == 0 &&
-			(strcmp($view, 'reset') == 0 || strcmp($view, 'remind') == 0));
+		if (strcasecmp($this->requestString('option'), 'com_users') != 0)
+		{
+			return false;
+		}
+		list($controller, $method) = $this->requestedTask();
+		if ($method === '' || ($controller === 'display' && $method === 'display'))
+		{
+			$view = strtolower($this->requestString('view'));
+			$result = ($view === 'reset' || $view === 'remind');
+			$what = 'view '.$view;
+		}
+		else
+		{
+			$result = in_array($controller.'.'.$method, self::PasswordRecoveryTasks, true);
+			$what = 'task '.$controller.'.'.$method;
+		}
 		if ($result)
 		{
 			$this->logger->log('Allowing blocked IP through to the '.
-				'password recovery view ('.$view.'), so a blocked '.
+				'password recovery ('.$what.'), so a blocked '.
 				'legitimate user can still recover their account',
 				Log::INFO);
 		}
@@ -691,21 +755,24 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * Detects a request that actually submits login credentials, for
 	 * "Login Only" block mode (issue #187): on the frontend, credentials
 	 * are submitted to com_users (task=user.login), the backend login form
-	 * posts to com_login (task=login); com_users with task=login is kept
-	 * for backend entry URLs built that way - merely viewing the login
-	 * form (no task, or a display task) doesn't match, so it stays
-	 * reachable.
+	 * posts to com_login (task=login) - merely viewing the login form (no
+	 * task, or a display task) doesn't match, so it stays reachable.
+	 *
+	 * The task is compared as Joomla's dispatcher runs it (see
+	 * requestedTask()): the login method of whatever controller, in any case
+	 * - "task=user.LOGIN", "task=user.login.x" and
+	 * "controller=user&task=login" are all logins. Matching more than
+	 * Joomla would run only blocks a request which wouldn't do anything.
 	 */
 	private function isLoginAttemptRequest()
 	{
-		$option = $this->requestString('option');
-		$task = $this->requestString('task');
-		$result = (strcmp($option, 'com_users') == 0 &&
-			(strcmp($task, 'user.login') == 0 || strcmp($task, 'login') == 0)) ||
-			(strcmp($option, 'com_login') == 0 && strcmp($task, 'login') == 0);
+		$option = strtolower($this->requestString('option'));
+		list(, $method) = $this->requestedTask();
+		$result = ($option === 'com_users' || $option === 'com_login') && $method === 'login';
 		if ($result)
 		{
-			$this->logger->log('Detected a login-attempt request (task='.$task.')', Log::DEBUG);
+			$this->logger->log('Detected a login-attempt request (task='.
+				$this->requestString('task').')', Log::DEBUG);
 		}
 		return $result;
 	}
@@ -734,7 +801,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$now = time();
 		if ($now > ($lastPurge + $purgeInterval))
 		{
-			$purgeAge = $this->getIntParam('deleteOld', DatabaseHelper::$DEFAULT_PURGE_WEEKS);
+			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
 			if ($purgeAge > 0)
 			{
 				$this->mydb->purgeOldEntries($purgeAge);

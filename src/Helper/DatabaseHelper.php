@@ -28,10 +28,6 @@ class DatabaseHelper
 	// TokenunblockModel::TokenValidDays must stay in sync with this
 	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
 
-	// failed logins are purged after this many weeks unless the administrator
-	// chose another time (0 = never). Keeping them for ever is not needed to
-	// protect anything, and they are personal data (addresses, usernames)
-	public static $DEFAULT_PURGE_WEEKS = 4;
 
 	// upper bound for the rows of the failed logins, however the purge age is
 	// set: a visitor can add one for every request, from as many addresses as
