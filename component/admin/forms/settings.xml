@@ -204,7 +204,7 @@
 				<option value="0">PLG_SYSTEM_BFSTOP_DISABLED</option>
 				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 			</field>
-			<field name="deleteOld" type="integer" validate="options" default="0"
+			<field name="deleteOld" type="integer" validate="options" default="4"
 				first="0" last="24" step="1"
 				label="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_LABEL"
 				description="PLG_SYSTEM_BFSTOP_DELETE_OLD_ENTRIES_DESC" />
