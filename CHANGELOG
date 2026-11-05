@@ -182,7 +182,9 @@
     purge age to 0 for the old behaviour) and limited to 200000 rows
   - Security: a response is delayed by 60 seconds at most, however the delay
     settings add up, and the account throttle no longer delays an address
-    that was just blocked
+    that was just blocked. "Delay Duration" and "Maximum Adaptive Delay" go
+    up to 60 seconds (before: 120); a larger value saved by an earlier
+    version has to be lowered the next time the settings are saved
   - Security: unblock tokens are stored as hashes; links sent before the
     update stop working (they are valid for 3 days only)
   - Security: usernames in log entries and in mails can no longer contain
