@@ -9,12 +9,21 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
+use Joomla\CMS\Installer\InstallerScript;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Joomla\Database\DatabaseInterface;
 
-class PlgsystembfstopInstallerScript
+class PlgsystembfstopInstallerScript extends InstallerScript
 {
+	// InstallerScript::preflight() refuses to install on anything older (and
+	// to replace a newer version of the plugin with an older one)
+	protected $minimumJoomla = '5.0.0';
+	protected $minimumPhp = '8.1.0';
+
+	// the version this update replaces, null for an installation
+	private $previousVersion = null;
+
 	public function __construct(InstallerAdapter $adapter) {}
 
 	public function install(InstallerAdapter $adapter)
@@ -52,11 +61,52 @@ class PlgsystembfstopInstallerScript
 			// a leftover log must not make the uninstallation fail
 		}
 	}
-	public function preflight($type, InstallerAdapter $adapter) {}
-
-	public function postflight($type, InstallerAdapter $adapter)
+	public function preflight($type, $adapter)
 	{
+		if (!parent::preflight($type, $adapter))
+		{
+			return false;
+		}
 		if ($type === 'update')
+		{
+			$manifest = $this->getItemArray('manifest_cache', '#__extensions', 'name', 'plg_system_bfstop');
+			$this->previousVersion = isset($manifest['version']) ? (string) $manifest['version'] : null;
+			$this->renameWhitelistTable();
+		}
+		return true;
+	}
+
+	/**
+	 * For version 1.4.2, the whitelist table was renamed to allowlist, but only
+	 * for updates; new installations kept the old name. This has to happen
+	 * before the update SQL, which runs after preflight() but before update()
+	 * and changes the allowlist table (MySQL only - PostgreSQL is supported
+	 * from 2.0.0 on, so no such table exists there).
+	 */
+	private function renameWhitelistTable()
+	{
+		$db = Factory::getContainer()->get(DatabaseInterface::class);
+		if ($db->getServerType() !== 'mysql')
+		{
+			return;
+		}
+		$prefix = $db->getPrefix();
+		$tables = array_map('strtolower', $db->getTableList());
+		if (in_array(strtolower($prefix.'bfstop_whitelist'), $tables, true) &&
+			!in_array(strtolower($prefix.'bfstop_allowlist'), $tables, true))
+		{
+			$db->setQuery('RENAME TABLE '.$db->quoteName('#__bfstop_whitelist').
+				' TO '.$db->quoteName('#__bfstop_allowlist'));
+			$db->execute();
+		}
+	}
+
+	public function postflight($type, $adapter)
+	{
+		// only for the update from a version before the settings moved, not
+		// for every later update
+		if ($type === 'update' && $this->previousVersion !== null &&
+			version_compare($this->previousVersion, '2.0.0', '<'))
 		{
 			$lang = Factory::getApplication()->getLanguage();
 			$lang->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
@@ -69,27 +119,7 @@ class PlgsystembfstopInstallerScript
 
 	public function update(InstallerAdapter $adapter)
 	{
-		// for version 1.4.2, whitelist was renamed to allowlist, but only for updates;
-		// for new installs, the old name remained, so let's fix this for all installations
-		// (MySQL only - PostgreSQL is supported from 2.0.0 on, so no such table exists there):
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
-		if ($db->getServerType() === 'mysql')
-		{
-			try
-			{
-				$sql = "SELECT COUNT(*) FROM `#__bfstop_whitelist`";
-				$db->setQuery($sql);
-				$numEntries = ((int)$db->loadResult());
-				$sql = "RENAME TABLE `#__bfstop_whitelist` TO `#__bfstop_allowlist`";
-				$db->setQuery($sql);
-				$db->execute();
-			}
-			catch (Exception $e)
-			{
-				// if table doesn't exist, there's nothing we need to do
-//				Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
-			}
-		}
 
 		// for 2.0.0, the previously separate blockEnabled/useHtaccess switches
 		// and the (never released) two-value blockMode were unified into a
