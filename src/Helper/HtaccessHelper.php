@@ -223,7 +223,7 @@ class HtaccessHelper
 	 */
 	private function locked(callable $change)
 	{
-		$lockFile = $this->lockDirectory().'/bfstop-htaccess-'.md5($this->path).'.lock';
+		$lockFile = self::lockDirectory().'/bfstop-htaccess-'.md5($this->path).'.lock';
 		$handle = @fopen($lockFile, 'c');
 		if ($handle === false || !flock($handle, LOCK_EX))
 		{
@@ -249,11 +249,12 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Joomla's own temporary directory if there is one we can use, not the
-	 * system's: that one is shared with other users of the machine on many
-	 * hosts, who could then hold the lock (or plant a link under its name).
+	 * Where lock files go (also those of the plugin, see Bfstop): Joomla's own
+	 * temporary directory if there is one we can use, not the system's: that
+	 * one is shared with other users of the machine on many hosts, who could
+	 * then hold the lock (or plant a link under its name).
 	 */
-	private function lockDirectory()
+	public static function lockDirectory()
 	{
 		try
 		{

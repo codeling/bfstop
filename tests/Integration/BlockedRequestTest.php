@@ -92,6 +92,34 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertNotBlocked('', '203.0.113.42');
 	}
 
+	public function testStoredAddressesAreConvertedByOneRequestAtATime()
+	{
+		// after the update, the first request converts the stored addresses;
+		// the ones arriving while it is at it must not all do the same
+		$this->configure();
+		$id = $this->block('2001:DB8::41');
+		$app = Factory::getApplication();
+		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
+			md5((string) $app->get('db').(string) $app->get('dbprefix')).'.lock';
+		$handle = fopen($lockFile, 'c');
+		$this->assertTrue(flock($handle, LOCK_EX), 'the test takes the lock of the "first request"');
+		try
+		{
+			$this->request('', '203.0.113.99');
+			$this->assertSame('2001:DB8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$id),
+				'converted although another request holds the lock');
+			$this->assertArrayNotHasKey('addressesCanonical', json_decode($this->getPluginParams(), true));
+		}
+		finally
+		{
+			flock($handle, LOCK_UN);
+			fclose($handle);
+		}
+		$this->request('', '203.0.113.99');
+		$this->assertSame('2001:db8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$id));
+		$this->assertSame(1, json_decode($this->getPluginParams(), true)['addressesCanonical']);
+	}
+
 	public function testBlockIsEnforcedOnlyAfterRouting()
 	{
 		// with SEF URLs option/view are empty until the router ran, so the

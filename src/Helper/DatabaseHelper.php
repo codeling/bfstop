@@ -915,6 +915,31 @@ class DatabaseHelper
 	 * request was started with would undo whatever an administrator saved in
 	 * the meantime.
 	 */
+	/**
+	 * A setting as it is stored now - the plugin's $params are what was stored
+	 * when the request began.
+	 */
+	public function getPluginSetting($name, $default = null)
+	{
+		try
+		{
+			$query = $this->db->getQuery(true)
+				->select($this->db->quoteName('params'))
+				->from($this->db->quoteName('#__extensions'))
+				->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
+				->where($this->db->quoteName('folder').' = '.$this->db->quote('system'))
+				->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
+			$this->db->setQuery($query);
+			$params = json_decode((string) $this->db->loadResult(), true);
+			return (is_array($params) && array_key_exists($name, $params)) ? $params[$name] : $default;
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return $default;
+		}
+	}
+
 	public function savePluginSetting($name, $value)
 	{
 		try
