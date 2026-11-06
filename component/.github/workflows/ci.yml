@@ -51,6 +51,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+          ini-values: error_reporting=E_ALL
       - name: Check PHP syntax
         run: find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l
 
@@ -130,6 +131,7 @@ jobs:
           extensions: mysqli, pdo_mysql, pgsql, pdo_pgsql, zip, mbstring, intl, gd
           tools: phpunit:11
           coverage: none
+          ini-values: error_reporting=E_ALL
 
       - name: Start database (${{ matrix.db }})
         env:
