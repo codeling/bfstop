@@ -1,6 +1,8 @@
 #!/bin/bash
 name=bfstop
-version=2.0.0
+# released together with the plugin, with the same version: see
+# tests/lint/check-versions.php and package/build.sh of codeling/bfstop
+version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$(dirname "$0")/${name}.xml" | head -n 1)"
 
 component_name=com_${name}
 site_files=site/*
