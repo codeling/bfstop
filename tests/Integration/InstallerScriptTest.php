@@ -84,6 +84,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
 		$this->assertTrue($this->updateHintShown('1.5.2'));
 		$this->assertFalse($this->updateHintShown('2.0.0'), 'the settings did not move again');
+		$this->assertFalse($this->updateHintShown('2.0.0-rc1'), 'a test release of 2.0.0 had them where they are');
 	}
 
 	public function testRefusesToReplaceANewerVersion()

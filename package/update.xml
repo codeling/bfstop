@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<extensionset name="Brute Force Stop Package" description="Brute Force Stop Package">
+    <extension name="Brute Force Stop Package" element="pkg_bfstop" type="package" version="2.0.0" detailsurl="https://bfstop.bfroehler.info/update-pkg.xml" />
+</extensionset>
