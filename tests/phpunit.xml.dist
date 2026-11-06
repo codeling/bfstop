@@ -6,6 +6,7 @@
 	cacheResult="false"
 	failOnWarning="true"
 	failOnRisky="true"
+	failOnDeprecation="true"
 	displayDetailsOnTestsThatTriggerWarnings="true"
 	displayDetailsOnTestsThatTriggerDeprecations="true"
 	displayDetailsOnSkippedTests="true">
