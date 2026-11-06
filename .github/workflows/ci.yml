@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # by release.yml, for a version tag: everything is built and tested from
+  # the tag, with the com_bfstop tag of the same name
+  workflow_call:
+    outputs:
+      version:
+        description: version of the package built (artifact bfstop-<version>)
+        value: ${{ jobs.package.outputs.version }}
 
 permissions:
   contents: read
@@ -97,14 +104,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # use the com_bfstop branch of the same name if there is one and it
-      # has commits main hasn't (for changes spanning both), else main: a
-      # branch which was merged and not deleted is a stale copy of an old main
+      # a release tag: the com_bfstop tag of the same name, which has to
+      # exist (tag com_bfstop first). Otherwise the com_bfstop branch of the
+      # same name if there is one and it has commits main hasn't (for changes
+      # spanning both), else main: a branch which was merged and not deleted
+      # is a stale copy of an old main
       - name: Determine com_bfstop branch
         id: com
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            if ! git ls-remote --exit-code --tags https://github.com/codeling/com_bfstop.git "refs/tags/$GITHUB_REF_NAME" > /dev/null; then
+              echo "::error::com_bfstop has no tag $GITHUB_REF_NAME - tag the component first"
+              exit 1
+            fi
+            echo "ref=refs/tags/$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "Using com_bfstop tag $GITHUB_REF_NAME"
+            exit 0
+          fi
           branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           ref=main
           ahead=none
@@ -128,6 +146,9 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
+      - name: Versions are those of the release
+        if: github.ref_type == 'tag'
+        run: COM_BFSTOP_ROOT="$RUNNER_TEMP/com_bfstop" php tests/lint/check-versions.php --release="$GITHUB_REF_NAME"
       - name: Build plugin, component and package
         id: build
         run: |

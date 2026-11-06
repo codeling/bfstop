@@ -104,9 +104,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	public function postflight($type, $adapter)
 	{
 		// only for the update from a version before the settings moved, not
-		// for every later update
+		// for every later update - nor from a test release of 2.0.0 (2.0.0-dev
+		// sorts before 2.0.0-alpha1, -beta1 and -rc1)
 		if ($type === 'update' && $this->previousVersion !== null &&
-			version_compare($this->previousVersion, '2.0.0', '<'))
+			version_compare($this->previousVersion, '2.0.0-dev', '<'))
 		{
 			$lang = Factory::getApplication()->getLanguage();
 			$lang->load('plg_system_bfstop', JPATH_ADMINISTRATOR);

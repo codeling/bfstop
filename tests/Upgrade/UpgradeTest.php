@@ -104,7 +104,7 @@ class UpgradeTest extends IntegrationTestCase
 	{
 		// the CLI wraps the messages
 		$log = preg_replace('/\s+/', ' ', (string) file_get_contents(getenv('UPGRADE_LOG')));
-		$settingsMoved = version_compare(getenv('UPGRADE_FROM'), '2.0.0', '<') ? 1 : 0;
+		$settingsMoved = version_compare(getenv('UPGRADE_FROM'), '2.0.0-dev', '<') ? 1 : 0;
 		$this->assertSame($settingsMoved, substr_count($log, 'major configuration changes'),
 			'the "configuration has moved" hint, only when updating from before 2.0.0');
 		$this->assertSame(0, substr_count($log, 'protects your site with its default settings'),
