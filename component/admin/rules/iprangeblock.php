@@ -14,7 +14,7 @@ use Joomla\Registry\Registry;
 
 class JFormRuleIprangeblock extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, Registry $input = null, Form $form = null)
+	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
 		return (IpValidateHelper::validIPRange($value) && !IpValidateHelper::matchesCurrentIP($value));
 	}
