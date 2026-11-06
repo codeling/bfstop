@@ -32,6 +32,8 @@ jobs:
         run: php tests/lint/check-joomla-checksums.php
       - name: Language files
         run: php tests/lint/check-language.php bfstop.xml PLG_SYSTEM_BFSTOP
+      - name: Plugin, package and CHANGELOG have the same version
+        run: php tests/lint/check-versions.php
       - name: Composer manifest is valid
         run: composer validate --strict
       - name: Vendored GeoIP reader is the version locked in composer.lock
@@ -73,29 +75,26 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.read.outputs.matrix }}
+      upgrade: ${{ steps.read.outputs.upgrade }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: read
         run: |
           echo "matrix=$(jq -c '{include: .include}' tests/ci/matrix.json)" >> "$GITHUB_OUTPUT"
+          # the update from the previous release: the Joomla 5 entries with
+          # MySQL/MariaDB (1.5 ran on neither Joomla 6 nor PostgreSQL)
+          echo "upgrade=$(jq -c '{include: [.include[] | select((.joomla | startswith("5.")) and (.db | startswith("postgres") | not))]}' tests/ci/matrix.json)" >> "$GITHUB_OUTPUT"
 
-  integration:
-    name: Joomla ${{ matrix.joomla }}, ${{ matrix.db }}, PHP ${{ matrix.php }}
-    needs: matrix
+  # what users install: the package with plugin and component, built once by
+  # package/build.sh; the jobs below install exactly this, and it is kept as
+  # an artifact of the run (a snapshot to try out)
+  package:
+    name: Package
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
-    env:
-      JOOMLA_VERSION: ${{ matrix.joomla }}
-      DB_HOST: 127.0.0.1
-      DB_NAME: joomla
-      DB_PASS: bfstop-test
+    outputs:
+      com-ref: ${{ steps.com.outputs.ref }}
+      version: ${{ steps.build.outputs.version }}
     steps:
-      - name: Set paths
-        run: |
-          echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
-          echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # use the com_bfstop branch of the same name if there is one and it
@@ -124,7 +123,52 @@ jobs:
           ref: ${{ steps.com.outputs.ref }}
           path: com_bfstop
       - name: Move com_bfstop checkout out of the plugin's
+        run: mv com_bfstop "$RUNNER_TEMP/com_bfstop"
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Build plugin, component and package
+        id: build
+        run: |
+          package/build.sh "$RUNNER_TEMP/com_bfstop" build
+          echo "version=$(php tests/lint/check-versions.php --print-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bfstop-${{ steps.build.outputs.version }}
+          path: build/
+          if-no-files-found: error
+
+  integration:
+    name: Joomla ${{ matrix.joomla }}, ${{ matrix.db }}, PHP ${{ matrix.php }}
+    needs: [matrix, package]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+    env:
+      JOOMLA_VERSION: ${{ matrix.joomla }}
+      DB_HOST: 127.0.0.1
+      DB_NAME: joomla
+      DB_PASS: bfstop-test
+    steps:
+      - name: Set paths
+        run: |
+          echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
+          echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # the component's classes are loaded from its checkout by the tests
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: codeling/com_bfstop
+          ref: ${{ needs.package.outputs.com-ref }}
+          path: com_bfstop
+      - name: Move com_bfstop checkout out of the plugin's
         run: mv com_bfstop "$COM_BFSTOP_ROOT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bfstop-${{ needs.package.outputs.version }}
+          path: ${{ runner.temp }}/build
 
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
@@ -138,12 +182,63 @@ jobs:
           DB_IMAGE: ${{ matrix.db }}
         run: tests/ci/start-database.sh
 
-      - name: Install Joomla and bfstop
+      - name: Install Joomla and the bfstop package
+        env:
+          BFSTOP_PACKAGE: ${{ runner.temp }}/build/pkg_bfstop-${{ needs.package.outputs.version }}.zip
         run: tests/ci/install-joomla.sh
 
       - name: Tests
         run: phpunit -c tests/phpunit.xml.dist
 
+      - name: Plugin log
+        if: failure()
+        run: cat "$JOOMLA_ROOT"/administrator/logs/*.php || true
+
+  # a site with the previous release (tests/ci/previous-release.sha256) and
+  # its data, updated with the package: tests/ci/upgrade-test.sh
+  upgrade:
+    name: Update from the previous release (Joomla ${{ matrix.joomla }}, ${{ matrix.db }})
+    needs: [matrix, package]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.upgrade) }}
+    env:
+      JOOMLA_VERSION: ${{ matrix.joomla }}
+      DB_HOST: 127.0.0.1
+      DB_NAME: joomla
+      DB_PASS: bfstop-test
+    steps:
+      - name: Set paths
+        run: |
+          echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
+          echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: codeling/com_bfstop
+          ref: ${{ needs.package.outputs.com-ref }}
+          path: com_bfstop
+      - name: Move com_bfstop checkout out of the plugin's
+        run: mv com_bfstop "$COM_BFSTOP_ROOT"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: bfstop-${{ needs.package.outputs.version }}
+          path: ${{ runner.temp }}/build
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mysqli, pdo_mysql, zip, mbstring, intl, gd
+          tools: phpunit:11
+          coverage: none
+      - name: Start database (${{ matrix.db }})
+        env:
+          DB_IMAGE: ${{ matrix.db }}
+        run: tests/ci/start-database.sh
+      - name: Update from the previous release
+        env:
+          BFSTOP_PACKAGE: ${{ runner.temp }}/build/pkg_bfstop-${{ needs.package.outputs.version }}.zip
+        run: tests/ci/upgrade-test.sh
       - name: Plugin log
         if: failure()
         run: cat "$JOOMLA_ROOT"/administrator/logs/*.php || true

@@ -19,7 +19,18 @@ The classes under test are always loaded from this checkout (and the
 component checkout), not from the copies installed into the Joomla site, so
 the site only needs to be set up again when the database schema changes.
 
-- `lint/`: checks of the language files (`check-language.php`), of the
+- `Upgrade/`: the update from the previous release, run by
+  `ci/upgrade-test.sh` only (skipped otherwise): a Joomla site with the
+  release named in `ci/previous-release.sha256` (downloaded from the GitHub
+  release and checked against that SHA-256), given settings and data in the
+  form that version kept them (`Upgrade/fixtures/seed.php`), is updated with
+  the package (`$BFSTOP_PACKAGE`). The tests check the versions and schema,
+  the migrated settings, the converted tables and addresses, that blocks
+  still work, that an update which stopped halfway can be run again, and that
+  the package refuses a Joomla version it doesn't support. After a release,
+  put the new one into `ci/previous-release.sha256` (the file says how).
+- `lint/`: checks of the versions (`check-versions.php`, see
+  `package/README.md`), of the language files (`check-language.php`), of the
   release zip built by `deploy.sh zip` (`check-zip.php`) and of the GitHub
   Actions workflows (`check-workflows.php`: every action pinned to a commit
   SHA, with its release in a comment; Dependabot proposes the updates); the
@@ -29,7 +40,11 @@ the site only needs to be set up again when the database schema changes.
   run by phpunit or CI.
 
 GitHub Actions runs everything on each push and pull request, on Joomla 5 and
-6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`.
+6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`. The
+sites there have bfstop installed from the package which the "Package" job
+built with `package/build.sh` - the zip users would get, kept as an artifact
+of the run - and the "Update from the previous release" jobs run
+`ci/upgrade-test.sh` with it, on the Joomla 5 sites with MySQL/MariaDB.
 
 Plugin and component are tested together, and each repository's workflow checks
 out the other one: the branch of the same name if that exists **and has commits
@@ -75,8 +90,9 @@ Unit tests only:
 
 For the integration tests, create an empty database, then let
 `tests/ci/install-joomla.sh` set up a Joomla site with bfstop in it (it
-downloads Joomla, installs it, then installs plugin and component from the
-checkouts). The download is only unpacked if its SHA-256 is the one in
+downloads Joomla, installs it, then builds the package from the plugin and
+component checkouts with `package/build.sh` and installs it - or the package
+zip given in `BFSTOP_PACKAGE`). The download is only unpacked if its SHA-256 is the one in
 `tests/ci/joomla-checksums.sha256`; for a version that isn't listed, add it
 there (the file says how to check it) or pass the hash as `JOOMLA_SHA256`. **Everything in that database will be overwritten.** For example,
 with PostgreSQL:
@@ -90,3 +106,12 @@ with PostgreSQL:
 `DB_TYPE` is `mysqli` for MySQL/MariaDB. The tests empty the bfstop tables
 and change the plugin's settings (restoring them afterwards), so don't point
 `JOOMLA_ROOT` at a site you care about.
+
+The update test needs an empty MySQL/MariaDB database and a directory without
+a Joomla site in it, and the package to update to:
+
+    package/build.sh /path/to/com_bfstop
+    export JOOMLA_VERSION=5.4.10 JOOMLA_ROOT=/tmp/bfstop-upgrade \
+        COM_BFSTOP_ROOT=/path/to/com_bfstop BFSTOP_PACKAGE=build/pkg_bfstop-2.0.0.zip \
+        DB_TYPE=mysqli DB_HOST=127.0.0.1 DB_USER=root DB_PASS=secret DB_NAME=bfstop_upgrade
+    tests/ci/upgrade-test.sh

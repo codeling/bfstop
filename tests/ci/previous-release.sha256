@@ -1,0 +1,7 @@
+# The release the upgrade test (tests/ci/upgrade-test.sh) updates from: the
+# package as published on https://github.com/codeling/bfstop/releases, with
+# its SHA-256 - what the test installs is code from that download, so it has
+# to be the package that was checked. After a release, put the new one here:
+#   curl -sSLO https://github.com/codeling/bfstop/releases/download/<version>/pkg_bfstop-<version>.zip
+#   sha256sum pkg_bfstop-<version>.zip
+1bd2fa5a8f5aac10e608d2ad319d2fe3d5e8d612455e3c015e69a7d01fa26f45  pkg_bfstop-1.5.2.zip
