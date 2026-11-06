@@ -9,6 +9,9 @@ https://github.com/codeling/bfstop/wiki
 
 For information on what changed in recent versions, see the CHANGELOG file
 
+The package users install (plugin and component together) is built from this
+repository and com_bfstop by package/build.sh, see package/README.md.
+
 If you find any issues, please report them at
 https://github.com/codeling/bfstop/issues
 

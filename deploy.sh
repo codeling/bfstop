@@ -15,10 +15,11 @@ langfiles="language"
 docs="CHANGELOG LICENSE.txt README"
 plgtype="system"
 langs="de-DE en-GB"
-version=2.0.0
+version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$(dirname "$0")/$extname.xml" | head -n 1)"
 
 if [ "$1" == "zip" ]
 then
+	rm -f $extname-$version.zip
 	zip -r $extname-$version.zip $srcfiles $docs $langfiles
 	exit
 fi

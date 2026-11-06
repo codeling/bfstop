@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<extension type="package" version="2.5" method="upgrade">
+	<name>Brute Force Stop Package</name>
+	<author>Bernhard Froehler</author>
+	<creationDate>May 2013</creationDate>
+	<copyright>Copyright (C) by Bernhard Froehler</copyright>
+	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
+	<packagename>bfstop</packagename>
+	<version>2.0.0</version>
+	<url>https://github.com/codeling/bfstop</url>
+	<packager>Bernhard Froehler</packager>
+	<packagerurl>https://github.com/codeling/bfstop</packagerurl>
+	<description>Brute Force Stop Package successfully installed!&lt;br&gt;&lt;br&gt;&lt;div&gt;This package contains all extensions constituting the Brute Force Stop (bfstop) functionality. It provides means to avert Brute-Force-Attacks on your Joomla-Installation.&lt;/div&gt;&lt;br&gt;&lt;div&gt;For a list of all currently blocked IP addresses (and the chance to unblock them), go to "Components" - "Brute Force Stop Administration"&lt;br&gt;&lt;br&gt;If you have any questions or problems, please visit the &lt;a href='https://github.com/codeling/bfstop'&gt;project site on github&lt;/a&gt;.&lt;br&gt;In case you want to uninstall Brute Force Stop, please use the Package to uninstall all extensions at once!&lt;br&gt;Brute Force Stop is published under the &lt;a target='_blank' title='GNU General Public License' href='http://www.gnu.org/copyleft/gpl.html'&gt;GNU General Public License&lt;/a&gt;.&lt;/div&gt;</description>
+	<scriptfile>script.php</scriptfile>
+	<files folder="packages">
+		<file type="component" id="com_bfstop">com_bfstop.zip</file>
+		<file type="plugin" id="bfstop" group="system">plg_sys_bfstop.zip</file>
+	</files>
+	<updateservers>
+		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>
+	</updateservers>
+</extension>
