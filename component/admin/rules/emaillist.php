@@ -19,7 +19,7 @@ use Joomla\Registry\Registry;
  */
 class JFormRuleEmaillist extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, Registry $input = null, Form $form = null)
+	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
 		$value = trim((string) $value);
 		if ($value === '')
