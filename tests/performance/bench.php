@@ -74,7 +74,6 @@ function http(string $url, array $o = []): array
 	}
 	$r = array('id' => $id, 'status' => curl_getinfo($ch, CURLINFO_RESPONSE_CODE),
 		'body' => (string) $body, 'ms' => curl_getinfo($ch, CURLINFO_TOTAL_TIME) * 1000);
-	curl_close($ch);
 	return $r;
 }
 
@@ -117,7 +116,6 @@ function httpConcurrent(array $requests, int $concurrency): array
 			$statuses[$code] = ($statuses[$code] ?? 0) + 1;
 			$latencies[] = curl_getinfo($ch, CURLINFO_TOTAL_TIME) * 1000;
 			curl_multi_remove_handle($mh, $ch);
-			curl_close($ch);
 			unset($active[(int) $ch]);
 			$done++;
 		}
