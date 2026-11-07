@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Htblocklist;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -55,22 +56,7 @@ class HtmlView extends BaseHtmlView
 
 	function convertDurationToReadable($duration)
 	{
-		if ($duration == 0)
-		{
-			return Text::_('COM_BFSTOP_BLOCK_UNLIMITED');
-		}
-		elseif ($duration >= 1 && $duration <= 59)
-		{
-			return Text::_('COM_BFSTOP_BLOCK_'.$duration.'MINUTES');
-		}
-		elseif ($duration == 60)
-		{
-			return Text::_('COM_BFSTOP_BLOCK_1HOUR');
-		}
-		else
-		{
-			return Text::_('COM_BFSTOP_BLOCK_'.($duration / 60).'HOURS');
-		}
+		return DurationHelper::toReadable($duration);
 	}
 
 	protected function addToolBar()

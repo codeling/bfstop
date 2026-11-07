@@ -10,11 +10,35 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
 
 class UnblockHelper
 {
+	private static function getHtaccessPath()
+	{
+		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
+		return $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
+	}
+
+	/**
+	 * With blocking through .htaccess, the web server keeps rejecting an
+	 * address until its line is taken out of the file - the plugin only does
+	 * that when it blocks the next address or once a day. So whatever was
+	 * unblocked here is taken out right away (if no other block of the
+	 * address is still active).
+	 */
+	public static function removeLiftedHtaccessBlocks($logger)
+	{
+		if (ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess')
+		{
+			return;
+		}
+		$htaccess = new HtaccessHelper(self::getHtaccessPath(), $logger);
+		$htaccess->removeLiftedBlocks(new DatabaseHelper($logger));
+	}
+
 	public static function unblockHtaccess($ips, $logger)
 	{
 		if (!is_array($ips) || sizeof($ips) == 0)
@@ -25,9 +49,7 @@ class UnblockHelper
 		$result = true;
 		foreach ($ips as $ip)
 		{
-			$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
-			$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
-			$htaccess = new HtaccessHelper($htaccessPath, null);
+			$htaccess = new HtaccessHelper(self::getHtaccessPath(), null);
 			$curResult = $htaccess->undenyIP($ip);
 			$result = $result && $curResult;
 			$logger->log("com_bfstop unblock: .htaccess unblock of $ip ".(($curResult) ? "successful" : "not successful")."!",
@@ -56,20 +78,23 @@ class UnblockHelper
 				$unblockEntry = $db->loadObject();
 				if ($unblockEntry != null)
 				{
-					$logger->log("com_bfstop unblock: Unblock already exists!", Log::ERROR);
-					return false;
+					// nothing to do for this one - but the others selected
+					// with it still have to be unblocked
+					$logger->log("com_bfstop unblock: Block $id was already lifted", Log::INFO);
+					continue;
 				}
 				$unblock = new \stdClass();
 				$unblock->block_id = $id;
 				$unblock->source = $source; // source of 1 indicates unblock via email
 				$unblock->crdate = $unblockDate;
 				$curResult = $db->insertObject('#__bfstop_unblock', $unblock);
-				$result = $result && $curResult;
 			}
 			catch (\RuntimeException $e)
 			{
 				$logger->log($e->getMessage(), Log::ERROR);
 			}
+			// also if the insert threw: that is a failure as well
+			$result = $result && $curResult;
 			$logger->log("com_bfstop unblock: Inserting unblock ".(($curResult) ? "successful" : "not successful")."!", ($curResult) ? Log::INFO : Log::ERROR);
 		}
 		return $result;
