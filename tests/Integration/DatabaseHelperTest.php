@@ -317,8 +317,6 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$oldUnlimitedBlock = $this->block('203.0.113.61', 10 * 24 * 60, 0);
 		$this->insert('#__bfstop_unblock', array('block_id' => $oldExpiredBlock, 'source' => 0, 'crdate' => self::minutesAgo(0)));
 		$this->insert('#__bfstop_unblock_token', array('token' => 'old', 'block_id' => $oldExpiredBlock, 'crdate' => self::minutesAgo(8 * 24 * 60)));
-		$this->insert('#__bfstop_dnscache', array('ipaddress' => '203.0.113.77', 'hostname' => null, 'checked_at' => self::minutesAgo(8 * 24 * 60)));
-		$this->insert('#__bfstop_dnscache', array('ipaddress' => '203.0.113.78', 'hostname' => null, 'checked_at' => self::minutesAgo(60)));
 
 		$this->helper->purgeOldEntries(1);
 
@@ -326,7 +324,21 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame(array($oldUnlimitedBlock), array_map('intval', $this->db->setQuery('SELECT id FROM #__bfstop_bannedip')->loadColumn()));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock'), 'unblock of purged block');
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token'));
-		$this->assertSame('203.0.113.78', $this->queryValue('SELECT ipaddress FROM #__bfstop_dnscache'));
+	}
+
+	public function testPruneDnsCacheRemovesExpiredAndKeepsTheNewestRows()
+	{
+		$row = fn ($ip, $minutesAgo) => $this->insert('#__bfstop_dnscache',
+			array('ipaddress' => $ip, 'hostname' => null, 'checked_at' => self::minutesAgo($minutesAgo)));
+		$row('2001:db8::1', 8 * 24 * 60);   // expired
+		$row('2001:db8::2', 30);
+		$row('2001:db8::3', 90);
+		$row('2001:db8::4', 10);
+		$addresses = fn () => $this->db->setQuery('SELECT ipaddress FROM #__bfstop_dnscache ORDER BY ipaddress')->loadColumn();
+		$this->helper->pruneDnsCache(10);
+		$this->assertSame(array('2001:db8::2', '2001:db8::3', '2001:db8::4'), $addresses());
+		$this->helper->pruneDnsCache(2);
+		$this->assertSame(array('2001:db8::2', '2001:db8::4'), $addresses());
 	}
 
 	public function testSaveLastPurgeChangesOnlyThatValue()

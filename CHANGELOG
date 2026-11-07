@@ -118,6 +118,11 @@
     from them (and the table is limited to 100000 rows, oldest first). This
     maintenance, like the limit of the username statistics, runs once a day
     whatever the purge age is set to
+  - Security: the cached results of the reverse-DNS risk signal are deleted
+    by the daily maintenance once they have expired, whatever the purge age
+    is set to (before: only by the purge by age, i.e. never with a purge age
+    of 0), and limited to 10000 rows, oldest first: the cache has a row per
+    address, and an IPv6 client can fail every login from another one
   - Unblock tokens which have expired are deleted by the daily maintenance too
     (before: only when somebody visited the unblock page, or by the purge by
     age if one is configured). The status code of the block page is set with
@@ -181,7 +186,22 @@
     lifted from the file (a timed block used to stay there for ever, and the
     file grew with every blocked address); at most 2000 lines are kept; the
     file is replaced atomically instead of being rewritten in place; the lock
-    file lives in Joomla's tmp directory instead of the system's
+    file lives in Joomla's tmp directory instead of the system's. A block
+    lifted in the component's block list or with an unblock link is taken out
+    of the file right away, not when the plugin next blocks an address or
+    does its daily maintenance (until then, the web server kept rejecting it)
+  - Security: in "Login Only" block mode, a blocked address could still try
+    passwords at the backend's login by leaving "option=com_login" out of
+    the request, or naming any other component: Joomla's backend runs
+    com_login for every request of a guest. Such requests are recognised as
+    the logins they are now; the exemptions for password recovery and the
+    unblock page don't let a blocked address through to the backend either
+  - Component: unblocking several entries of the block list at once no
+    longer stops at the first one which was unblocked already (the others
+    stayed blocked), and a database error while unblocking is reported as a
+    failure; the allow list can be sorted by its columns again; blocks of a
+    week, 30 days or a duration of the progressive block duration show their
+    duration instead of a language key
   - Security: failed logins are purged after 4 weeks by default (set the
     purge age to 0 for the old behaviour) and limited to 200000 rows
   - Security: a response is delayed by 60 seconds at most, however the delay

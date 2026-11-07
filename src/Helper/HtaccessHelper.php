@@ -165,6 +165,44 @@ class HtaccessHelper
 	}
 
 	/**
+	 * Takes the addresses whose blocks have run out or were lifted out of the
+	 * file. The web server knows nothing about durations or unblocks, so the
+	 * entry has to be removed, or the block would be permanent (and the file
+	 * would grow with every address ever blocked). Entries without a block in
+	 * the database - the ones an administrator added to the file by hand -
+	 * are left alone. Called by the plugin whenever it blocks and once a day,
+	 * and by com_bfstop right after it unblocked something.
+	 *
+	 * @return int the number of entries removed
+	 */
+	public function removeLiftedBlocks(DatabaseHelper $db)
+	{
+		$addresses = $db->getAddressesWithoutActiveBlock();
+		if (count($addresses) === 0)
+		{
+			return 0;
+		}
+		$present = $this->getDeniedIPs();
+		$removed = 0;
+		foreach ($addresses as $address)
+		{
+			if (in_array($address, $present, true))
+			{
+				if (!is_null($this->logger))
+				{
+					$this->logger->log('Block of '.$address.' is over, removing it from '.
+						$this->getFileName(), Log::INFO);
+				}
+				if ($this->undenyIP($address))
+				{
+					++$removed;
+				}
+			}
+		}
+		return $removed;
+	}
+
+	/**
 	 * Edit ErrorDocument 403 line in .htaccess.
 	 *
 	 * @param string $message
