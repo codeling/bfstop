@@ -109,7 +109,7 @@ $mainHeader = <<<TXT
  * third-party web API (see issues #76 and #169). Only the namespace, this
  * header and the _JEXEC guard have been changed; the decoding logic is
  * unmodified. Do not edit by hand: tools/vendor-geoip.php regenerates it from
- * composer.lock (see README, "GeoIP reader").
+ * composer.lock (see README.md, "GeoIP reader").
  *
  * Original work Copyright (C) MaxMind, Inc., licensed under the
  * Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).

@@ -42,6 +42,6 @@ The plugin ships a copy of MaxMind's `maxmind-db/reader` in `src/Helper/Geo`
 (the exact version is pinned in `composer.lock`). A weekly CI job and
 Dependabot report new releases and security advisories, and CI fails if the
 copy deviates from the pinned version. Releases are only made with the latest
-reader; see the "GeoIP reader" section of the README for how to update it. If
+reader; see the "GeoIP reader" section of README.md for how to update it. If
 you notice that the shipped version is behind, please report it like any other
 vulnerability.
