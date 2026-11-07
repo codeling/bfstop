@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Extension;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
@@ -32,6 +33,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// values of the "notifyBlockedUser" setting besides 0 (off) and 1 (only to
 	// users who logged in from the blocked address before)
 	private const NotifyBlockedAnyAddress = 2;
+
+	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
+	// plugin is active for, each the application's client id + 1
+	public const OriginFrontend = 1;
+	public const OriginBackend = 2;
+	public const OriginApi = 4;
 
 	/**
 	 * What the settings are while they have not been saved: the same as the
@@ -61,6 +68,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'deleteOld' => 4,
 		'logLevel' => 8, // Log::ERROR
 		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
+		// frontend, backend and the Web Services API
+		'enabledForOrigin' => self::OriginFrontend | self::OriginBackend | self::OriginApi,
 	);
 
 	private LoggerHelper $logger;
@@ -77,6 +86,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			'onUserLogin'        => 'onUserLogin',
 			'onAfterInitialise'  => 'onAfterInitialise',
 			'onAfterRoute'       => 'onAfterRoute',
+			'onAfterApiRoute'    => 'onAfterApiRoute',
 		);
 	}
 
@@ -404,7 +414,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder', self::DefaultSettings['notifyUsePasswordReminder']);
 		if ($this->getStringParam('blockMode', 'full') === 'off' ||
 			(!$notifyRemaining &&
-			  !($passwordReminder == -1 || $passwordReminder > 0)))
+			  !($passwordReminder == -1 || $passwordReminder > 0)) ||
+			// an API client gets no messages shown
+			$this->isApiRequest())
 		{
 			// avoid database access if reminders are disabled anyway
 			return;
@@ -443,8 +455,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function isEnabledForCurrentOrigin()
 	{
-		$enabledFor = $this->getIntParam('enabledForOrigin', 3);
+		$enabledFor = $this->getIntParam('enabledForOrigin', self::DefaultSettings['enabledForOrigin']);
+		// site 0, administrator 1, api 3: see the Origin* constants
 		return (($enabledFor & ($this->getApplication()->getClientId() + 1)) != 0);
+	}
+
+	private function isApiRequest()
+	{
+		return $this->getApplication()->isClient('api');
 	}
 
 	/**
@@ -537,7 +555,22 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, Log::INFO);
 			return;
 		}
-		$username = mb_strimwidth((string) ($user['username'] ?? ''), 0, 150, "...");
+		$username = (string) ($user['username'] ?? '');
+		if ($this->isApiRequest() && $username === '')
+		{
+			// Joomla tries to log in every API request to an endpoint which
+			// isn't public, also one which comes without any credentials:
+			// that isn't an attempt to guess any. The authentication plugins
+			// don't pass on the username they were given, see ApiHelper
+			$username = ApiHelper::requestCredentialsUsername();
+			if ($username === null)
+			{
+				$this->logger->log('Ignoring failed login of an API request without credentials from '.
+					$ipAddress, Log::DEBUG);
+				return;
+			}
+		}
+		$username = mb_strimwidth($username, 0, 150, "...");
 		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
 		$logEntry = new \stdClass();
@@ -792,6 +825,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isLoginAttemptRequest()
 	{
+		if ($this->isApiRequest())
+		{
+			// an API request carries its credentials with it, each one with
+			// them is a login (see ApiHelper)
+			return ApiHelper::requestCredentialsUsername() !== null;
+		}
 		$option = $this->requestedOption();
 		list(, $method) = $this->requestedTask();
 		$result = ($option === 'com_users' || $option === 'com_login') && $method === 'login';
@@ -924,6 +963,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	public function onAfterRoute($event)
 	{
+		$this->enforceBlock();
+	}
+
+	/**
+	 * The Web Services API (api/index.php) doesn't trigger onAfterRoute, but
+	 * this, before it logs in the request.
+	 */
+	public function onAfterApiRoute($event)
+	{
+		$this->enforceBlock();
+	}
+
+	private function enforceBlock()
+	{
 		if (!isset($this->mydb))
 		{
 			// onAfterInitialise did not run (or bailed out early)
@@ -946,11 +999,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				$this->mydb->getClientString(
 					$this->getApplication()->getClientId()),
 				Log::INFO);
-			if ($this->isUnblockRequest($blockIds))
+			// the unblock page and the password recovery are pages of the
+			// site; the API has neither
+			if (!$this->isApiRequest() && $this->isUnblockRequest($blockIds))
 			{
 				return;
 			}
-			if ($this->isPasswordRecoveryRequest())
+			if (!$this->isApiRequest() && $this->isPasswordRecoveryRequest())
 			{
 				return;
 			}
@@ -978,8 +1033,27 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			{
 				$message .= " ".Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
 			}
+			if ($this->isApiRequest())
+			{
+				header('Content-Type: application/vnd.api+json; charset=utf-8');
+				$message = self::blockedApiResponse($message, $status);
+			}
 			echo $message;
 			$this->getApplication()->close();
 		}
+	}
+
+	/**
+	 * The body of the answer to a blocked API request: an error in the form
+	 * the API answers others with (JSON:API, see Joomla's JsonapiRenderer).
+	 */
+	public static function blockedApiResponse($message, $status)
+	{
+		$error = array('title' => trim(html_entity_decode(strip_tags((string) $message), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
+		if ($status !== null)
+		{
+			$error['code'] = $status;
+		}
+		return json_encode(array('errors' => array($error)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 	}
 }

@@ -58,7 +58,16 @@ class DatabaseHelper
 
 	public function getClientString($id)
 	{
-		return ($id == 0) ? 'Frontend' : 'Backend';
+		// the client id of the application: site 0, administrator 1, api 3
+		switch ((int) $id)
+		{
+			case 0:
+				return 'Frontend';
+			case 3:
+				return 'API';
+			default:
+				return 'Backend';
+		}
 	}
 
 	// $time (as written by date("Y-m-d H:i:s")) moved back by $minutes;

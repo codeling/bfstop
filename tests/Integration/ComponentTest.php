@@ -588,6 +588,15 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	public function testFailedLoginListNamesTheOrigins()
+	{
+		$view = (new \ReflectionClass(\Codeling\Component\Bfstop\Administrator\View\Failedloginlist\HtmlView::class))
+			->newInstanceWithoutConstructor();
+		$this->assertSame('Frontend', $view->getOriginName(0));
+		$this->assertSame('Backend', $view->getOriginName('1'));
+		$this->assertSame('API', $view->getOriginName(3));
+	}
+
 	public function testListsAreSortableByTheirColumnHeaders()
 	{
 		// a column a header sorts by which isn't among the model's filter

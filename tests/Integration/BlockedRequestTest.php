@@ -62,12 +62,22 @@ class BlockedRequestTest extends IntegrationTestCase
 	 * @param string|null $backendUser null for a request to the site, else one
 	 *                                 to the backend: '' by a guest, or by the
 	 *                                 user with this username
+	 * @param string[]    $options     further options of fixtures/request.php
+	 *                                 (--api, --server=...)
 	 */
-	private function request($query = '', $ip = self::Ip, $routed = true, $backendUser = null)
+	private function request($query = '', $ip = self::Ip, $routed = true, $backendUser = null, array $options = array())
 	{
+		if ($backendUser !== null)
+		{
+			$options[] = '--admin'.($backendUser === '' ? '' : '='.$backendUser);
+		}
+		if (!$routed)
+		{
+			$options[] = '--no-route';
+		}
 		$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/request.php').' '.
-			escapeshellarg($ip).' '.escapeshellarg($query).($routed ? '' : ' --no-route').
-			($backendUser === null ? '' : ' '.escapeshellarg('--admin'.($backendUser === '' ? '' : '='.$backendUser))).
+			escapeshellarg($ip).' '.escapeshellarg($query).
+			implode('', array_map(function ($option) { return ' '.escapeshellarg($option); }, $options)).
 			' 2>&1';
 		exec($command, $output, $exitCode);
 		$output = implode("\n", $output);
@@ -87,6 +97,20 @@ class BlockedRequestTest extends IntegrationTestCase
 		$output = $this->request($query, $ip, true, $backendUser);
 		$this->assertStringContainsString('NOT BLOCKED', $output, "request '$query' should not be blocked");
 		$this->assertStringNotContainsString(self::BlockedMessage, $output);
+	}
+
+	/**
+	 * A request to the Web Services API; $headers as in $_SERVER
+	 * ('HTTP_AUTHORIZATION' => 'Bearer ...')
+	 */
+	private function apiRequest($ip = self::Ip, array $headers = array())
+	{
+		$options = array('--api');
+		foreach ($headers as $name => $value)
+		{
+			$options[] = '--server='.$name.'='.$value;
+		}
+		return $this->request('', $ip, true, null, $options);
 	}
 
 	public function testFullModeBlocksEverything()
@@ -313,6 +337,61 @@ class BlockedRequestTest extends IntegrationTestCase
 		// a logged-in user's request goes where it says
 		$this->assertNotBlocked('option=com_content&task=display.login', self::Ip, 'Admin');
 		$this->assertBlocked('option=com_login&task=login', self::Ip, 'Admin');
+	}
+
+	public function testBlockedAddressIsRejectedByTheApi()
+	{
+		$this->configure();
+		$this->block();
+		$output = $this->apiRequest();
+		$this->assertStringNotContainsString('NOT BLOCKED', $output);
+		// in the form the API answers errors in, not a page
+		$this->assertStringContainsString('{"errors":[{"title":"'.self::BlockedMessage.'","code":403}]}', $output);
+		$this->assertStringContainsString('STATUS: 403', $output);
+		$this->assertStringContainsString('NOT BLOCKED', $this->apiRequest('203.0.113.42'));
+	}
+
+	public function testApiIsOnlyProtectedIfSwitchedOn()
+	{
+		$this->configure(array('enabledForOrigin' => Bfstop::OriginFrontend | Bfstop::OriginBackend));
+		$this->block();
+		$this->assertStringContainsString('NOT BLOCKED', $this->apiRequest());
+		$this->assertBlocked();
+		$this->configure(array('enabledForOrigin' => Bfstop::OriginApi));
+		$this->assertStringNotContainsString('NOT BLOCKED', $this->apiRequest());
+		$this->assertNotBlocked();
+	}
+
+	public function testUnsavedSettingsProtectTheApi()
+	{
+		$this->setPluginParams(json_encode(array('blockedMessage' => self::BlockedMessage, 'logLevel' => 8)));
+		$this->block();
+		$this->assertStringNotContainsString('NOT BLOCKED', $this->apiRequest());
+	}
+
+	public function testLoginOnlyModeRejectsApiRequestsWithCredentials()
+	{
+		// each API request with credentials is a login
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->block();
+		$this->assertStringContainsString('NOT BLOCKED', $this->apiRequest());
+		foreach (array(
+			array('HTTP_AUTHORIZATION' => 'Bearer c2hhMjU2OjQyOmFiYw=='),
+			array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw=='),
+			array('HTTP_AUTHORIZATION' => 'Basic '.base64_encode('admin:secret')),
+			array('PHP_AUTH_USER' => 'admin', 'PHP_AUTH_PW' => 'secret')) as $headers)
+		{
+			$output = $this->apiRequest(self::Ip, $headers);
+			$this->assertStringNotContainsString('NOT BLOCKED', $output, implode(', ', array_keys($headers)));
+			$this->assertStringContainsString(self::BlockedMessage, $output);
+		}
+	}
+
+	public function testBlockedApiResponse()
+	{
+		$this->assertSame('{"errors":[{"title":"Blocked & gone","code":403}]}',
+			Bfstop::blockedApiResponse('<b>Blocked</b> &amp; gone ', 403));
+		$this->assertSame('{"errors":[{"title":"x"}]}', Bfstop::blockedApiResponse('x', null));
 	}
 
 	public function testUnblockTokenAndPasswordRecoveryAreNoPassToTheBackend()

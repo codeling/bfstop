@@ -196,6 +196,20 @@
     com_login for every request of a guest. Such requests are recognised as
     the logins they are now; the exemptions for password recovery and the
     unblock page don't let a blocked address through to the backend either
+  - Security: logins through Joomla's Web Services API (api/index.php, with
+    an API token or HTTP Basic authentication) are protected as well. Before,
+    the plugin never looked at the API, so passwords could be tried there
+    without being counted, and blocked addresses could still use it. Now
+    failed API logins are counted (those of requests which carry credentials:
+    Joomla also reports one for every request to an endpoint which isn't
+    public, and a request without credentials guesses nothing), and a blocked
+    address gets an error from the API ("Login Only" mode: every request with
+    credentials is a login). "Active for" has the API as a third part besides
+    frontend and backend; it is on by default, an update from 1.x adds it to
+    a saved setting, and the update says so. The description of the setting
+    no longer claims that a block always applies to the whole site: blocks
+    have only ever been enforced in the parts the plugin is active for
+    (blocking through .htaccess aside)
   - Component: unblocking several entries of the block list at once no
     longer stops at the first one which was unblocked already (the others
     stayed blocked), and a database error while unblocking is reported as a

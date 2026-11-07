@@ -10,10 +10,13 @@
 // message if it rejects the request, "NOT BLOCKED" otherwise. An optional
 // second argument gives the request parameters as a query string (e.g.
 // "option=com_users&task=user.login"). With --admin it is a request to the
-// backend, by a guest, or with --admin=<username> by that user.
+// backend, by a guest, or with --admin=<username> by that user; with --api
+// one to the Web Services API. --server=NAME=VALUE sets $_SERVER[NAME] (e.g.
+// a header).
 // Used by PluginEventsTest; needs the same environment as the tests.
 
 use Joomla\CMS\Application\AdministratorApplication;
+use Joomla\CMS\Application\ApiApplication;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\User\UserFactoryInterface;
@@ -22,8 +25,20 @@ use Joomla\Event\Event;
 require dirname(__DIR__, 2).'/bootstrap.php';
 
 $_SERVER['REMOTE_ADDR'] = $argv[1];
+$isApi = in_array('--api', $argv, true);
+if ($isApi)
+{
+	Factory::$application = Factory::getContainer()->get(ApiApplication::class);
+	Factory::$application->createExtensionNamespaceMap();
+	Factory::$application->loadLanguage();
+}
 foreach (array_slice($argv, 3) as $option)
 {
+	if (strncmp($option, '--server=', 9) === 0)
+	{
+		list($name, $value) = explode('=', substr($option, 9), 2);
+		$_SERVER[$name] = $value;
+	}
 	if (strncmp($option, '--admin', 7) !== 0)
 	{
 		continue;
@@ -53,8 +68,10 @@ register_shutdown_function(function ()
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
 $app->getDispatcher()->dispatch('onAfterInitialise', new Event('onAfterInitialise', array()));
 // blocking is enforced after routing (SEF URLs only yield option/view then)
+// (the API has an event of its own for that)
 if (!in_array('--no-route', $argv, true))
 {
-	$app->getDispatcher()->dispatch('onAfterRoute', new Event('onAfterRoute', array()));
+	$event = $isApi ? 'onAfterApiRoute' : 'onAfterRoute';
+	$app->getDispatcher()->dispatch($event, new Event($event, array()));
 }
 echo "NOT BLOCKED\n";
