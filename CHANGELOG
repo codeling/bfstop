@@ -4,6 +4,10 @@
   - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6 and PHP 8.1); the
     installer refuses older Joomla and PHP versions, and replacing a newer
     version of BFStop with an older one
+  - Component: PSR-4 namespaced classes (Codeling\Component\Bfstop); the
+    frontend router.php was removed (all of its build/parse logic was
+    commented out), Joomla's default component router is used instead, with
+    no change in behaviour
   - Modernize token generation to use random_bytes()/random_int()
   - Consolidate all configuration into the component's Settings view
     (Components -> Brute Force Stop -> Settings); the plugin's Options tab

@@ -1,6 +1,6 @@
 name: Dependency check
 
-# The plugin ships a copy of the MaxMind DB reader (src/Helper/Geo, see README).
+# The plugin ships a copy of the MaxMind DB reader (src/Helper/Geo, see README.md).
 # This weekly job reports a newer release, and security advisories against the
 # locked version, even if Dependabot is switched off.
 

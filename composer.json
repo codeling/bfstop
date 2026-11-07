@@ -1,6 +1,6 @@
 {
     "name": "codeling/bfstop",
-    "description": "Brute Force Stop for Joomla! - this file only tracks the third-party code vendored into the plugin package (src/Helper/Geo), see README",
+    "description": "Brute Force Stop for Joomla! - this file only tracks the third-party code vendored into the plugin package (src/Helper/Geo), see README.md",
     "type": "project",
     "license": "GPL-3.0-or-later",
     "require": {
