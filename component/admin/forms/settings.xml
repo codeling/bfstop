@@ -105,12 +105,18 @@
 				description="PLG_SYSTEM_BFSTOP_PROXY_IP_DESC" />
 		</fieldset>
 		<fieldset name="advanced">
-			<field name="enabledForOrigin" type="list" validate="options" default="3"
+			<!-- bits: 1 frontend, 2 backend, 4 Web Services API (the client id
+				of the application + 1, see the plugin's Bfstop::Origin*) -->
+			<field name="enabledForOrigin" type="list" validate="options" default="7"
 				label="PLG_SYSTEM_BFSTOP_ENABLED_FOR_ORIGIN_LABEL"
 				description="PLG_SYSTEM_BFSTOP_ENABLED_FOR_ORIGIN_DESC">
+				<option value="7">PLG_SYSTEM_BFSTOP_ENABLED_FOR_ALL</option>
+				<option value="3">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BOTH</option>
+				<option value="5">PLG_SYSTEM_BFSTOP_ENABLED_FOR_FRONTEND_API</option>
+				<option value="6">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BACKEND_API</option>
 				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED_FOR_FRONTEND</option>
 				<option value="2">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BACKEND</option>
-				<option value="3">PLG_SYSTEM_BFSTOP_ENABLED_FOR_BOTH</option>
+				<option value="4">PLG_SYSTEM_BFSTOP_ENABLED_FOR_API</option>
 			</field>
 			<field name="progressiveBlockDuration" type="list" validate="options" default="0"
 				label="COM_BFSTOP_SETTINGS_PROGRESSIVE_BLOCK_DURATION_LABEL"

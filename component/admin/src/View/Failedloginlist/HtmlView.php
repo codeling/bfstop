@@ -40,7 +40,16 @@ class HtmlView extends BaseHtmlView
 
 	function getOriginName($origin)
 	{
-		return ($origin == 0) ? 'Frontend' : 'Backend';
+		// the client id of the application: site 0, administrator 1, api 3
+		switch ((int) $origin)
+		{
+			case 0:
+				return 'Frontend';
+			case 3:
+				return 'API';
+			default:
+				return 'Backend';
+		}
 	}
 
 	protected function addToolBar()
