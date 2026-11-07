@@ -23,14 +23,14 @@ use Joomla\CMS\Language\Text;
 	<th>
 		<?php echo HTMLHelper::_('grid.sort',
 			'COM_BFSTOP_HEADING_ID',
-			'b.id',
+			'a.id',
 			$this->sortDirection,
 			$this->sortColumn); ?>
 	</th>
 	<th>
 		<?php echo HTMLHelper::_('grid.sort',
 			'COM_BFSTOP_HEADING_IPADDRESS',
-			'b.ipaddress',
+			'a.ipaddress',
 			$this->sortDirection,
 			$this->sortColumn); ?>
 	</th>
@@ -40,7 +40,7 @@ use Joomla\CMS\Language\Text;
 	<th>
 		<?php echo HTMLHelper::_('grid.sort',
 			'COM_BFSTOP_HEADING_NOTES',
-			'b.notes',
+			'a.notes',
 			$this->sortDirection,
 			$this->sortColumn); ?>
 	</th>
