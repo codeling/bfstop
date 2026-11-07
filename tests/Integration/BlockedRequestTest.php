@@ -58,26 +58,33 @@ class BlockedRequestTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo($minutesAgo), 'duration' => $duration), 'id');
 	}
 
-	private function request($query = '', $ip = self::Ip, $routed = true)
+	/**
+	 * @param string|null $backendUser null for a request to the site, else one
+	 *                                 to the backend: '' by a guest, or by the
+	 *                                 user with this username
+	 */
+	private function request($query = '', $ip = self::Ip, $routed = true, $backendUser = null)
 	{
 		$command = escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/request.php').' '.
-			escapeshellarg($ip).' '.escapeshellarg($query).($routed ? '' : ' --no-route').' 2>&1';
+			escapeshellarg($ip).' '.escapeshellarg($query).($routed ? '' : ' --no-route').
+			($backendUser === null ? '' : ' '.escapeshellarg('--admin'.($backendUser === '' ? '' : '='.$backendUser))).
+			' 2>&1';
 		exec($command, $output, $exitCode);
 		$output = implode("\n", $output);
 		$this->assertSame(0, $exitCode, $output);
 		return $output;
 	}
 
-	private function assertBlocked($query = '', $ip = self::Ip)
+	private function assertBlocked($query = '', $ip = self::Ip, $backendUser = null)
 	{
-		$output = $this->request($query, $ip);
+		$output = $this->request($query, $ip, true, $backendUser);
 		$this->assertStringContainsString(self::BlockedMessage, $output, "request '$query' should be blocked");
 		$this->assertStringNotContainsString('NOT BLOCKED', $output);
 	}
 
-	private function assertNotBlocked($query = '', $ip = self::Ip)
+	private function assertNotBlocked($query = '', $ip = self::Ip, $backendUser = null)
 	{
-		$output = $this->request($query, $ip);
+		$output = $this->request($query, $ip, true, $backendUser);
 		$this->assertStringContainsString('NOT BLOCKED', $output, "request '$query' should not be blocked");
 		$this->assertStringNotContainsString(self::BlockedMessage, $output);
 	}
@@ -278,6 +285,41 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertNotBlocked('option=com_users&task=user.logout');
 		$this->assertNotBlocked('option=com_users&view=login&task=display');
 		$this->assertNotBlocked('option=com_content&task=user.login');
+	}
+
+	public function testLoginOnlyModeRecognisesBackendLoginsWithoutComLogin()
+	{
+		// the backend runs com_login for every request of a guest, whatever
+		// component it names (AdministratorApplication::findOption(), called
+		// after onAfterRoute): each of these is a login
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->block();
+		$this->assertBlocked('option=com_login&task=login', self::Ip, '');
+		$this->assertBlocked('task=login', self::Ip, '');
+		$this->assertBlocked('option=com_cpanel&task=login', self::Ip, '');
+		$this->assertBlocked('option=com_users&task=login', self::Ip, '');
+		$this->assertBlocked('option=com_content&task=display.login', self::Ip, '');
+		// the login form itself stays reachable, as do the components the
+		// backend lets a guest reach
+		$this->assertNotBlocked('', self::Ip, '');
+		$this->assertNotBlocked('option=com_cpanel', self::Ip, '');
+		$this->assertNotBlocked('option=com_ajax&task=login', self::Ip, '');
+		// a logged-in user's request goes where it says
+		$this->assertNotBlocked('option=com_content&task=display.login', self::Ip, 'Admin');
+		$this->assertBlocked('option=com_login&task=login', self::Ip, 'Admin');
+	}
+
+	public function testUnblockTokenAndPasswordRecoveryAreNoPassToTheBackend()
+	{
+		// in the backend, these requests of a guest would go to com_login
+		$this->configure();
+		$id = $this->block();
+		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($id, str_repeat('ef', 20));
+		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
+		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$token, self::Ip, '');
+		$this->assertNotBlocked('option=com_users&view=reset');
+		$this->assertBlocked('option=com_users&view=reset', self::Ip, '');
+		$this->assertBlocked('option=com_users&task=reset.request', self::Ip, '');
 	}
 
 	public function testPasswordRecoveryStaysReachable()

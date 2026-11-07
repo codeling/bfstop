@@ -657,7 +657,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isUnblockRequest($blockIds)
 	{
-		if (strcmp($this->requestString('option'), 'com_bfstop') != 0 ||
+		// tokenunblock is a view of the site; in the backend, the request of
+		// a guest would go to com_login (see requestedOption())
+		if (!$this->getApplication()->isClient('site') ||
+			strcmp($this->requestString('option'), 'com_bfstop') != 0 ||
 			strcmp($this->requestString('view'), 'tokenunblock') != 0 ||
 			$this->requestString('task') !== '')
 		{
@@ -705,6 +708,38 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return array($controller === '' ? 'display' : $controller, $task);
 	}
 
+	// the components the backend runs for a guest (or a user who may not log in
+	// there) as requested; every other request goes to com_login, see
+	// AdministratorApplication::$allowedUnprivilegedOptions
+	private const UnprivilegedBackendOptions = array('com_login', 'com_ajax');
+
+	/**
+	 * The component Joomla runs for this request, in lower case. Usually the
+	 * "option" parameter, but not in the backend: there,
+	 * AdministratorApplication::findOption() - called when the request is
+	 * dispatched, after onAfterRoute - runs com_login for a guest, whatever
+	 * else the request names, and com_cpanel if it names nothing. Checks of
+	 * the component have to go by that, or a login posted to the backend
+	 * with "option" left out (or set to any other component) would not be
+	 * recognised as the login it is.
+	 */
+	private function requestedOption()
+	{
+		$option = strtolower($this->requestString('option'));
+		$app = $this->getApplication();
+		if (!$app->isClient('administrator'))
+		{
+			return $option;
+		}
+		$user = $app->getIdentity();
+		if (($user === null || $user->guest || !$user->authorise('core.login.admin')) &&
+			!in_array($option, self::UnprivilegedBackendOptions, true))
+		{
+			return 'com_login';
+		}
+		return $option === '' ? 'com_cpanel' : $option;
+	}
+
 	// the tasks of com_users (controller.method) with which a user who forgot
 	// their password or username gets a new one: the forms of the reset and
 	// remind views post to them (index.php?task=reset.request, ...)
@@ -732,7 +767,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function isPasswordRecoveryRequest()
 	{
-		if (strcasecmp($this->requestString('option'), 'com_users') != 0)
+		if ($this->requestedOption() !== 'com_users')
 		{
 			return false;
 		}
@@ -770,10 +805,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * - "task=user.LOGIN", "task=user.login.x" and
 	 * "controller=user&task=login" are all logins. Matching more than
 	 * Joomla would run only blocks a request which wouldn't do anything.
+	 * The same goes for the component (see requestedOption()): a backend
+	 * login without "option=com_login" is a login all the same.
 	 */
 	private function isLoginAttemptRequest()
 	{
-		$option = strtolower($this->requestString('option'));
+		$option = $this->requestedOption();
 		list(, $method) = $this->requestedTask();
 		$result = ($option === 'com_users' || $option === 'com_login') && $method === 'login';
 		if ($result)

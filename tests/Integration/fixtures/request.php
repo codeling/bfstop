@@ -9,16 +9,35 @@
 // argument, as far as the plugin is concerned: prints the plugin's block
 // message if it rejects the request, "NOT BLOCKED" otherwise. An optional
 // second argument gives the request parameters as a query string (e.g.
-// "option=com_users&task=user.login").
+// "option=com_users&task=user.login"). With --admin it is a request to the
+// backend, by a guest, or with --admin=<username> by that user.
 // Used by PluginEventsTest; needs the same environment as the tests.
 
+use Joomla\CMS\Application\AdministratorApplication;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\CMS\User\UserFactoryInterface;
 use Joomla\Event\Event;
 
 require dirname(__DIR__, 2).'/bootstrap.php';
 
 $_SERVER['REMOTE_ADDR'] = $argv[1];
+foreach (array_slice($argv, 3) as $option)
+{
+	if (strncmp($option, '--admin', 7) !== 0)
+	{
+		continue;
+	}
+	$container = Factory::getContainer();
+	$container->alias('session.web.administrator', 'session.cli');
+	$admin = $container->get(AdministratorApplication::class);
+	Factory::$application = $admin;
+	$admin->createExtensionNamespaceMap();
+	$admin->loadLanguage();
+	$username = (string) substr($option, 8);
+	$admin->loadIdentity($username === '' ? null
+		: $container->get(UserFactoryInterface::class)->loadUserByUsername($username));
+}
 $app = Factory::getApplication();
 parse_str($argv[2] ?? '', $params);
 foreach ($params as $name => $value)
