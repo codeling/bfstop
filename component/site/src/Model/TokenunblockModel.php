@@ -153,6 +153,9 @@ class TokenunblockModel extends BaseDatabaseModel
 					$db->quote($stored);
 			$db->setQuery($sql);
 			$success = $db->execute();
+			// with blocking through .htaccess, the web server would otherwise
+			// go on rejecting the address until the plugin's next maintenance
+			UnblockHelper::removeLiftedHtaccessBlocks($logger);
 		}
 		catch (\RuntimeException $e)
 		{

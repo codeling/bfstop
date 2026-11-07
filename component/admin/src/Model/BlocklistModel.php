@@ -57,7 +57,11 @@ class BlocklistModel extends ListModel
 
 	public function unblock($ids, $logger)
 	{
-		if (UnblockHelper::unblockDB($this->getDatabase(), $ids, 0, $logger))
+		$unblocked = UnblockHelper::unblockDB($this->getDatabase(), $ids, 0, $logger);
+		// with blocking through .htaccess, the web server would otherwise go on
+		// rejecting the addresses until the plugin's next maintenance
+		UnblockHelper::removeLiftedHtaccessBlocks($logger);
+		if ($unblocked)
 		{
 			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
 		}
