@@ -1,67 +1,61 @@
-# com\_bfstop
-## Brute Force Stop Joomla! Component
+# Brute Force Stop: Joomla! administration component
 
-Main author: Bernhard Fröhler
+Brute Force Stop (BFStop) protects the login of a Joomla! site against
+brute-force attacks. It records failed logins, slows down and blocks the IP
+addresses (and throttles the accounts) they come from, notifies you about
+failed logins and blocks, and lets users who blocked themselves unblock their
+address through a link sent by email.
 
-This is the component part of the [Brute Force Stop Joomla! Extension package](https://extensions.joomla.org/extensions/extension/access-a-security/site-security/brute-force-stop/).
+This repository contains the **component** (`com_bfstop`): BFStop's settings,
+the lists of blocked addresses, failed logins and allowed addresses, the log,
+username statistics and IP address information in the administrator backend,
+and the unblock page in the frontend. The work on every request, watching the
+logins and rejecting requests from blocked addresses, is done by the
+**plugin** ([codeling/bfstop](https://github.com/codeling/bfstop)). Plugin and
+component only work together.
 
-For detailed information, as well as instructions on how to download, install and configure Brute Force Stop, please browse to [the bfstop wiki](https://github.com/codeling/bfstop/wiki).
+## Usage
 
-If you find any issues, please report them at [the bfstop issue tracker](https://github.com/codeling/bfstop/issues).
+- Install the **package** `pkg_bfstop-<version>.zip` from the
+  [releases](https://github.com/codeling/bfstop/releases). It contains the
+  plugin and the component and installs both. Don't install them separately:
+  they are released together, and need to have the same version.
+- Requirements: Joomla! 5 or 6, PHP 8.1 or newer, and MySQL, MariaDB or
+  PostgreSQL. Sites still on Joomla! 4 stay with BFStop 1.5.
+- The plugin is enabled when it is installed. Configure BFStop under
+  *Components → Brute Force Stop → Settings*.
+- Joomla! offers updates through its update manager.
 
-If you are interested in the source code, or want to contribute, please check [the bfstop source repository](https://github.com/codeling/com\_bfstop) at github.
+## Resources
 
-For any further questions, don't hesitate to contact me under bfstop@bfroehler.info
+- Documentation: [the bfstop wiki](https://github.com/codeling/bfstop/wiki)
+- Downloads: [GitHub releases](https://github.com/codeling/bfstop/releases),
+  [Joomla! Extensions Directory](https://extensions.joomla.org/extensions/extension/access-a-security/site-security/brute-force-stop/)
+- Changes: [CHANGELOG](https://github.com/codeling/bfstop/blob/main/CHANGELOG)
+  (for plugin, component and package)
+- Bug tracker (for plugin and component):
+  [codeling/bfstop issues](https://github.com/codeling/bfstop/issues)
+- Security issues: please don't report them in the bug tracker, see
+  [SECURITY.md](SECURITY.md)
+- Update server: `https://bfstop.bfroehler.info/update.xml`
+- Source: [codeling/bfstop](https://github.com/codeling/bfstop) (plugin and
+  package), [codeling/com_bfstop](https://github.com/codeling/com_bfstop)
+  (component)
+- Contact: info@bfstop.de
 
-## Security changes in this release
+## Development
 
-- The link in the "you were blocked" email now only asks for confirmation when
-  opened; the unblock itself is a POST request, and only works from the IP
-  address which was blocked (so mail scanners and link previews can't use it).
-- The log view and the IP information view now escape everything they show.
-- The unblock page answers with an error status if the link can't be used (400,
-  403, 404 or 500; a GET request just asks for confirmation and stays a 200),
-  unless the plugin's "Use HTTP Error" setting is off. Because the link contains
-  a secret, the page is not cached, sends no Referer and asks search engines
-  not to index it.
-- New setting "Usernames Not Matching an Account" (default: hash), see the
-  plugin's CHANGELOG.
-- New setting "IPv6 Tracking Granularity" (default: /64).
-- The "User Block Message" setting has a new value: the email with the unblock
-  link is by default only sent if the user has logged in from the blocked IP
-  address before, so it can't be used to flood somebody's inbox.
-- Sending the test email needs the permission to change the settings, and the
-  .htaccess and GeoIP database path settings are validated.
-- Subnets with a prefix length like `1e1` or `0x8` are no longer accepted.
-- The "Blocked IPs (database)" list now shows whether expired blocks are deleted
-  automatically ("Prune old attempts" setting), and the username statistics view says
-  that the table is limited to 10,000 usernames.
+- Package and releases: the package is built from the plugin repository and
+  this one by `package/build.sh` of codeling/bfstop; how versions and releases
+  work is described in its
+  [package/README.md](https://github.com/codeling/bfstop/blob/main/package/README.md).
+- Tests: the tests of plugin and component are in the plugin repository, see
+  its [tests/README.md](https://github.com/codeling/bfstop/blob/main/tests/README.md).
+  CI tests plugin and component together; for a change spanning both
+  repositories, use the same branch name in both.
+- Contributions are welcome, as pull requests to this repository or to
+  codeling/bfstop.
 
-## 2.0.0: Joomla 5/6 migration
+## License
 
-Version 2.0.0 migrates the component to PSR-4 namespaced classes
-(`Codeling\Component\Bfstop`) and drops support for Joomla 3/4. Notable change
-for integrators: the frontend `router.php` was removed, since all of its
-build/parse logic was already commented out and effectively a no-op; Joomla's
-default component router is used instead, with no change in behaviour.
-
-BFStop's configuration was also consolidated into this component's Settings
-view (Components -> Brute Force Stop -> Settings). It used to be split
-between here and the plugin's own Options tab in the Plugin Manager; the
-plugin manifest no longer defines any configuration fields, so the
-component's Settings view is now the single place to configure BFStop
-(enabling/disabling the plugin itself still happens in the Plugin Manager,
-as with any Joomla plugin).
-
-This version also adds adaptive, risk-based allowance of failed login
-attempts (issue #76): failed logins are now throttled per account across
-all source IPs combined (not just per IP), and an optional per-attempt
-risk score (known IP/username pairs, common usernames, missing
-User-Agent, GeoIP country, reverse-DNS) adjusts delay and block
-thresholds - see the plugin's CHANGELOG for the full list, and the
-new "Account-level Throttle", "GeoIP Database", and "Adaptive Risk
-Scoring" fieldsets in the Settings view. The "Information for IP
-Address" view (issue #169) also works again, using the same local
-GeoIP database instead of the discontinued freegeoip.net API it used
-to depend on.
-
+GNU General Public License, version 3, see [LICENSE.txt](LICENSE.txt).
