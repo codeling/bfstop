@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Component\Bfstop\Administrator\Controller\DisplayController;
+use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Model\AllowModel;
@@ -15,10 +16,12 @@ use Codeling\Component\Bfstop\Administrator\Model\AllowlistModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlockModel;
 use Codeling\Component\Bfstop\Administrator\Model\BlocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\FailedloginlistModel;
+use Codeling\Component\Bfstop\Administrator\Model\HtblocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Factory\MVCFactory;
 
@@ -361,6 +364,62 @@ class ComponentTest extends IntegrationTestCase
 		$this->logger->errors = array();
 	}
 
+	public function testUnblockingSeveralBlocksSkipsThoseAlreadyLifted()
+	{
+		$ids = array();
+		foreach (array('203.0.113.70', '203.0.113.71', '203.0.113.72') as $ip)
+		{
+			$ids[] = $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		}
+		$this->insert('#__bfstop_unblock', array('block_id' => $ids[0], 'source' => 0, 'crdate' => self::minutesAgo(5)));
+		// the one which was lifted already used to end the loop: the others
+		// selected with it stayed blocked
+		$this->assertTrue(UnblockHelper::unblockDB($this->db, $ids, 0, $this->logger));
+		$helper = new DatabaseHelper($this->logger);
+		$this->assertFalse($helper->isIPBlocked('203.0.113.71'));
+		$this->assertFalse($helper->isIPBlocked('203.0.113.72'));
+		$this->assertSame(3, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock'));
+	}
+
+	public function testUnblockingTakesTheAddressOutOfTheHtaccessFile()
+	{
+		// the web server rejects an address as long as it is in the file - not
+		// until the plugin's next maintenance, up to a day later
+		$dir = sys_get_temp_dir().'/bfstop-unblock-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$params = $this->getPluginParams();
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$block = function ($ip)
+			{
+				return $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+			};
+			$byBackend = $block('203.0.113.60');
+			$block('203.0.113.61');
+			$byToken = $block('203.0.113.62');
+			$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $byToken, 'crdate' => self::minutesAgo(1)));
+			$htaccess = new HtaccessHelper($dir, $this->logger);
+			foreach (array('203.0.113.60', '203.0.113.61', '203.0.113.62', '203.0.113.63') as $ip)
+			{
+				$htaccess->denyIP($ip);              // .63: added by hand, no block in the database
+			}
+
+			$this->model(BlocklistModel::class)->unblock(array($byBackend), $this->logger);
+			$this->assertSame(array('203.0.113.61', '203.0.113.62', '203.0.113.63'), $htaccess->getDeniedIPs());
+
+			$this->assertSame(TokenunblockModel::ResultUnblocked,
+				$this->model(TokenunblockModel::class)->process('valid', true, '203.0.113.62', $this->logger));
+			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
+		}
+		finally
+		{
+			$this->setPluginParams($params);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
 	public function testSettingsAndLogViewsNeedTheAdminPermission()
 	{
 		if (!defined('JPATH_COMPONENT'))
@@ -500,5 +559,52 @@ class ComponentTest extends IntegrationTestCase
 		$helper = new DatabaseHelper($this->logger);
 		$this->assertTrue($helper->isIPBlocked('203.0.113.200'));
 		$this->assertTrue($helper->isIPOnAllowList('2001:db8::ABCD'));
+	}
+
+	public function testBlockDurationsAreShownAsText()
+	{
+		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		$this->assertSame('unlimited', DurationHelper::toReadable(0));
+		$this->assertSame('15 minutes', DurationHelper::toReadable('15'));
+		$this->assertSame('1 day', DurationHelper::toReadable(1440));
+		// the settings' week and 30 days, and what the progressive block
+		// duration makes of the others, used to show as language keys
+		$this->assertSame('7 days', DurationHelper::toReadable(10080));
+		$this->assertSame('30 days', DurationHelper::toReadable(43200));
+		$this->assertSame('16 hours', DurationHelper::toReadable(960));
+		$this->assertSame('20 minutes', DurationHelper::toReadable(20));
+		$this->assertSame('90 minutes', DurationHelper::toReadable(90));
+		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$options = $xml->xpath('//field[@name="blockDuration"]/option');
+		$this->assertNotEmpty($options);
+		foreach ($options as $option)
+		{
+			// the progressive block duration doubles it up to 2^6 times
+			for ($multiplier = 1; $multiplier <= 64; $multiplier *= 2)
+			{
+				$text = DurationHelper::toReadable(((int) $option['value']) * $multiplier);
+				$this->assertStringNotContainsString('COM_BFSTOP_', $text);
+			}
+		}
+	}
+
+	public function testListsAreSortableByTheirColumnHeaders()
+	{
+		// a column a header sorts by which isn't among the model's filter
+		// fields is replaced by the default ordering: the header does nothing
+		$models = array('allowlist' => AllowlistModel::class, 'blocklist' => BlocklistModel::class,
+			'failedloginlist' => FailedloginlistModel::class, 'htblocklist' => HtblocklistModel::class,
+			'usernamestats' => UsernamestatsModel::class);
+		foreach ($models as $view => $class)
+		{
+			$head = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/tmpl/'.$view.'/default_head.php');
+			preg_match_all("#'grid\.sort',\s*'\w+',\s*'([^']+)'#", $head, $m);
+			$this->assertNotEmpty($m[1], $view);
+			$filterFields = (new \ReflectionProperty($class, 'filter_fields'))->getValue($this->model($class));
+			foreach ($m[1] as $column)
+			{
+				$this->assertContains($column, $filterFields, "$view: column $column");
+			}
+		}
 	}
 }

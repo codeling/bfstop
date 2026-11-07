@@ -298,30 +298,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	/**
 	 * With blocking through .htaccess the web server holds back a blocked
-	 * address; it doesn't know that a block has run out or was lifted, so the
-	 * entry has to be taken out of the file here, or the block would be
-	 * permanent (and the file would grow with every address ever blocked).
-	 * Entries without a block in the database - the ones an administrator
-	 * added to the file by hand - are left alone.
+	 * address; it doesn't know that a block has run out or was lifted, see
+	 * HtaccessHelper::removeLiftedBlocks().
 	 */
 	private function removeLiftedHtaccessBlocks()
 	{
-		$addresses = $this->mydb->getAddressesWithoutActiveBlock();
-		if (count($addresses) === 0)
-		{
-			return;
-		}
-		$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
-		$present = $htaccess->getDeniedIPs();
-		foreach ($addresses as $address)
-		{
-			if (in_array($address, $present, true))
-			{
-				$this->logger->log('Block of '.$address.' is over, removing it from '.
-					$htaccess->getFileName(), Log::INFO);
-				$htaccess->undenyIP($address);
-			}
-		}
+		(new HtaccessHelper($this->getHtaccessPath(), $this->logger))->removeLiftedBlocks($this->mydb);
 	}
 
 	private function getRealDurationFromDBDuration($duration)
