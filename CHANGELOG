@@ -199,6 +199,11 @@
     are no longer used (Factory::getDbo/getConfig/getSession/getLanguage/
     getDocument/getMailer, $_db, Table::getInstance, View::get(),
     addStyleSheet(), getCfg()); a test fails if one comes back
+  - Translations: the strings added since 0.9 are now translated into all
+    languages (the language check reports no missing keys any more);
+    Portuguese (Brazil and Portugal) is complete and is installed with the
+    plugin and the component; the installation hint no longer shows markup
+    and an empty link when installing from the command line
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

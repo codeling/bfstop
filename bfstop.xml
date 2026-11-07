@@ -32,6 +32,10 @@
 		<language tag="it-IT">language/it-IT/it-IT.plg_system_bfstop.sys.ini</language>
 		<language tag="nl-NL">language/nl-NL/nl-NL.plg_system_bfstop.ini</language>
 		<language tag="nl-NL">language/nl-NL/nl-NL.plg_system_bfstop.sys.ini</language>
+		<language tag="pt-BR">language/pt-BR/pt-BR.plg_system_bfstop.ini</language>
+		<language tag="pt-BR">language/pt-BR/pt-BR.plg_system_bfstop.sys.ini</language>
+		<language tag="pt-PT">language/pt-PT/pt-PT.plg_system_bfstop.ini</language>
+		<language tag="pt-PT">language/pt-PT/pt-PT.plg_system_bfstop.sys.ini</language>
 		<language tag="ru-RU">language/ru-RU/ru-RU.plg_system_bfstop.ini</language>
 		<language tag="ru-RU">language/ru-RU/ru-RU.plg_system_bfstop.sys.ini</language>
 	</languages>
