@@ -57,8 +57,14 @@ class com_bfstopInstallerScript extends InstallerScript
 		}
 		$lang = Factory::getApplication()->getLanguage();
 		$lang->load('com_bfstop', JPATH_ADMINISTRATOR);
-		Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_INSTALL_HINT',
-			Route::_('index.php?option=com_bfstop&view=settings', false)
-		), 'warning');
+		// Route::_() gives an empty string when installing from the command line
+		$url = Route::_('index.php?option=com_bfstop&view=settings', false);
+		$message = Text::sprintf('COM_BFSTOP_INSTALL_HINT', $url !== '' ? $url : 'index.php?option=com_bfstop&view=settings');
+		if (PHP_SAPI === 'cli')
+		{
+			// the console prints messages as they are: no markup there
+			$message = html_entity_decode(strip_tags($message), ENT_QUOTES, 'UTF-8');
+		}
+		Factory::getApplication()->enqueueMessage($message, 'warning');
 	}
 }
