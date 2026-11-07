@@ -161,8 +161,14 @@ class BlockedRequestTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(4 * 24 * 60)));
 		$this->insert('#__bfstop_unblock_token', array('token' => str_repeat('cd', 20), 'block_id' => 2,
 			'crdate' => self::minutesAgo(60)));
+		// reverse-DNS results which have expired
+		$this->insert('#__bfstop_dnscache', array('ipaddress' => '203.0.113.77', 'hostname' => null,
+			'checked_at' => self::minutesAgo(8 * 24 * 60)));
+		$this->insert('#__bfstop_dnscache', array('ipaddress' => '203.0.113.78', 'hostname' => null,
+			'checked_at' => self::minutesAgo(60)));
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
+		$this->assertSame(array('203.0.113.78'), $this->db->setQuery('SELECT ipaddress FROM #__bfstop_dnscache')->loadColumn());
 		$this->assertSame(array(DatabaseHelper::hashToken(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);

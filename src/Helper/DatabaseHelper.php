@@ -51,6 +51,11 @@ class DatabaseHelper
 	// IP per TTL window, see issue #103
 	public static $DNS_CACHE_TTL_DAYS = 7;
 
+	// upper bound for the rows of the reverse-DNS cache: it has a row per
+	// address, and a client with an IPv6 network can fail every login from
+	// another one
+	public static $DNS_CACHE_MAX_ROWS = 10000;
+
 	public function getClientString($id)
 	{
 		return ($id == 0) ? 'Frontend' : 'Backend';
@@ -883,14 +888,7 @@ class DatabaseHelper
 
 			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate);
 			$this->db->execute();
-
-			// dnscache entries are already treated as expired by
-			// getCachedHostname() past DNS_CACHE_TTL_DAYS regardless of the
-			// admin-configured purge age above - this just reclaims the
-			// storage for rows nothing will ever read as valid again.
-			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
-				$this->db->quote(self::minutesBefore($now, self::$DNS_CACHE_TTL_DAYS * 24 * 60)));
-			$this->db->execute();
+			// the reverse-DNS cache has an age of its own, see pruneDnsCache()
 		}
 		catch (\Exception $e)
 		{
@@ -992,6 +990,51 @@ class DatabaseHelper
 			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.
 				$this->db->quote(date("Y-m-d H:i:s", time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
 			$this->db->execute();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+		}
+	}
+
+	/**
+	 * Deletes the cached reverse-DNS results which have expired - nothing
+	 * reads them any more (see getCachedHostname()) - and, oldest first, as
+	 * many more as needed to keep at most $maxRows. Run by the daily
+	 * maintenance whatever the purge age is set to: with the reverse-DNS risk
+	 * signal on, a visitor adds a row for every address they fail a login
+	 * from.
+	 */
+	public function pruneDnsCache($maxRows = null)
+	{
+		$maxRows = $maxRows ?? self::$DNS_CACHE_MAX_ROWS;
+		try
+		{
+			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
+				$this->db->quote(self::minutesBefore(date("Y-m-d H:i:s"), self::$DNS_CACHE_TTL_DAYS * 24 * 60)));
+			$this->db->execute();
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_dnscache');
+				$excess = ((int) $this->db->loadResult()) - $maxRows;
+				if ($excess <= 0)
+				{
+					return;
+				}
+				$query = $this->db->getQuery(true)
+					->select($this->db->quoteName('ipaddress'))
+					->from($this->db->quoteName('#__bfstop_dnscache'))
+					->order($this->db->quoteName('checked_at').' ASC');
+				$this->db->setQuery($query, 0, min($excess, 1000));
+				$addresses = $this->db->loadColumn();
+				if (count($addresses) === 0)
+				{
+					return;
+				}
+				$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE ipaddress IN ('.
+					implode(',', array_map(array($this->db, 'quote'), $addresses)).')');
+				$this->db->execute();
+			}
 		}
 		catch (\Exception $e)
 		{

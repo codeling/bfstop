@@ -834,6 +834,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->trimFailedLogins();
 			$this->mydb->trimUsernameStats();
 			$this->mydb->pruneKnownIps();
+			$this->mydb->pruneDnsCache();
 			$this->mydb->purgeExpiredUnblockTokens();
 			if ($this->getStringParam('blockMode', 'full') === 'htaccess')
 			{
