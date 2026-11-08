@@ -49,15 +49,55 @@ class SettingsModel extends AdminModel
 		if (empty($data))
 		{
 			$data = $this->getItem();
+			if (is_object($data) && isset($data->params) && is_array($data->params))
+			{
+				$data->params = self::paramsForForm($data->params);
+			}
 		}
 		return $data;
+	}
+
+	/**
+	 * The stored params as the form shows them: "enabledForOrigin" is a
+	 * bitmask (what the plugin reads, and what 1.x stored), the form has a
+	 * checkbox for each of its bits.
+	 */
+	public static function paramsForForm(array $params)
+	{
+		$params['enabledForOrigin'] = Bfstop::originList(
+			$params['enabledForOrigin'] ?? Bfstop::DefaultSettings['enabledForOrigin']);
+		return $params;
+	}
+
+	/**
+	 * The form's params as they are stored, see paramsForForm(). The form
+	 * requires a part to be ticked; should a request come without any (or
+	 * only with values which are none), the setting is left out, which makes
+	 * the plugin use its default - active for all parts, not for none.
+	 */
+	public static function paramsForStorage(array $params)
+	{
+		if (array_key_exists('enabledForOrigin', $params))
+		{
+			$mask = Bfstop::originMask($params['enabledForOrigin']);
+			if ($mask === 0)
+			{
+				unset($params['enabledForOrigin']);
+			}
+			else
+			{
+				$params['enabledForOrigin'] = $mask;
+			}
+		}
+		return $params;
 	}
 
 	public function save($data)
 	{
 		$id = $this->resolvePluginExtensionId();
 		$data[$this->getTable()->getKeyName()] = $id;
-		$data['params'] = self::keepInternalSettings($data['params'] ?? array(), $this->loadStoredParams($id));
+		$data['params'] = self::keepInternalSettings(self::paramsForStorage($data['params'] ?? array()),
+			$this->loadStoredParams($id));
 		return parent::save($data);
 	}
 
