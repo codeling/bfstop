@@ -69,6 +69,10 @@ INSERT INTO `#__bfstop_username_stats` (username, attempts, first_attempt, last_
 
 -- speeds up the per-username (account-level) throttle query
 ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime) /** CAN FAIL **/;
+-- the failed logins of an address within a time span (counted for every
+-- failed login), and those of the last hour / older than the purge age
+ALTER TABLE `#__bfstop_failedlogin` ADD INDEX ipaddress_logtime (ipaddress, logtime) /** CAN FAIL **/;
+ALTER TABLE `#__bfstop_failedlogin` ADD INDEX logtime (logtime) /** CAN FAIL **/;
 
 -- every request looks up the visitor's address in the block and allow list;
 -- addresses and networks are stored in canonical form (the plugin brings

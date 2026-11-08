@@ -177,6 +177,12 @@
     converts existing entries once, on the first request after the update.
     Entries which are added to the tables by other means have to be in that
     form as well
+  - Security: the failed logins are indexed by address and by time. With
+    the 200000 of them that are kept at most, the lookups made for every
+    failed login took 9-27 ms each (PostgreSQL 16 / MariaDB 10.11), the one
+    made when an address gets blocked up to 190 ms on MariaDB, and those of
+    the adaptive delay 8-18 ms; now each takes below 1 ms, while recording
+    a failed login takes as long as before
   - Security: the bundled MaxMind DB reader (maxmind-db/reader, now 1.14.0,
     which limits the decoding of malformed or hostile database files) is
     tracked in composer.json/composer.lock; src/Helper/Geo is generated from
