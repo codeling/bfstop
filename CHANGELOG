@@ -205,8 +205,12 @@
     public, and a request without credentials guesses nothing), and a blocked
     address gets an error from the API ("Login Only" mode: every request with
     credentials is a login). "Active for" has the API as a third part besides
-    frontend and backend; it is on by default, an update from 1.x adds it to
-    a saved setting, and the update says so. The description of the setting
+    frontend and backend, with a checkbox for each part (instead of a list of
+    their combinations); it is on by default, an update from 1.x adds it to
+    a saved setting, and the update says so. The parts are recognised by the
+    application a request runs in (before: by its client id + 1, which would
+    have made Joomla's installation and console applications look like other
+    parts). The description of the setting
     no longer claims that a block always applies to the whole site: blocks
     have only ever been enforced in the parts the plugin is active for
     (blocking through .htaccess aside)

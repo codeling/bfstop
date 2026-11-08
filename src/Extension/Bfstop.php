@@ -35,10 +35,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private const NotifyBlockedAnyAddress = 2;
 
 	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
-	// plugin is active for, each the application's client id + 1
+	// plugin is active for. Joomla's other applications - the installation
+	// (client id 2) and the console (cli/joomla.php, client 4) - have no
+	// logins and no bit
 	public const OriginFrontend = 1;
 	public const OriginBackend = 2;
 	public const OriginApi = 4;
+	private const OriginClients = array(
+		'site' => self::OriginFrontend,
+		'administrator' => self::OriginBackend,
+		'api' => self::OriginApi,
+	);
 
 	/**
 	 * What the settings are while they have not been saved: the same as the
@@ -453,11 +460,55 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 	}
 
+	/**
+	 * The "enabledForOrigin" setting as the bitmask it is stored as (see the
+	 * Origin* constants), also from the list of bits the settings form has
+	 * a checkbox for each (see com_bfstop's SettingsModel); other bits are
+	 * dropped.
+	 */
+	public static function originMask($value)
+	{
+		$mask = 0;
+		foreach (is_array($value) ? $value : array($value) as $bits)
+		{
+			$mask |= is_numeric($bits) ? (int) $bits : 0;
+		}
+		return $mask & array_sum(self::OriginClients);
+	}
+
+	/**
+	 * The bits set in an "enabledForOrigin" bitmask, as the settings form's
+	 * checkboxes take them (strings, in the order of the Origin* constants).
+	 */
+	public static function originList($mask)
+	{
+		$mask = self::originMask($mask);
+		$list = array();
+		foreach (self::OriginClients as $bit)
+		{
+			if ($mask & $bit)
+			{
+				$list[] = (string) $bit;
+			}
+		}
+		return $list;
+	}
+
 	private function isEnabledForCurrentOrigin()
 	{
-		$enabledFor = $this->getIntParam('enabledForOrigin', self::DefaultSettings['enabledForOrigin']);
-		// site 0, administrator 1, api 3: see the Origin* constants
-		return (($enabledFor & ($this->getApplication()->getClientId() + 1)) != 0);
+		$enabledFor = self::originMask($this->params->get('enabledForOrigin', self::DefaultSettings['enabledForOrigin']));
+		// by the application's name, not its client id: getClientId() + 1
+		// gave the bits only by luck (site 0, administrator 1, api 3), the
+		// installation (2) and the console (4, which hasn't even got the
+		// method) would come out as other parts' bits
+		foreach (self::OriginClients as $client => $bit)
+		{
+			if ($this->getApplication()->isClient($client))
+			{
+				return ($enabledFor & $bit) !== 0;
+			}
+		}
+		return false;
 	}
 
 	private function isApiRequest()

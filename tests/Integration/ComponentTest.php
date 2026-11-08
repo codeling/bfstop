@@ -299,20 +299,67 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testSettingsOnlyTakeTheValuesTheyOffer()
 	{
+		// a part to be active for has to be ticked
+		$valid = array('enabledForOrigin' => array('1', '4'));
 		$form = $this->settingsForm();
-		$this->assertTrue($form->validate(array('params' => array('blockMode' => 'htaccess', 'blockNumber' => '10',
+		$this->assertTrue($form->validate(array('params' => $valid + array('blockMode' => 'htaccess', 'blockNumber' => '10',
 			'delayDuration' => '20', 'emailaddress' => 'a@example.org; b@example.org'))));
-		foreach (array('blockMode' => 'everything', 'delayDuration' => '100000', 'blockNumber' => '-3',
-			'ipv6PrefixLength' => '0', 'unknownUsernameMode' => 'x', 'maxBlocksBefore' => '7') as $name => $value)
+		foreach (array(array('blockMode', 'everything'), array('delayDuration', '100000'), array('blockNumber', '-3'),
+			array('ipv6PrefixLength', '0'), array('unknownUsernameMode', 'x'), array('maxBlocksBefore', '7'),
+			array('enabledForOrigin', array('3')), array('enabledForOrigin', '')) as list($name, $value))
 		{
-			$this->assertFalse($this->settingsForm()->validate(array('params' => array($name => $value))), "$name=$value");
+			$this->assertFalse($this->settingsForm()->validate(array('params' => array($name => $value) + $valid)),
+				"$name=".json_encode($value));
+		}
+		$this->assertFalse($this->settingsForm()->validate(array('params' => array('blockNumber' => '10'))),
+			'no part ticked');
+	}
+
+	public function testActiveForIsStoredAsABitmask()
+	{
+		// the form has a checkbox per part, the plugin reads (and 1.x stored)
+		// their sum
+		$this->assertSame(array('enabledForOrigin' => array('1', '4')),
+			SettingsModel::paramsForForm(array('enabledForOrigin' => 5)));
+		$this->assertSame(array('enabledForOrigin' => array('2')),
+			SettingsModel::paramsForForm(array('enabledForOrigin' => '2')));
+		$this->assertSame(array('blockNumber' => 7, 'enabledForOrigin' => array('1', '2', '4')),
+			SettingsModel::paramsForForm(array('blockNumber' => 7)), 'never saved: the default');
+		$this->assertSame(array('enabledForOrigin' => 5),
+			SettingsModel::paramsForStorage(array('enabledForOrigin' => array('4', '1'))));
+		$this->assertSame(array('blockNumber' => 7), SettingsModel::paramsForStorage(array('blockNumber' => 7)));
+		// never active for nothing: without a part, the plugin's default applies
+		$this->assertSame(array(), SettingsModel::paramsForStorage(array('enabledForOrigin' => array())));
+		$this->assertSame(array(), SettingsModel::paramsForStorage(array('enabledForOrigin' => array('8'))));
+		// and the form ticks the parts of the stored bitmask
+		$form = $this->settingsForm();
+		$form->bind(array('params' => SettingsModel::paramsForForm(array('enabledForOrigin' => 5))));
+		$html = $form->getInput('enabledForOrigin', 'params');
+		$this->assertSame(3, preg_match_all('/<input type="checkbox"/', $html), $html);
+		$this->assertSame(array('1', '4'), preg_match_all('/<input type="checkbox"[^>]*value="(\d)"[^>]*checked/', $html, $m) ? $m[1] : array(), $html);
+
+		$original = $this->getPluginParams();
+		try
+		{
+			$this->setPluginParams(json_encode(array('enabledForOrigin' => 3)));
+			$model = $this->model(SettingsModel::class);
+			$model->getState();
+			$formData = (new \ReflectionMethod($model, 'loadFormData'))->invoke($model);
+			$this->assertSame(array('1', '2'), $formData->params['enabledForOrigin']);
+			$this->assertTrue($model->save(array('params' => array('enabledForOrigin' => array('2', '4')))),
+				implode(', ', $model->getErrors()));
+			$this->assertSame(6, json_decode($this->getPluginParams(), true)['enabledForOrigin']);
+		}
+		finally
+		{
+			$this->setPluginParams($original);
 		}
 	}
 
 	public function testEveryListAndIntegerSettingIsValidatedAgainstItsOptions()
 	{
 		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
-		$fields = $xml->xpath('//field[@type="list" or @type="integer"]');
+		$fields = $xml->xpath('//field[@type="list" or @type="integer" or @type="checkboxes"]');
 		$this->assertGreaterThan(30, count($fields));
 		foreach ($fields as $field)
 		{
@@ -529,6 +576,13 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$field = $xml->xpath('//field[@name="'.$name.'"]');
 			$this->assertCount(1, $field, $name);
+			if ($name === 'enabledForOrigin')
+			{
+				// checkboxes, stored as a bitmask
+				$this->assertSame($default, \Codeling\Plugin\System\Bfstop\Extension\Bfstop::originMask(
+					explode(',', (string) $field[0]['default'])), $name);
+				continue;
+			}
 			$this->assertSame((string) $default, (string) $field[0]['default'], $name);
 		}
 	}

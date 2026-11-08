@@ -387,6 +387,28 @@ class BlockedRequestTest extends IntegrationTestCase
 		}
 	}
 
+	public function testActiveForBitmask()
+	{
+		$this->assertSame(7, Bfstop::originMask(7));
+		$this->assertSame(5, Bfstop::originMask(array('1', '4')));
+		$this->assertSame(2, Bfstop::originMask('2'));
+		// bits of no part, and what isn't a number, are dropped
+		$this->assertSame(1, Bfstop::originMask(array('1', '8', 'x', null)));
+		$this->assertSame(0, Bfstop::originMask(''));
+		$this->assertSame(array('1', '2', '4'), Bfstop::originList(15));
+		$this->assertSame(array('2', '4'), Bfstop::originList('6'));
+		$this->assertSame(array(), Bfstop::originList(0));
+	}
+
+	public function testActiveForStoredAsAListIsUnderstood()
+	{
+		// what the plugin reads is a bitmask; a list of bits works as well
+		$this->configure(array('enabledForOrigin' => array('4')));
+		$this->block();
+		$this->assertNotBlocked();
+		$this->assertStringNotContainsString('NOT BLOCKED', $this->apiRequest());
+	}
+
 	public function testBlockedApiResponse()
 	{
 		$this->assertSame('{"errors":[{"title":"Blocked & gone","code":403}]}',
