@@ -87,6 +87,52 @@ class InstallerScriptTest extends IntegrationTestCase
 		$this->assertFalse($this->updateHintShown('2.0.0-rc1'), 'a test release of 2.0.0 had them where they are');
 	}
 
+	/**
+	 * Runs the update of the installed plugin from $fromVersion, whose stored
+	 * settings are $params; returns the settings afterwards
+	 */
+	private function update($fromVersion, array $params)
+	{
+		$this->setInstalledVersion($fromVersion);
+		$this->setPluginParams(json_encode($params));
+		list($script, $adapter) = $this->script();
+		$this->assertTrue($script->preflight('update', $adapter));
+		$script->update($adapter);
+		$script->postflight('update', $adapter);
+		return json_decode($this->getPluginParams(), true);
+	}
+
+	public function testUpdateFromBefore200ProtectsTheApi()
+	{
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$hint = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_API_HINT', ''));
+		$hintShown = function () use ($hint)
+		{
+			return in_array($hint, array_map('strip_tags', $this->messages()), true);
+		};
+		$original = $this->getPluginParams();
+		try
+		{
+			// the frontend/backend setting of 1.x knew nothing of the API
+			$params = $this->update('1.5.2', array('blockEnabled' => '1', 'enabledForOrigin' => '2'));
+			$this->assertSame(6, $params['enabledForOrigin'], 'backend only became backend and API');
+			$this->assertSame('full', $params['blockMode']);
+			$this->assertTrue($hintShown());
+			// never saved: its default protects the API anyway
+			$params = $this->update('1.5.2', array('blockEnabled' => '1'));
+			$this->assertArrayNotHasKey('enabledForOrigin', $params);
+			$this->assertTrue($hintShown());
+			// a later update leaves the choice alone
+			$params = $this->update('2.0.0', array('blockMode' => 'full', 'enabledForOrigin' => 3));
+			$this->assertSame(3, $params['enabledForOrigin']);
+			$this->assertFalse($hintShown());
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
+
 	public function testRefusesToReplaceANewerVersion()
 	{
 		$this->setInstalledVersion('99.0.0');

@@ -107,6 +107,8 @@ class UpgradeTest extends IntegrationTestCase
 		$settingsMoved = version_compare(getenv('UPGRADE_FROM'), '2.0.0-dev', '<') ? 1 : 0;
 		$this->assertSame($settingsMoved, substr_count($log, 'major configuration changes'),
 			'the "configuration has moved" hint, only when updating from before 2.0.0');
+		$this->assertSame($settingsMoved, substr_count($log, 'now also protects logins through'),
+			'the hint that the API is protected now, only when updating from before 2.0.0');
 		$this->assertSame(0, substr_count($log, 'protects your site with its default settings'),
 			'the hint of a new installation');
 	}
@@ -117,6 +119,8 @@ class UpgradeTest extends IntegrationTestCase
 		$this->assertSame('full', $params['blockMode'] ?? null, 'blockEnabled/useHtaccess became blockMode');
 		$this->assertSame('15', (string) $params['blockNumber']);
 		$this->assertSame('90', (string) $params['delayDuration']);
+		$this->assertSame(version_compare(getenv('UPGRADE_FROM'), '2.0.0-dev', '<') ? 7 : 3,
+			(int) $params['enabledForOrigin'], 'frontend and backend became frontend, backend and API (the seed is in 1.x form)');
 	}
 
 	public function testTablesAreConverted()

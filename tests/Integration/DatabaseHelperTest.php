@@ -309,6 +309,14 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertNull($this->helper->getCachedHostname('203.0.113.5'), 'cached "no PTR record"');
 	}
 
+	public function testClientNames()
+	{
+		// the origin of a failed login: the client id of the application
+		$this->assertSame('Frontend', $this->helper->getClientString(0));
+		$this->assertSame('Backend', $this->helper->getClientString(1));
+		$this->assertSame('API', $this->helper->getClientString(3));
+	}
+
 	public function testPurgeOldEntries()
 	{
 		$this->failedLogin('203.0.113.5', 'old', 8 * 24 * 60);

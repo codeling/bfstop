@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Joomla\CMS\Factory;
 
 /**
@@ -76,15 +77,20 @@ class FailedLoginTest extends IntegrationTestCase
 		)));
 	}
 
-	private function command($username, $ip = self::Ip)
+	/**
+	 * @param string[] $options further options of fixtures/failed_login.php
+	 *                          (--api, --server=...)
+	 */
+	private function command($username, $ip = self::Ip, array $options = array())
 	{
 		return escapeshellarg(PHP_BINARY).' '.escapeshellarg(__DIR__.'/fixtures/failed_login.php').' '.
-			escapeshellarg($ip).' '.escapeshellarg($username);
+			escapeshellarg($ip).' '.escapeshellarg($username).
+			implode('', array_map(function ($option) { return ' '.escapeshellarg($option); }, $options));
 	}
 
-	private function failedLogin($username, $ip = self::Ip)
+	private function failedLogin($username, $ip = self::Ip, array $options = array())
 	{
-		exec($this->command($username, $ip).' 2>&1', $output, $exitCode);
+		exec($this->command($username, $ip, $options).' 2>&1', $output, $exitCode);
 		$output = implode("\n", $output);
 		$this->assertSame(0, $exitCode, $output);
 		$this->assertStringContainsString('DONE', $output);
@@ -122,6 +128,53 @@ class FailedLoginTest extends IntegrationTestCase
 			proc_terminate($process);
 			proc_close($process);
 		}
+	}
+
+	/**
+	 * A failed login to the Web Services API: Joomla reports it with an empty
+	 * username whatever the request carried. $headers as in $_SERVER
+	 */
+	private function failedApiLogin(array $headers = array(), $ip = self::Ip)
+	{
+		$options = array('--api');
+		foreach ($headers as $name => $value)
+		{
+			$options[] = '--server='.$name.'='.$value;
+		}
+		$this->failedLogin('', $ip, $options);
+	}
+
+	public function testApiLoginsWithoutCredentialsAreNotCounted()
+	{
+		// Joomla tries to log in every request to an endpoint which isn't
+		// public, also those which carry no credentials at all
+		$this->configure(array('blockNumber' => 2));
+		$this->failedApiLogin();
+		$this->failedApiLogin();
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		$this->assertFalse((new DatabaseHelper($this->logger))->isIPBlocked(self::Ip));
+	}
+
+	public function testApiLoginsWithCredentialsAreCountedAndBlocked()
+	{
+		$this->configure(array('blockNumber' => 3, 'unknownUsernameMode' => 'plain'));
+		$this->failedApiLogin(array('PHP_AUTH_USER' => 'bob', 'PHP_AUTH_PW' => 'guess'));
+		$this->failedApiLogin(array('HTTP_AUTHORIZATION' => 'Basic '.base64_encode('carol:guess')));
+		$this->failedApiLogin(array('HTTP_AUTHORIZATION' => 'Bearer c2hhMjU2OjQyOmFiYw=='));
+		// HTTP Basic gives the username; a token names its user by id only
+		$this->assertSame(array('bob', 'carol', ''), $this->storedUsernames());
+		$this->assertSame(array('3', '3', '3'), array_map('strval',
+			$this->db->setQuery('SELECT origin FROM #__bfstop_failedlogin ORDER BY id')->loadColumn()));
+		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked(self::Ip));
+	}
+
+	public function testApiLoginsAreOnlyCountedIfSwitchedOn()
+	{
+		$this->configure(array('enabledForOrigin' => Bfstop::OriginFrontend | Bfstop::OriginBackend));
+		$this->failedApiLogin(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw=='));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		$this->failedLogin('bob');
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
 	}
 
 	public function testBlockedAddressIsNotDelayed()

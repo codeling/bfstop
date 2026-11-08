@@ -27,6 +27,9 @@ $params = array(
 	'delayDuration' => '90',
 	'deleteOld' => '0',
 	'logLevel' => '8',
+	// frontend and backend, 1.x's default: 2.0.0 adds the Web Services API
+	// to it (and the frontend has to stay, the tests make site requests)
+	'enabledForOrigin' => '3',
 );
 $db->setQuery('UPDATE #__extensions SET enabled=1, params='.$db->quote(json_encode($params)).
 	" WHERE type='plugin' AND folder='system' AND element='bfstop'");

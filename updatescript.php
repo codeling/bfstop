@@ -24,6 +24,22 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	// the version this update replaces, null for an installation
 	private $previousVersion = null;
 
+	// the bit of the "enabledForOrigin" setting for the Web Services API
+	// (Bfstop::OriginApi - the class of the version being replaced may be the
+	// one loaded while this runs)
+	private const OriginApi = 4;
+
+	/**
+	 * Whether this update replaces a version before 2.0.0, which kept its
+	 * settings in the Plugin Manager and didn't know the API. Not for a test
+	 * release of 2.0.0 (2.0.0-dev sorts before 2.0.0-alpha1, -beta1 and -rc1).
+	 */
+	private function updatesFromBefore200($type)
+	{
+		return $type === 'update' && $this->previousVersion !== null &&
+			version_compare($this->previousVersion, '2.0.0-dev', '<');
+	}
+
 	public function __construct(InstallerAdapter $adapter) {}
 
 	public function install(InstallerAdapter $adapter)
@@ -104,15 +120,19 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	public function postflight($type, $adapter)
 	{
 		// only for the update from a version before the settings moved, not
-		// for every later update - nor from a test release of 2.0.0 (2.0.0-dev
-		// sorts before 2.0.0-alpha1, -beta1 and -rc1)
-		if ($type === 'update' && $this->previousVersion !== null &&
-			version_compare($this->previousVersion, '2.0.0-dev', '<'))
+		// for every later update
+		if ($this->updatesFromBefore200($type))
 		{
 			$lang = Factory::getApplication()->getLanguage();
 			$lang->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+			$settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
 			Factory::getApplication()->enqueueMessage(
-				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_HINT', Route::_('index.php?option=com_bfstop&view=settings', false)),
+				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_HINT', $settingsUrl),
+				'warning'
+			);
+			// update() switched the protection of the API on, see there
+			Factory::getApplication()->enqueueMessage(
+				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_API_HINT', $settingsUrl),
 				'warning'
 			);
 		}
@@ -138,6 +158,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			$db->setQuery($query);
 			$params = json_decode((string) $db->loadResult(), true);
 
+			$changed = false;
 			if (is_array($params) && !array_key_exists('blockMode', $params))
 			{
 				$newMode = 'full';
@@ -150,7 +171,21 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 					$newMode = 'htaccess';
 				}
 				$params['blockMode'] = $newMode;
-
+				$changed = true;
+			}
+			// 2.0.0 also protects logins through the Web Services API, which
+			// the frontend/backend setting of earlier versions didn't cover:
+			// switched on for every site, as it is for a new installation (a
+			// setting that was never saved gets the new default anyway).
+			// postflight() tells the administrator
+			if (is_array($params) && $this->updatesFromBefore200('update') &&
+				array_key_exists('enabledForOrigin', $params))
+			{
+				$params['enabledForOrigin'] = ((int) $params['enabledForOrigin']) | self::OriginApi;
+				$changed = true;
+			}
+			if ($changed)
+			{
 				$query = $db->getQuery(true)
 					->update($db->quoteName('#__extensions'))
 					->set($db->quoteName('params') . ' = ' . $db->quote(json_encode($params)))
