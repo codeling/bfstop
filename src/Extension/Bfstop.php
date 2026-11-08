@@ -125,32 +125,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return is_string($value) ? $value : "\0";
 	}
 
-	private static function endsWith($haystack, $needle)
-	{
-		$length = strlen($needle);
-		if ($length == 0)
-		{
-			return true;
-		}
-		return (substr($haystack, -$length) === $needle);
-	}
-
 	private function getUnblockLink($id, $username)
 	{
 		$token = $this->mydb->getNewUnblockToken($id,
 			TokenHelper::getToken($this->logger), $username);
-		$link = 'index.php?option=com_bfstop'.
-			'&view=tokenunblock'.
-			'&token='.$token;
-		$linkBase = Uri::base();
-		// strip off an eventual administrator - tokenunblock is a site view
-		$adminDir = 'administrator/';
-		if (self::endsWith($linkBase, $adminDir))
-		{
-			$linkBase = substr($linkBase, 0,
-				strlen($linkBase) - strlen($adminDir));
-		}
-		return $linkBase.$link;
+		return self::unblockLink($token);
+	}
+
+	/**
+	 * The link to the unblock page, which is a page of the site: Uri::root()
+	 * is the site's address in every application (Uri::base() is the
+	 * backend's in the backend, and the API's in the API). Like any address
+	 * Joomla builds, it has the host the request was sent to unless the
+	 * site's $live_site is set.
+	 */
+	public static function unblockLink($token)
+	{
+		return Uri::root().'index.php?option=com_bfstop&view=tokenunblock&token='.rawurlencode((string) $token);
 	}
 
 	private function getPasswordResetLink()
