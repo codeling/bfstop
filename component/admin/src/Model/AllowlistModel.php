@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\ListModel;
@@ -32,11 +33,8 @@ class AllowlistModel extends ListModel
 		$query = $db->getQuery(true);
 		$query->select('a.id, a.ipaddress, a.notes');
 		$query->from('#__bfstop_allowlist a');
-		$ordering  = $this->getState('list.ordering', 'a.id');
-		$ordering  = (strcmp($ordering, '') == 0) ? 'a.id' : $ordering;
-		$direction = $this->getState('list.direction', 'ASC');
-		$direction = (strcmp($direction, '') == 0) ? 'ASC' : $direction;
-		$query->order($db->escape($ordering).' '.$db->escape($direction));
+		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
+			$this->filter_fields, 'a.id', 'ASC'));
 		return $query;
 	}
 
