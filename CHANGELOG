@@ -279,6 +279,10 @@
     not by its address, so switching addresses no longer means a new lookup
     with every failed login, and the failed login is recorded before the
     lookup. Without /etc/resolv.conf (e.g. on Windows) the signal is skipped
+  - Security (component): clearing and pruning the log need the core.admin
+    permission, as viewing it does (before: core.delete only, so a user who
+    may only delete entries of the lists could erase the log without being
+    able to read it); core.delete is still needed as well
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

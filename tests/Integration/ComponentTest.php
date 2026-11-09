@@ -750,4 +750,58 @@ class ComponentTest extends IntegrationTestCase
 			$this->setPluginParams($original);
 		}
 	}
+
+	/**
+	 * A user who has exactly the given permissions in com_bfstop.
+	 */
+	private static function userWith(array $actions)
+	{
+		return new class ($actions) extends \Joomla\CMS\User\User
+		{
+			private $actions;
+
+			public function __construct(array $actions)
+			{
+				parent::__construct();
+				$this->actions = $actions;
+			}
+
+			public function authorise($action, $assetname = null)
+			{
+				return $assetname === 'com_bfstop' && in_array($action, $this->actions, true);
+			}
+		};
+	}
+
+	public function testOnlyWhoMayReadTheLogMayClearIt()
+	{
+		// the log view needs core.admin: who may only delete entries of the
+		// lists must not be able to erase the log
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
+		$logFile = \Codeling\Plugin\System\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
+		$clear = function (array $actions) use ($app, $input, $logFile)
+		{
+			file_put_contents($logFile, "#<?php die('Forbidden.'); ?>\n2026-01-01T00:00:00+00:00 INFO an entry\n");
+			$app->loadIdentity(self::userWith($actions));
+			$controller = new \Codeling\Component\Bfstop\Administrator\Controller\LogController(
+				array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'), new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input);
+			$controller->clear();
+			clearstatcache();
+			return !(is_file($logFile) && str_contains((string) file_get_contents($logFile), 'an entry'));
+		};
+		try
+		{
+			$this->assertFalse($clear(array('core.manage', 'core.delete')), 'core.delete alone');
+			$this->assertFalse($clear(array('core.manage', 'core.admin')), 'core.admin alone');
+			$this->assertTrue($clear(array('core.manage', 'core.admin', 'core.delete')));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+			@unlink($logFile);
+		}
+	}
 }
