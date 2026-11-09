@@ -194,11 +194,11 @@
 				<option value="hash">COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_HASH</option>
 				<option value="plain">COM_BFSTOP_SETTINGS_UNKNOWN_USERNAME_MODE_PLAIN</option>
 			</field>
-			<field name="ipv6PrefixLength" type="list" validate="options" default="64"
+			<field name="ipv6PrefixLength" type="list" validate="options" default="56"
 				label="COM_BFSTOP_SETTINGS_IPV6_PREFIX_LABEL"
 				description="COM_BFSTOP_SETTINGS_IPV6_PREFIX_DESC">
-				<option value="64">COM_BFSTOP_SETTINGS_IPV6_PREFIX_64</option>
-				<option value="56">/56</option>
+				<option value="64">/64</option>
+				<option value="56">COM_BFSTOP_SETTINGS_IPV6_PREFIX_56</option>
 				<option value="48">/48</option>
 				<option value="128">COM_BFSTOP_SETTINGS_IPV6_PREFIX_128</option>
 			</field>
@@ -240,6 +240,10 @@
 				first="100" last="2000" step="100"
 				label="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MAX_LABEL"
 				description="PLG_SYSTEM_BFSTOP_ADAPTIVE_DELAY_THRSH_MAX_DESC" />
+			<field name="delayMaxConcurrent" type="integer" validate="options" default="5"
+				first="1" last="50" step="1"
+				label="COM_BFSTOP_SETTINGS_DELAY_MAX_CONCURRENT_LABEL"
+				description="COM_BFSTOP_SETTINGS_DELAY_MAX_CONCURRENT_DESC" />
 		</fieldset>
 		<fieldset name="account" label="COM_BFSTOP_SETTINGS_ACCOUNT_FIELDSET_LABEL">
 			<field name="accountThrottleEnabled" type="list" validate="options" default="1"
@@ -326,7 +330,7 @@
 				label="COM_BFSTOP_SETTINGS_RISK_USERAGENT_POINTS_LABEL"
 				description="COM_BFSTOP_SETTINGS_RISK_USERAGENT_POINTS_DESC" />
 			<field name="riskDelaySecondsPerPoint" type="integer" validate="options"
-				default="2" first="0" last="30" step="1"
+				default="0" first="0" last="30" step="1"
 				label="COM_BFSTOP_SETTINGS_RISK_DELAY_PER_POINT_LABEL"
 				description="COM_BFSTOP_SETTINGS_RISK_DELAY_PER_POINT_DESC" />
 			<field name="riskBlockNumberReductionPerPoint" type="integer" validate="options"
