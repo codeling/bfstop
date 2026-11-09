@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Model\ListModel;
 
@@ -39,11 +40,8 @@ class FailedloginlistModel extends ListModel
 			$query->where('l.username = :username')
 				->bind(':username', $username);
 		}
-		$ordering  = $this->getState('list.ordering', 'l.id');
-		$ordering  = (strcmp($ordering, '') == 0) ? 'l.id' : $ordering;
-		$direction = $this->getState('list.direction', 'ASC');
-		$direction = (strcmp($direction, '') == 0) ? 'ASC' : $direction;
-		$query->order($db->escape($ordering).' '.$db->escape($direction));
+		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
+			$this->filter_fields, 'l.id', 'ASC'));
 		return $query;
 	}
 

@@ -17,6 +17,16 @@ use Joomla\CMS\Language\Text;
 class IpValidateHelper
 {
 	/**
+	 * The shortest prefix length a network of the block and allow list may
+	 * have: an allow list entry for a whole address family (0.0.0.0/0, ::/0)
+	 * or a large share of it switches the protection off, a block of it
+	 * shuts everybody out - which the check whether a block would include
+	 * the current address misses if that is of the other family.
+	 */
+	public const MinPrefixIPv4 = 8;
+	public const MinPrefixIPv6 = 16;
+
+	/**
 	 * Joomla shows the messages it is given as HTML, so what was typed into
 	 * a form must not be put into one as it is.
 	 */
@@ -41,6 +51,13 @@ class IpValidateHelper
 			if (preg_match('/^[0-9]{1,3}\z/', $subnet) !== 1 || (int) $subnet > $maxBits)
 			{
 				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', self::e($subnet)), 'warning');
+				return false;
+			}
+			$minBits = IpRangeHelper::isIPv6($ip) ? self::MinPrefixIPv6 : self::MinPrefixIPv4;
+			if ((int) $subnet < $minBits)
+			{
+				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE',
+					self::e($address), self::MinPrefixIPv4, self::MinPrefixIPv6), 'warning');
 				return false;
 			}
 		}

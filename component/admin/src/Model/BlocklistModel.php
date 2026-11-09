@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\ListModel;
@@ -36,11 +37,8 @@ class BlocklistModel extends ListModel
 		$query = $db->getQuery(true);
 		$query->select('b.id, b.ipaddress, b.crdate, b.duration, b.attempts, b.last_attempt, u.crdate as unblocked');
 		$query->from('#__bfstop_bannedip b left join #__bfstop_unblock u on b.id=u.block_id');
-		$ordering  = $this->getState('list.ordering', 'b.id');
-		$ordering  = (strcmp($ordering, '') == 0) ? 'b.id' : $ordering;
-		$direction = $this->getState('list.direction', 'ASC');
-		$direction = (strcmp($direction, '') == 0) ? 'ASC' : $direction;
-		$query->order($db->escape($ordering).' '.$db->escape($direction));
+		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
+			$this->filter_fields, 'b.id', 'ASC'));
 		return $query;
 	}
 

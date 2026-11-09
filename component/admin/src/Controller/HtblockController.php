@@ -14,6 +14,7 @@ use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -79,6 +80,12 @@ class HtblockController extends FormController
 		{
 			$logger->log("IP address '$ipaddress' is on allow list! Will not block it via .htaccess", Log::INFO);
 			$this->returnToFormWithMessage($ipaddress, Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'));
+			return false;
+		}
+		if (IpHelper::overlapsTrustedProxy($ipaddress, IpHelper::trustedProxies()))
+		{
+			// the web server would turn away everybody coming through it
+			$this->returnToFormWithMessage($ipaddress, Text::_('COM_BFSTOP_IPADDRESS_TRUSTED_PROXY'));
 			return false;
 		}
 		$result = $htaccess->denyIP($ipaddress);

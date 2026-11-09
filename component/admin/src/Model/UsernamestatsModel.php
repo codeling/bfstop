@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Joomla\CMS\MVC\Model\ListModel;
 
 /**
@@ -37,11 +38,8 @@ class UsernamestatsModel extends ListModel
 		$query->select('s.username, s.attempts, s.first_attempt, s.last_attempt, u.id AS user_id');
 		$query->from('#__bfstop_username_stats s');
 		$query->join('LEFT', '#__users u ON u.username = s.username');
-		$ordering  = $this->getState('list.ordering', 's.attempts');
-		$ordering  = (strcmp($ordering, '') == 0) ? 's.attempts' : $ordering;
-		$direction = $this->getState('list.direction', 'DESC');
-		$direction = (strcmp($direction, '') == 0) ? 'DESC' : $direction;
-		$query->order($db->escape($ordering).' '.$db->escape($direction));
+		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
+			$this->filter_fields, 's.attempts', 'DESC'));
 		return $query;
 	}
 

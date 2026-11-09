@@ -22,13 +22,18 @@ use Joomla\CMS\Router\Route;
 class LogController extends BaseController
 {
 	/**
-	 * Checks the token and the permission to delete; sets the redirect and
-	 * returns false if the request has to be refused.
+	 * Checks the token and the permissions; sets the redirect and returns
+	 * false if the request has to be refused. The log is only shown to whom
+	 * may change the settings (core.admin, see the log view), and who may
+	 * not read it must not be able to erase it either - what it records of
+	 * failed logins and blocks would be gone without a trace. Deleting
+	 * needs core.delete as well, as for the lists.
 	 */
 	private function checkRequest($listUrl)
 	{
 		$this->checkToken();
-		if (!Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop'))
+		$user = Factory::getApplication()->getIdentity();
+		if (!$user || !$user->authorise('core.admin', 'com_bfstop') || !$user->authorise('core.delete', 'com_bfstop'))
 		{
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return false;

@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
 use Joomla\CMS\Table\Extension;
 
@@ -90,6 +91,24 @@ class SettingsModel extends AdminModel
 			}
 		}
 		return $params;
+	}
+
+	/**
+	 * Unblock links for any IP address (Bfstop::NotifyBlockedAnyAddress) are
+	 * only safe with the site's $live_site, see
+	 * Bfstop::effectiveNotifyBlockedUser(): without it, the settings page
+	 * doesn't take that value.
+	 */
+	public function validate($form, $data, $group = null)
+	{
+		$valid = parent::validate($form, $data, $group);
+		if (is_array($valid) && !Bfstop::hasLiveSite() &&
+			(int) ($valid['params']['notifyBlockedUser'] ?? 0) === Bfstop::NotifyBlockedAnyAddress)
+		{
+			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
+			return false;
+		}
+		return $valid;
 	}
 
 	public function save($data)
