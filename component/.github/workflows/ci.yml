@@ -115,6 +115,7 @@ jobs:
             echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla"
             echo "COM_BFSTOP_ROOT=$GITHUB_WORKSPACE"
             echo "PLUGIN_ROOT=$RUNNER_TEMP/bfstop"
+            echo "DOWNLOAD_CACHE=$HOME/.cache/bfstop-ci"
           } >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,6 +138,14 @@ jobs:
         env:
           DB_IMAGE: ${{ matrix.db }}
         run: '"$PLUGIN_ROOT"/tests/ci/start-database.sh'
+
+      # the Joomla package is kept between runs instead of being fetched from
+      # GitHub for every job. A cached package has to pass the same SHA-256
+      # check as a downloaded one (tests/ci/fetch-verified.sh in the plugin)
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bfstop-ci
+          key: downloads-joomla-${{ matrix.joomla }}
 
       - name: Install Joomla, bfstop and com_bfstop
         run: '"$PLUGIN_ROOT"/tests/ci/install-joomla.sh'
