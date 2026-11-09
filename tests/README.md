@@ -94,7 +94,10 @@ downloads Joomla, installs it, then builds the package from the plugin and
 component checkouts with `package/build.sh` and installs it - or the package
 zip given in `BFSTOP_PACKAGE`). The download is only unpacked if its SHA-256 is the one in
 `tests/ci/joomla-checksums.sha256`; for a version that isn't listed, add it
-there (the file says how to check it) or pass the hash as `JOOMLA_SHA256`. **Everything in that database will be overwritten.** For example,
+there (the file says how to check it) or pass the hash as `JOOMLA_SHA256`. To
+keep the downloaded packages for the next run, point `DOWNLOAD_CACHE` at a
+directory (CI does so); a package found there is used again only if its SHA-256
+still matches. **Everything in that database will be overwritten.** For example,
 with PostgreSQL:
 
     export JOOMLA_VERSION=5.4.8 JOOMLA_ROOT=/tmp/bfstop-joomla \

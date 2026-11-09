@@ -19,6 +19,8 @@
 #   DB_HOST, DB_USER, DB_PASS, DB_NAME   database connection (database must exist)
 #   COM_BFSTOP_ROOT  optional: checkout of https://github.com/codeling/com_bfstop
 #   BFSTOP_PACKAGE   optional: package zip to install instead of building one
+#   DOWNLOAD_CACHE   optional: directory to keep the Joomla package in between
+#                    runs, see download-joomla.sh
 set -euo pipefail
 
 : "${JOOMLA_ROOT:?}" "${DB_TYPE:?}" "${DB_HOST:?}" "${DB_USER:?}" "${DB_NAME:?}"
