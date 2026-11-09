@@ -184,6 +184,36 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
 	}
 
+	public function testTrustedProxyIsNotBlockedThroughHtaccess()
+	{
+		// a failed login through a trusted proxy without the header naming
+		// the client is counted against the proxy (not counting it would let
+		// such requests fail logins without limit) - but in .htaccess, the
+		// proxy's address would turn away every visitor coming through it
+		$dir = sys_get_temp_dir().'/bfstop-proxy-htaccess-'.getmypid();
+		mkdir($dir);
+		try
+		{
+			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir,
+				'useProxy' => 1, 'proxyIpAddress' => self::Ip));
+			$this->failedLogin('Admin');
+			$this->failedLogin('Admin');
+			$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'), 'blocked in the database');
+			$this->assertStringNotContainsString(self::Ip, (string) @file_get_contents($dir.'/.htaccess'));
+
+			// a client the proxy names in the header is blocked through .htaccess
+			$header = array('--server=HTTP_X_FORWARDED_FOR=203.0.113.99');
+			$this->failedLogin('Admin', self::Ip, $header);
+			$this->failedLogin('Admin', self::Ip, $header);
+			$this->assertStringContainsString('Require not ip 203.0.113.99', (string) file_get_contents($dir.'/.htaccess'));
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
 	public function testBlockedAddressIsNotDelayed()
 	{
 		$this->configure(array('delayDuration' => 5, 'blockNumber' => 1));

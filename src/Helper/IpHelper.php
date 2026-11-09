@@ -195,6 +195,76 @@ class IpHelper
 	}
 
 	/**
+	 * The trusted proxies of the plugin's settings, if proxy support is on
+	 * (see getAddress()); empty otherwise.
+	 *
+	 * @return string[]
+	 */
+	public static function trustedProxies()
+	{
+		$plugin = PluginHelper::getPlugin('system', 'bfstop');
+		if (!$plugin)
+		{
+			return array();
+		}
+		$params = new Registry($plugin->params);
+		return (bool) $params->get('useProxy', false)
+			? self::parseTrustedProxies((string) $params->get('proxyIpAddress', ''))
+			: array();
+	}
+
+	/**
+	 * An address or network as its binary network address and prefix length,
+	 * null if it is neither.
+	 */
+	private static function network($value)
+	{
+		$canonical = self::canonicalEntry($value);
+		if ($canonical === null)
+		{
+			return null;
+		}
+		$parts = explode('/', $canonical);
+		$bin = inet_pton($parts[0]);
+		return array($bin, count($parts) === 2 ? (int) $parts[1] : strlen($bin) * 8);
+	}
+
+	/**
+	 * Whether the address or network $entry contains one of the
+	 * $trustedProxies (addresses or networks) or part of one of them.
+	 *
+	 * With proxy support on, a failed login whose forwarding header can't be
+	 * read is counted against the address the request came from: a trusted
+	 * proxy (see getAddress()). Not counting it would let whoever can send
+	 * such a request fail logins without limit; blocking the proxy only
+	 * holds back the requests which resolve to its address - except in the
+	 * .htaccess file, where the web server knows nothing of the header and
+	 * would turn away every request coming through the proxy.
+	 */
+	public static function overlapsTrustedProxy($entry, array $trustedProxies)
+	{
+		$network = self::network($entry);
+		if ($network === null)
+		{
+			return false;
+		}
+		foreach ($trustedProxies as $proxy)
+		{
+			$proxyNetwork = self::network($proxy);
+			if ($proxyNetwork === null || strlen($proxyNetwork[0]) !== strlen($network[0]))
+			{
+				continue;
+			}
+			$mask = self::prefixMask(min($network[1], $proxyNetwork[1]), strlen($network[0]));
+			if (($network[0] & $mask) === ($proxyNetwork[0] & $mask))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Whether $ip is one of the $trustedProxies (see parseTrustedProxies()).
 	 * Addresses are compared in binary form, so different spellings of the
 	 * same IPv6 address match.

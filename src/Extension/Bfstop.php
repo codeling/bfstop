@@ -212,6 +212,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// the file only holds what is still blocked
 			$this->removeLiftedHtaccessBlocks();
 		}
+		if ($usehtaccess && IpHelper::overlapsTrustedProxy($logEntry->ipaddress, IpHelper::trustedProxies()))
+		{
+			// the failed logins came through a trusted proxy without a
+			// forwarding header which tells the client (see getAddress()):
+			// in the .htaccess file, this would turn away everybody coming
+			// through the proxy, so it is only blocked in the database
+			$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it is (or contains) a '.
+				'trusted proxy - check that the proxy sends the configured header', Log::ERROR);
+			$usehtaccess = false;
+		}
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&

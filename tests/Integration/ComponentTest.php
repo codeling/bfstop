@@ -651,6 +651,34 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame('API', $view->getOriginName(3));
 	}
 
+	public function testListOrderingIsAnIdentifierFromTheFilterFields()
+	{
+		$clause = fn ($column, $direction) => \Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper::clause(
+			$this->db, $column, $direction, array('a.id', 'a.ipaddress'), 'a.id', 'ASC');
+		$this->assertSame($this->db->quoteName('a.ipaddress').' DESC', $clause('a.ipaddress', 'desc'));
+		$this->assertSame($this->db->quoteName('a.id').' ASC', $clause('a.notes', 'DESC; DROP TABLE x'));
+		$this->assertSame($this->db->quoteName('a.id').' ASC', $clause('(SELECT 1)', null));
+		$this->assertSame($this->db->quoteName('a.id').' DESC', $clause(null, 'DESC'));
+		// every list can still be sorted by every column it offers
+		foreach (array(AllowlistModel::class, BlocklistModel::class, FailedloginlistModel::class, UsernamestatsModel::class) as $class)
+		{
+			$model = $this->model($class);
+			$model->getState(); // populate the state now, so it doesn't overwrite what is set here
+			foreach ((new \ReflectionProperty($class, 'filter_fields'))->getValue($model) as $column)
+			{
+				foreach (array('ASC', 'DESC') as $direction)
+				{
+					$model->setState('list.ordering', $column);
+					$model->setState('list.direction', $direction);
+					$query = (new \ReflectionMethod($model, 'getListQuery'))->invoke($model);
+					$this->db->setQuery($query);
+					$this->assertIsArray($this->db->loadObjectList(), "$class $column $direction");
+					$this->assertStringContainsString($this->db->quoteName($column).' '.$direction, (string) $query);
+				}
+			}
+		}
+	}
+
 	public function testListsAreSortableByTheirColumnHeaders()
 	{
 		// a column a header sorts by which isn't among the model's filter

@@ -291,6 +291,18 @@
     /16 (IPv6): an allow list entry like 0.0.0.0/0 switched the protection
     off, and a block of ::/0 entered from an IPv4 address shut out every
     IPv6 visitor without the warning a block of one's own address gets
+  - Security: with proxy support on, a trusted proxy is no longer written to
+    the .htaccess file. Failed logins through it whose forwarding header
+    doesn't name the client are still counted against its address (not
+    counting them would let such requests fail logins without limit), and
+    blocked in the database - which only holds back requests resolving to
+    that address -, but the web server would turn away everybody coming
+    through the proxy. The component's .htaccess block form refuses it as
+    well. The help of the proxy setting warns against trusting a whole
+    address range of a CDN or hosting provider
+  - Component: the lists build their ORDER BY from the filter fields only,
+    with the column quoted as an identifier (before: escape(), which is for
+    string literals, relying on Joomla's check of the request)
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

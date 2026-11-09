@@ -275,4 +275,20 @@ class IpHelperTest extends TestCase
 			}
 		}
 	}
+
+	public function testOverlapsTrustedProxy()
+	{
+		$proxies = array('192.0.2.10', '198.51.100.0/24', '2001:db8:aa::/48', 'nonsense');
+		foreach (array('192.0.2.10', '192.0.2.0/24', '0.0.0.0/0', '198.51.100.77', '198.51.100.0/25',
+			'198.51.0.0/16', '2001:db8:aa:1::/64', '2001:db8:aa:1::5', '2001:db8::/32', '2001:DB8:AA::1') as $entry)
+		{
+			$this->assertTrue(IpHelper::overlapsTrustedProxy($entry, $proxies), $entry);
+		}
+		foreach (array('192.0.2.11', '192.0.2.12/31', '198.51.101.0/24', '203.0.113.5', '2001:db8:ab::/48',
+			'::ffff:192.0.2.10', 'nonsense', '') as $entry)
+		{
+			$this->assertFalse(IpHelper::overlapsTrustedProxy($entry, $proxies), $entry);
+		}
+		$this->assertFalse(IpHelper::overlapsTrustedProxy('192.0.2.10', array()));
+	}
 }
