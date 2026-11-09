@@ -670,4 +670,84 @@ class ComponentTest extends IntegrationTestCase
 			}
 		}
 	}
+
+	/**
+	 * Runs $test with the given $live_site of the site, and puts it back.
+	 */
+	private function withLiveSite($liveSite, callable $test)
+	{
+		$app = Factory::getApplication();
+		$original = $app->get('live_site', '');
+		$app->set('live_site', $liveSite);
+		try
+		{
+			return $test();
+		}
+		finally
+		{
+			$app->set('live_site', $original);
+		}
+	}
+
+	public function testUnblockLinksForAnyAddressNeedTheLiveSite()
+	{
+		// without $live_site, the link would have the host the attacker's
+		// request named, see Bfstop::effectiveNotifyBlockedUser()
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		$data = array('params' => array('enabledForOrigin' => array('1'), 'notifyBlockedUser' => '2'));
+		$validate = function () use (&$data)
+		{
+			$model = $this->model(SettingsModel::class);
+			return array($model->validate($this->settingsForm(), $data), $model->getErrors());
+		};
+		list($valid, $errors) = $this->withLiveSite('', $validate);
+		$this->assertFalse($valid);
+		$this->assertStringContainsString('$live_site', implode(' ', $errors));
+		list($valid) = $this->withLiveSite('https://www.example.org', $validate);
+		$this->assertIsArray($valid);
+		$this->assertSame('2', $valid['params']['notifyBlockedUser']);
+		foreach (array('0', '1') as $mode)
+		{
+			$data['params']['notifyBlockedUser'] = $mode;
+			list($valid) = $this->withLiveSite('', $validate);
+			$this->assertIsArray($valid, "mode $mode");
+		}
+	}
+
+	public function testSettingsPageProposesTheLiveSite()
+	{
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		$note = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::liveSiteNote();
+		$root = rtrim(\Joomla\CMS\Uri\Uri::root(), '/');
+		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);
+	}
+
+	public function testWarnsIfUnblockLinksForAnyAddressLackTheLiveSite()
+	{
+		$original = $this->getPluginParams();
+		$app = Factory::getApplication();
+		$warnings = function ($mode, $liveSite) use ($app)
+		{
+			$this->setPluginParams(json_encode(array('notifyBlockedUser' => $mode)));
+			return $this->withLiveSite($liveSite, function () use ($app)
+			{
+				$app->getMessageQueue(true);
+				$controller = new DisplayController(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'),
+					new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
+				$controller->warnIfUnblockLinksNeedLiveSite();
+				return count($app->getMessageQueue(true));
+			});
+		};
+		try
+		{
+			$this->assertSame(1, $warnings(2, ''));
+			$this->assertSame(0, $warnings(2, 'https://www.example.org'));
+			$this->assertSame(0, $warnings(1, ''));
+			$this->assertSame(0, $warnings(0, ''));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
 }

@@ -252,6 +252,16 @@
     Portuguese (Brazil and Portugal) is complete and is installed with the
     plugin and the component; the installation hint no longer shows markup
     and an empty link when installing from the command line
+  - Security: unblock links for any IP address ("User Block Message"
+    "for any IP address") need the site's address, $live_site in
+    configuration.php. Without it, Joomla builds the link from the host named
+    by the request of the failed login which got the address blocked - the
+    attacker's - so a link to the attacker's server (opened by mail scanners)
+    could hand them the token for unblocking their own address, again and
+    again. Without $live_site, such links are only sent where "only if the
+    user has logged in from that IP address before" sends them; the settings
+    page doesn't take the setting then and says what to add to
+    configuration.php, and the backend warns about a setting saved before
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

@@ -19,6 +19,7 @@ use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -30,9 +31,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 {
 	protected $autoloadLanguage = true;
 
-	// values of the "notifyBlockedUser" setting besides 0 (off) and 1 (only to
-	// users who logged in from the blocked address before)
-	private const NotifyBlockedAnyAddress = 2;
+	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
+	// users who logged in from the blocked address before, 2 for any address
+	// - which needs the site's $live_site, see effectiveNotifyBlockedUser()
+	public const NotifyBlockedKnownAddress = 1;
+	public const NotifyBlockedAnyAddress = 2;
 
 	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
 	// plugin is active for. Joomla's other applications - the installation
@@ -281,7 +284,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function whyNoUnblockMail($logEntry)
 	{
-		if ($this->getIntParam('notifyBlockedUser', 0) === self::NotifyBlockedAnyAddress)
+		$setting = $this->getIntParam('notifyBlockedUser', 0);
+		$mode = self::effectiveNotifyBlockedUser($setting, self::hasLiveSite());
+		if ($mode !== $setting)
+		{
+			$this->logger->log('Unblock links for any IP address need the site\'s address ($live_site in '.
+				'configuration.php): sending one only if the user has logged in from this address before', Log::WARNING);
+		}
+		if ($mode === self::NotifyBlockedAnyAddress)
 		{
 			return $this->mydb->hasCurrentUnblockToken($logEntry->username)
 				? 'there already is an unblock link for this user which can be used'
@@ -291,6 +301,37 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
 			? null
 			: 'the user has never logged in from this IP address';
+	}
+
+	/**
+	 * Whether the site's address is configured ($live_site in
+	 * configuration.php). Without it, Joomla builds every address it links to
+	 * - also Uri::root(), and so the unblock link - from the host the request
+	 * names, which is whatever the client sent.
+	 */
+	public static function hasLiveSite()
+	{
+		return trim((string) Factory::getApplication()->get('live_site', '')) !== '';
+	}
+
+	/**
+	 * The "notifyBlockedUser" setting as it is applied. The unblock email is
+	 * prepared in the request of the failed login which got the address
+	 * blocked, so the link in it has the host that request named, unless
+	 * $live_site is set. With links for any address (mode 2), that request is
+	 * an attacker's: a link to their own server would hand them the token
+	 * (mail scanners open every link), which unblocks their address - over
+	 * and over. Without $live_site, the links are therefore only sent as in
+	 * mode 1, where the request comes from an address the user logged in
+	 * from. The settings page doesn't take mode 2 without $live_site; this
+	 * covers a setting saved before, or $live_site removed later.
+	 */
+	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
+	{
+		$setting = (int) $setting;
+		return ($setting === self::NotifyBlockedAnyAddress && !$hasLiveSite)
+			? self::NotifyBlockedKnownAddress
+			: $setting;
 	}
 
 	private function getHtaccessPath()

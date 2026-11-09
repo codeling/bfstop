@@ -19,7 +19,7 @@ class UnblockLinkTest extends IntegrationTestCase
 {
 	private const Expected = 'http://www.example.org/index.php?option=com_bfstop&view=tokenunblock&token=T0KEN';
 
-	private function linkBuiltIn($cgi, $directory)
+	private function linkBuiltIn($cgi, $directory, $host = 'www.example.org', $liveSite = '')
 	{
 		$root = realpath(getenv('JOOMLA_ROOT'));
 		$probe = $root.$directory.'/bfstop-unblock-link-test.php';
@@ -31,6 +31,7 @@ require JPATH_BASE."/includes/defines.php";
 require JPATH_BASE."/includes/framework.php";
 require '.var_export(dirname(__DIR__, 2).'/src/Extension/Bfstop.php', true).';
 $c = \\Joomla\\CMS\\Factory::getContainer();
+$c->get("config")->set("live_site", '.var_export($liveSite, true).');
 foreach (array("session.web.site", "session.web.administrator", \\Joomla\\Session\\SessionInterface::class) as $alias)
 {
 	$c->alias($alias, "session.cli");
@@ -42,8 +43,8 @@ echo "\nLINK: ", \\Codeling\\Plugin\\System\\Bfstop\\Extension\\Bfstop::unblockL
 		{
 			$env = array('REDIRECT_STATUS' => '1', 'GATEWAY_INTERFACE' => 'CGI/1.1', 'REQUEST_METHOD' => 'GET',
 				'SCRIPT_FILENAME' => $probe, 'SCRIPT_NAME' => $directory.'/bfstop-unblock-link-test.php',
-				'REQUEST_URI' => $directory.'/bfstop-unblock-link-test.php', 'HTTP_HOST' => 'www.example.org',
-				'SERVER_NAME' => 'www.example.org', 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '192.0.2.1');
+				'REQUEST_URI' => $directory.'/bfstop-unblock-link-test.php', 'HTTP_HOST' => $host,
+				'SERVER_NAME' => $host, 'SERVER_PORT' => '80', 'REMOTE_ADDR' => '192.0.2.1');
 			$process = proc_open(array($cgi, '-d', 'display_errors=1', $probe), array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes, null, $env);
 			$output = stream_get_contents($pipes[1]).stream_get_contents($pipes[2]);
 			proc_close($process);
@@ -68,6 +69,23 @@ echo "\nLINK: ", \\Codeling\\Plugin\\System\\Bfstop\\Extension\\Bfstop::unblockL
 		foreach (array('' => 'site', '/administrator' => 'backend', '/api' => 'API') as $directory => $name)
 		{
 			$this->assertSame(self::Expected, $this->linkBuiltIn($cgi, $directory), $name);
+		}
+	}
+
+	public function testUnblockLinkHasTheLiveSiteNotTheRequestedHost()
+	{
+		$cgi = trim((string) shell_exec('command -v php-cgi 2>/dev/null'));
+		if ($cgi === '')
+		{
+			$this->markTestSkipped('php-cgi is not installed');
+		}
+		// the request which gets an address blocked is the attacker's, and so
+		// is the host it names; without $live_site the link has that host
+		$this->assertSame('http://attacker.example/index.php?option=com_bfstop&view=tokenunblock&token=T0KEN',
+			$this->linkBuiltIn($cgi, '', 'attacker.example'));
+		foreach (array('' => 'site', '/administrator' => 'backend', '/api' => 'API') as $directory => $name)
+		{
+			$this->assertSame(self::Expected, $this->linkBuiltIn($cgi, $directory, 'attacker.example', 'http://www.example.org'), $name);
 		}
 	}
 }

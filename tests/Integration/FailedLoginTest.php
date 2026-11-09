@@ -22,6 +22,9 @@ class FailedLoginTest extends IntegrationTestCase
 
 	private static $originalParams;
 	private $createdUsers = array();
+	// the site's $live_site in the requests of the failed logins: unblock
+	// links for any address are only sent with it
+	private $liveSite = 'https://www.example.org';
 
 	public static function setUpBeforeClass(): void
 	{
@@ -90,6 +93,10 @@ class FailedLoginTest extends IntegrationTestCase
 
 	private function failedLogin($username, $ip = self::Ip, array $options = array())
 	{
+		if ($this->liveSite !== '')
+		{
+			$options[] = '--live-site='.$this->liveSite;
+		}
 		exec($this->command($username, $ip, $options).' 2>&1', $output, $exitCode);
 		$output = implode("\n", $output);
 		$this->assertSame(0, $exitCode, $output);
@@ -494,5 +501,36 @@ class FailedLoginTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(10), 'username' => 'victim'));
 		$this->blockWith(2);
 		$this->assertSame(1, $this->tokenCount("username = 'Admin'"), 'the link for victim has no bearing on Admin');
+	}
+
+	// without the site's $live_site, the link has the host the request of the
+	// attacker's failed login named: links for any address (mode 2) are then
+	// only sent where mode 1 would send them
+
+	public function testAnyAddressModeWithoutLiveSiteNeverSendsToAnAttackersAddress()
+	{
+		$this->liveSite = '';
+		$this->blockWith(2);
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), 'blocked');
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	public function testAnyAddressModeWithoutLiveSiteSendsLinkIfTheUserLoggedInFromThere()
+	{
+		$this->liveSite = '';
+		$this->knownIp(self::Ip, 'Admin');
+		$this->blockWith(2);
+		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+	}
+
+	public function testEffectiveNotifyBlockedUserSetting()
+	{
+		foreach (array(0, 1, 2) as $setting)
+		{
+			$this->assertSame($setting, Bfstop::effectiveNotifyBlockedUser((string) $setting, true));
+		}
+		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(0, false));
+		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser(1, false));
+		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser('2', false));
 	}
 }
