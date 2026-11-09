@@ -270,6 +270,15 @@
     further ones are answered without delay, and still counted and blocked.
     The risk score adds no delay by default any more ("Delay Seconds Per
     Risk Point" 0, before: 2, i.e. 4 seconds for a failed login as "admin")
+  - Security: the reverse DNS risk signal can no longer hold a request for
+    as long as the attacker's name servers like. The lookup is made by the
+    plugin over UDP, with the name servers of /etc/resolv.conf, and given up
+    on after 1 second (gethostbyaddr() can't be given a timeout, and the
+    system resolver retries for up to half a minute); no answer counts as no
+    record. Results are cached by the network an IPv6 client is tracked by,
+    not by its address, so switching addresses no longer means a new lookup
+    with every failed login, and the failed login is recorded before the
+    lookup. Without /etc/resolv.conf (e.g. on Windows) the signal is skipped
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

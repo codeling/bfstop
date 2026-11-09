@@ -663,7 +663,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 		}
 		$username = mb_strimwidth($username, 0, 150, "...");
-		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
@@ -683,6 +682,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// reached the block threshold, and each of them would tie up a
 		// worker for the whole delay.
 		$this->mydb->insertFailedLogin($logEntry);
+
+		// after recording it: a signal of the score may take time (the
+		// reverse DNS lookup), and parallel requests waiting for it must
+		// already count
+		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username,
+			$logEntry->ipaddress);
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
 

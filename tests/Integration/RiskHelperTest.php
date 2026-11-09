@@ -131,6 +131,34 @@ class RiskHelperTest extends IntegrationTestCase
 		$this->assertSame(2, RiskHelper::computeScore($db, $this->logger, $params, '203.0.113.5', 'jdoe'));
 	}
 
+	public function testReverseDnsIsCachedByTheTrackedNetwork()
+	{
+		// an IPv6 client switching addresses would otherwise miss the cache,
+		// and cause a lookup, with every failed login
+		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
+		$db = $this->createMock(DatabaseHelper::class);
+		$db->expects($this->once())->method('getCachedHostname')->with('2001:db8:1::/56')->willReturn('host.example.org');
+		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'jdoe', '2001:db8:1::/56'));
+	}
+
+	public function testReverseDnsLookupIsLimitedInTime()
+	{
+		// a documentation address has no PTR record: whether the name
+		// servers of /etc/resolv.conf say so or can't be reached, the result
+		// is "no record", within DnsHelper::TimeoutSeconds, and is cached
+		if (\Codeling\Plugin\System\Bfstop\Helper\DnsHelper::nameservers() === array())
+		{
+			$this->markTestSkipped('no name server in /etc/resolv.conf');
+		}
+		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
+		$db = $this->createMock(DatabaseHelper::class);
+		$db->method('getCachedHostname')->willReturn(false);
+		$db->expects($this->once())->method('cacheHostname')->with('2001:db8:1::/56', null);
+		$start = microtime(true);
+		$this->assertSame(2, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'jdoe', '2001:db8:1::/56'));
+		$this->assertLessThan(\Codeling\Plugin\System\Bfstop\Helper\DnsHelper::TimeoutSeconds + 0.5, microtime(true) - $start);
+	}
+
 	public function testReverseDnsFailureFailsSafe()
 	{
 		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
