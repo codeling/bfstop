@@ -38,11 +38,13 @@ class HtmlView extends BaseHtmlView
 		{
 			ToolbarHelper::deleteList('COM_BFSTOP_ALLOWLIST_DELETE_CONFIRM', 'allowlist.remove');
 		}
-		if ($user->authorise('core.edit', 'com_bfstop'))
+		// see AllowController::mayChangeAllowList()
+		$isAdmin = $user->authorise('core.admin', 'com_bfstop');
+		if ($isAdmin && $user->authorise('core.edit', 'com_bfstop'))
 		{
 			ToolbarHelper::editList('allow.edit');
 		}
-		if ($user->authorise('core.create', 'com_bfstop'))
+		if ($isAdmin && $user->authorise('core.create', 'com_bfstop'))
 		{
 			ToolbarHelper::addNew('allow.add');
 		}
