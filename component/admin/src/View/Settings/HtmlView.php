@@ -12,11 +12,13 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\CMS\Uri\Uri;
 
 class HtmlView extends BaseHtmlView
 {
@@ -53,8 +55,27 @@ class HtmlView extends BaseHtmlView
 		$this->pluginVersion = $versions['plugin'];
 		$this->componentVersion = $versions['component'];
 
+		if (!Bfstop::hasLiveSite())
+		{
+			Factory::getApplication()->enqueueMessage(self::liveSiteNote(), 'warning');
+		}
+
 		$this->addToolbar();
 		parent::display($tpl);
+	}
+
+	/**
+	 * What the settings page says if the site's $live_site isn't set (see
+	 * Bfstop::effectiveNotifyBlockedUser()), with the line to put into
+	 * configuration.php. The address it proposes is the one of this request,
+	 * sent by the administrator's browser: shown for them to check, never
+	 * used for anything.
+	 */
+	public static function liveSiteNote()
+	{
+		$line = 'public $live_site = '.var_export(rtrim(Uri::root(), '/'), true).';';
+		return Text::sprintf('COM_BFSTOP_WARNING_NO_LIVE_SITE',
+			'<code>'.htmlspecialchars($line, ENT_QUOTES, 'UTF-8').'</code>');
 	}
 
 	protected function addToolbar()

@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Factory;
@@ -35,6 +36,11 @@ class DisplayController extends BaseController
 		$this->warnIfAdminUserExists();
 		$this->warnIfHtAccessNotWorking();
 		$this->checkWhetherProxyConfigured();
+		if ($view !== 'settings')
+		{
+			// the settings page says it itself, see its view
+			$this->warnIfUnblockLinksNeedLiveSite();
+		}
 		$input->set('view', $view);
 		parent::display($cachable);
 	}
@@ -77,6 +83,22 @@ class DisplayController extends BaseController
 			$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_HTACCESS_NOT_WORKING')
 				// .'found='.$req['found'].', readable='.$req['readable'].', writeable='.$req['writeable'].', apache='.$req['apacheserver']
 				, 'warning');
+		}
+	}
+
+	/**
+	 * Unblock links for any IP address were chosen (before this version
+	 * checked it, or $live_site was removed since), but they need $live_site:
+	 * the plugin only sends them as for "only known addresses", see
+	 * Bfstop::effectiveNotifyBlockedUser().
+	 */
+	function warnIfUnblockLinksNeedLiveSite()
+	{
+		$setting = (int) ParamHelper::get('notifyBlockedUser', 'params', 0);
+		if (Bfstop::effectiveNotifyBlockedUser($setting, Bfstop::hasLiveSite()) !== $setting)
+		{
+			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_NOTIFY_ANY_WITHOUT_LIVE_SITE',
+				Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
 		}
 	}
 
