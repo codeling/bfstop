@@ -178,6 +178,7 @@ jobs:
         run: |
           echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
           echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
+          echo "DOWNLOAD_CACHE=$HOME/.cache/bfstop-ci" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # the component's classes are loaded from its checkout by the tests
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -205,6 +206,14 @@ jobs:
           DB_IMAGE: ${{ matrix.db }}
         run: tests/ci/start-database.sh
 
+      # the release packages the tests install (Joomla; for the update, the
+      # previous BFStop release) are kept between runs instead of being
+      # fetched from GitHub for every job. A cached package has to pass the
+      # same SHA-256 check as a downloaded one (tests/ci/fetch-verified.sh)
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bfstop-ci
+          key: downloads-joomla-${{ matrix.joomla }}
       - name: Install Joomla and the bfstop package
         env:
           BFSTOP_PACKAGE: ${{ runner.temp }}/build/pkg_bfstop-${{ needs.package.outputs.version }}.zip
@@ -236,6 +245,7 @@ jobs:
         run: |
           echo "JOOMLA_ROOT=$RUNNER_TEMP/joomla" >> "$GITHUB_ENV"
           echo "COM_BFSTOP_ROOT=$RUNNER_TEMP/com_bfstop" >> "$GITHUB_ENV"
+          echo "DOWNLOAD_CACHE=$HOME/.cache/bfstop-ci" >> "$GITHUB_ENV"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -259,6 +269,14 @@ jobs:
         env:
           DB_IMAGE: ${{ matrix.db }}
         run: tests/ci/start-database.sh
+      # the release packages the tests install (Joomla; for the update, the
+      # previous BFStop release) are kept between runs instead of being
+      # fetched from GitHub for every job. A cached package has to pass the
+      # same SHA-256 check as a downloaded one (tests/ci/fetch-verified.sh)
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/bfstop-ci
+          key: downloads-update-joomla-${{ matrix.joomla }}-${{ hashFiles('tests/ci/previous-release.sha256') }}
       - name: Update from the previous release
         env:
           BFSTOP_PACKAGE: ${{ runner.temp }}/build/pkg_bfstop-${{ needs.package.outputs.version }}.zip

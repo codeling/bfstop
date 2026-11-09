@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_failedlogin" (
   PRIMARY KEY ("id")
 );
 CREATE INDEX IF NOT EXISTS "#__bfstop_failedlogin_username_logtime" ON "#__bfstop_failedlogin" ("username", "logtime");
+CREATE INDEX IF NOT EXISTS "#__bfstop_failedlogin_ipaddress_logtime" ON "#__bfstop_failedlogin" ("ipaddress", "logtime");
+CREATE INDEX IF NOT EXISTS "#__bfstop_failedlogin_logtime" ON "#__bfstop_failedlogin" ("logtime");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_bannedip" (

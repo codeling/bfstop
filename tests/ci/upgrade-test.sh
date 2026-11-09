@@ -11,6 +11,8 @@
 #   BFSTOP_PACKAGE   the package zip to update to
 #   COM_BFSTOP_ROOT  checkout of com_bfstop (the tests load its classes)
 #   PHPUNIT          optional: the phpunit command (default: phpunit)
+#   DOWNLOAD_CACHE   optional: directory to take the previous release and the
+#                    Joomla package from and keep them in, see fetch-verified.sh
 set -euo pipefail
 
 : "${BFSTOP_PACKAGE:?}" "${JOOMLA_ROOT:?}"
@@ -20,20 +22,13 @@ new_package="$(cd "$(dirname "$BFSTOP_PACKAGE")" && pwd)/$(basename "$BFSTOP_PAC
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-sha256() {
-	if command -v sha256sum > /dev/null; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
-}
-
 read -r expected file < <(grep -v '^#' "$here/previous-release.sha256" | grep . | head -n 1)
 previous="${file#pkg_bfstop-}"
 previous="${previous%.zip}"
-echo "Downloading BFStop $previous"
-curl -fsSL -o "$work/$file" "https://github.com/codeling/bfstop/releases/download/$previous/$file"
-actual="$(sha256 "$work/$file")"
-if [ "$actual" != "$expected" ]; then
-	echo "SHA-256 of $file differs: expected $expected, got $actual" >&2
-	exit 1
-fi
+echo "Fetching BFStop $previous"
+# from the download cache if there is one (DOWNLOAD_CACHE), see fetch-verified.sh
+"$here/fetch-verified.sh" "https://github.com/codeling/bfstop/releases/download/$previous/$file" \
+	"$expected" "$work/$file"
 
 BFSTOP_PACKAGE="$work/$file" "$here/install-joomla.sh"
 php "$plugin_root/tests/Upgrade/fixtures/seed.php"

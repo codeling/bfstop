@@ -123,6 +123,15 @@ class UpgradeTest extends IntegrationTestCase
 			(int) $params['enabledForOrigin'], 'frontend and backend became frontend, backend and API (the seed is in 1.x form)');
 	}
 
+	public function testFailedLoginsAreIndexed()
+	{
+		$indexes = \Codeling\Bfstop\Tests\Integration\InstallTest::indexedColumns($this->db, 'bfstop_failedlogin');
+		foreach (array('ipaddress,logtime', 'username,logtime', 'logtime') as $columns)
+		{
+			$this->assertContains($columns, $indexes);
+		}
+	}
+
 	public function testTablesAreConverted()
 	{
 		$this->db->setQuery('SELECT TABLE_NAME, TABLE_COLLATION FROM information_schema.TABLES '.

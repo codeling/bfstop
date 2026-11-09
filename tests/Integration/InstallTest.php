@@ -29,6 +29,42 @@ class InstallTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * The columns of each index of a table, e.g. "ipaddress,logtime".
+	 */
+	public static function indexedColumns($db, $table)
+	{
+		$name = $db->getPrefix().$table;
+		if ($db->getServerType() === 'postgresql')
+		{
+			$db->setQuery('SELECT indexdef FROM pg_indexes WHERE tablename = '.$db->quote($name));
+			return array_map(function ($definition)
+			{
+				preg_match('/\(([^)]*)\)\s*$/', $definition, $m);
+				return str_replace(array('"', ' '), '', $m[1]);
+			}, $db->loadColumn());
+		}
+		$columns = array();
+		$db->setQuery('SHOW INDEX FROM '.$db->quoteName($name));
+		foreach ($db->loadObjectList() as $row)
+		{
+			$columns[$row->Key_name][(int) $row->Seq_in_index] = $row->Column_name;
+		}
+		return array_map(function ($c) { ksort($c); return implode(',', $c); }, array_values($columns));
+	}
+
+	public function testLookupsOfFailedLoginsAreIndexed()
+	{
+		// per address (every failed login), per username (account throttle),
+		// by time (adaptive delay, purge): with up to 200000 rows, a scan
+		// takes 10-200 ms
+		$indexes = self::indexedColumns($this->db, 'bfstop_failedlogin');
+		foreach (array('ipaddress,logtime', 'username,logtime', 'logtime') as $columns)
+		{
+			$this->assertContains($columns, $indexes);
+		}
+	}
+
 	public function testPluginEnabledAndSchemaVersionRecorded()
 	{
 		$this->db->setQuery("SELECT e.enabled, s.version_id FROM #__extensions e ".

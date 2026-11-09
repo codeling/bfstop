@@ -8,7 +8,12 @@ CREATE TABLE IF NOT EXISTS #__bfstop_failedlogin (
 	origin int NOT NULL,
 	handled BOOLEAN NOT NULL DEFAULT 0,
 	PRIMARY KEY  (id),
-	KEY username_logtime (username, logtime)
+	KEY username_logtime (username, logtime),
+-- the failed logins of an address within a time span: counted for every
+-- failed login, listed when it gets blocked
+	KEY ipaddress_logtime (ipaddress, logtime),
+-- those of the last hour (adaptive delay), the purge of old ones
+	KEY logtime (logtime)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
