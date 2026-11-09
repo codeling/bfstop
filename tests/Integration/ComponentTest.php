@@ -804,4 +804,32 @@ class ComponentTest extends IntegrationTestCase
 			@unlink($logFile);
 		}
 	}
+
+	public function testChangingTheAllowListNeedsTheAdminPermission()
+	{
+		// an entry exempts addresses from all protection: like the settings,
+		// it needs core.admin, not only core.create / core.edit
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\AllowController(
+			array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+			new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
+		$allowAdd = new \ReflectionMethod($controller, 'allowAdd');
+		$allowEdit = new \ReflectionMethod($controller, 'allowEdit');
+		try
+		{
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create', 'core.edit')));
+			$this->assertFalse($allowAdd->invoke($controller, array()));
+			$this->assertFalse($allowEdit->invoke($controller, array('id' => 1), 'id'));
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.admin')));
+			$this->assertFalse($allowAdd->invoke($controller, array()), 'core.create is still needed');
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.admin', 'core.create', 'core.edit')));
+			$this->assertTrue($allowAdd->invoke($controller, array()));
+			$this->assertTrue($allowEdit->invoke($controller, array('id' => 1), 'id'));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+		}
+	}
 }

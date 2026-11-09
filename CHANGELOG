@@ -283,6 +283,14 @@
     permission, as viewing it does (before: core.delete only, so a user who
     may only delete entries of the lists could erase the log without being
     able to read it); core.delete is still needed as well
+  - Security (component): adding and changing entries of the allow list need
+    the core.admin permission besides core.create / core.edit - an entry
+    exempts addresses from all protection, as changing the settings could
+    (removing entries still needs core.delete only). The block, .htaccess
+    block and allow forms no longer take networks larger than /8 (IPv4) or
+    /16 (IPv6): an allow list entry like 0.0.0.0/0 switched the protection
+    off, and a block of ::/0 entered from an IPv4 address shut out every
+    IPv6 visitor without the warning a block of one's own address gets
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes
