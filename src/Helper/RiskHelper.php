@@ -41,7 +41,7 @@ class RiskHelper
 		}
 		try
 		{
-			if ($db->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', 64)))
+			if ($db->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', Bfstop::DefaultSettings['ipv6PrefixLength'])))
 			{
 				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
 			}

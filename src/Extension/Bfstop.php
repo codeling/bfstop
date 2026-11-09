@@ -80,6 +80,15 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
 		// frontend, backend and the Web Services API
 		'enabledForOrigin' => self::OriginFrontend | self::OriginBackend | self::OriginApi,
+		// a delay ties up a PHP worker for its whole length, see delayResponse():
+		// the risk score adds none unless the administrator asks for it
+		'riskDelaySecondsPerPoint' => 0,
+		// what an IPv6 client is tracked by, see IpHelper::trackedAddress():
+		// a connection usually gets a /56 (or more), not just a /64, so a /64
+		// would let a client start over 256 times
+		'ipv6PrefixLength' => 56,
+		// at most this many responses are delayed at the same time
+		'delayMaxConcurrent' => 5,
 	);
 
 	private LoggerHelper $logger;
@@ -298,7 +307,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				: null;
 		}
 		return $this->mydb->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
-			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
+			$logEntry->username, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))
 			? null
 			: 'the user has never logged in from this IP address';
 	}
@@ -557,7 +566,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function determineDelayDuration($riskScore = 0)
 	{
 		$baseDelay = $this->determineBaseDelayDuration();
-		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', 2);
+		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', self::DefaultSettings['riskDelaySecondsPerPoint']);
 		return $baseDelay + max(0, $riskScore) * $riskDelaySecondsPerPoint;
 	}
 
@@ -602,7 +611,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function trackedAddress($ipAddress)
 	{
-		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', 64));
+		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']));
 	}
 
 	/**
@@ -710,7 +719,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					$this->logger->log('Delay of '.round($delayDuration).'s cut to '.
 						$seconds.'s', Log::WARNING);
 				}
-				sleep($seconds);
+				$this->delayResponse($seconds);
 			}
 		}
 	}
@@ -725,6 +734,88 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	public static function cappedDelay($seconds)
 	{
 		return max(0, min((int) round($seconds), self::MaxDelaySeconds));
+	}
+
+	/**
+	 * The files of the slots for delayed responses (see delayResponse()), one
+	 * set per site (database), as the temporary directory may be shared.
+	 *
+	 * @return string[]
+	 */
+	public static function delaySlotFiles($count)
+	{
+		$app = Factory::getApplication();
+		$site = md5((string) $app->get('db').(string) $app->get('dbprefix'));
+		$files = array();
+		for ($i = 0; $i < max(1, (int) $count); ++$i)
+		{
+			$files[] = HtaccessHelper::lockDirectory().'/bfstop-delay-'.$site.'-'.$i.'.lock';
+		}
+		return $files;
+	}
+
+	/**
+	 * Holds back the response by $seconds - if fewer than
+	 * "delayMaxConcurrent" responses are being held back right now.
+	 *
+	 * A delay only slows down whoever waits for one answer before sending the
+	 * next request; for the whole time, it occupies a PHP worker, of which a
+	 * server has only so many. An attacker with many addresses (an IPv6
+	 * network gives plenty) sends failed logins in parallel instead, each of
+	 * them sleeping in a worker of its own, until there are none left for
+	 * anybody else. So a delayed response takes one of a fixed number of
+	 * slots - an exclusive lock on one of delaySlotFiles(), which the
+	 * operating system releases however the request ends - and if none is
+	 * free, the response goes out at once. The failed login has been counted
+	 * by then (see onUserLoginFailure()), so blocking is not affected.
+	 *
+	 * Not answering at all wouldn't help: PHP can't keep a connection open
+	 * without a worker, and a connection which is closed at once tells the
+	 * client just as quickly that the login failed. Holding connections open
+	 * cheaply is something only the web server or a proxy in front of it can
+	 * do (e.g. nginx's limit_req).
+	 *
+	 * @return bool whether the response was delayed
+	 */
+	private function delayResponse($seconds)
+	{
+		if ($seconds <= 0)
+		{
+			return false;
+		}
+		$maxConcurrent = max(1, $this->getIntParam('delayMaxConcurrent', self::DefaultSettings['delayMaxConcurrent']));
+		$opened = false;
+		foreach (self::delaySlotFiles($maxConcurrent) as $file)
+		{
+			$handle = @fopen($file, 'c');
+			if ($handle === false)
+			{
+				continue;
+			}
+			$opened = true;
+			if (!flock($handle, LOCK_EX | LOCK_NB))
+			{
+				fclose($handle);
+				continue;
+			}
+			try
+			{
+				sleep($seconds);
+			}
+			finally
+			{
+				flock($handle, LOCK_UN);
+				fclose($handle);
+			}
+			return true;
+		}
+		// without a way to count the delayed responses, there is no limit:
+		// not delaying is what keeps the server available
+		$this->logger->log($opened
+			? 'Not delaying the response: '.$maxConcurrent.' response(s) are being delayed already'
+			: 'Not delaying the response: could not create the lock files in '.HtaccessHelper::lockDirectory(),
+			$opened ? Log::INFO : Log::WARNING);
+		return false;
 	}
 
 	public function onUserLogin($event)

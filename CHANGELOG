@@ -135,11 +135,11 @@
     for every token. The page is not cached and tells browsers not to send
     its address (which contains the token) to other sites and search engines
     not to index it
-  - Security: IPv6 clients are now tracked per network (default: /64, see
+  - Security: IPv6 clients are now tracked per network (default: /56, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an
     attacker can no longer start over by switching to another address in
-    their /64. IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
+    their network (a connection usually gets a /56, i.e. 256 /64s). IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
     unrelated clients' IPv4 addresses, are still tracked individually
   - Security: the block page is never cached (Cache-Control: no-store) and,
     if no setting says otherwise, answers with the HTTP status 403 instead of
@@ -262,6 +262,14 @@
     user has logged in from that IP address before" sends them; the settings
     page doesn't take the setting then and says what to add to
     configuration.php, and the backend warns about a setting saved before
+  - Security: delays can no longer be used to run the server out of PHP
+    workers. A delayed response holds a worker for the whole delay, and an
+    attacker with many addresses (an IPv6 network gives plenty) could send
+    failed logins in parallel until none was left. At most "Responses
+    delayed at the same time" (default 5) responses are delayed at once;
+    further ones are answered without delay, and still counted and blocked.
+    The risk score adds no delay by default any more ("Delay Seconds Per
+    Risk Point" 0, before: 2, i.e. 4 seconds for a failed login as "admin")
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

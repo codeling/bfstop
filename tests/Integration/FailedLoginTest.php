@@ -210,6 +210,56 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
 	}
 
+	public function testOnlySoManyResponsesAreDelayedAtTheSameTime()
+	{
+		// every delayed response holds a PHP worker: with all slots taken
+		// (here by this test), the response goes out at once - and the
+		// failed login counts all the same
+		$this->configure(array('blockNumber' => 2, 'delayDuration' => 5, 'delayMaxConcurrent' => 2));
+		$handles = array();
+		try
+		{
+			foreach (Bfstop::delaySlotFiles(2) as $file)
+			{
+				$handle = fopen($file, 'c');
+				// waits for a delayed response of an earlier test which still
+				// runs (proc_terminate() only ends the shell around it)
+				$this->assertTrue(flock($handle, LOCK_EX), $file);
+				$handles[] = $handle;
+			}
+			$start = microtime(true);
+			$this->failedLogin('Admin');
+			$this->assertLessThan(3.0, microtime(true) - $start, 'not delayed');
+			$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+			$this->failedLogin('Admin');
+			$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'), 'blocked as usual');
+
+			// one slot free again: delayed
+			flock(array_pop($handles), LOCK_UN);
+			$start = microtime(true);
+			$this->failedLogin('Admin', '203.0.113.52');
+			$this->assertGreaterThanOrEqual(4.5, microtime(true) - $start, 'delayed');
+		}
+		finally
+		{
+			foreach ($handles as $handle)
+			{
+				flock($handle, LOCK_UN);
+				fclose($handle);
+			}
+		}
+	}
+
+	public function testRiskScoreAddsNoDelayByDefault()
+	{
+		$this->assertSame(0, Bfstop::DefaultSettings['riskDelaySecondsPerPoint']);
+		// "admin" is a common username, and there is no User-Agent: 4 points
+		$this->setPluginParams(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
+		$start = microtime(true);
+		$this->failedLogin('admin', self::Ip, array('--server=HTTP_USER_AGENT='));
+		$this->assertLessThan(3.0, microtime(true) - $start);
+	}
+
 	public function testDelaysAreCapped()
 	{
 		$this->assertSame(0, Bfstop::cappedDelay(0));
@@ -269,18 +319,29 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testIpv6ClientsAreTrackedAndBlockedByNetwork()
 	{
-		// switching to another address in its /64 must not reset an attacker
+		// switching to another address in its /56 - also in another of its
+		// /64s - must not reset an attacker (the default granularity)
 		$this->configure(array('blockNumber' => 3, 'blockedMessage' => 'BFSTOP TEST: blocked'));
 		$this->failedLogin('Admin', '2001:db8:1:2::1');
-		$this->failedLogin('Admin', '2001:db8:1:2:aaaa::2');
+		$this->failedLogin('Admin', '2001:db8:1:5a:aaaa::2');
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
-		$this->failedLogin('Admin', '2001:db8:1:2:bbbb::3');
+		$this->failedLogin('Admin', '2001:db8:1:ff:bbbb::3');
 
-		$this->assertSame('2001:db8:1:2::/64', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
-		$this->assertStringContainsString('BFSTOP TEST: blocked', $this->requestFrom('2001:db8:1:2:cccc::4'));
-		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('2001:db8:1:3::1'), 'a different /64');
+		$this->assertStringContainsString('BFSTOP TEST: blocked', $this->requestFrom('2001:db8:1:7:cccc::4'));
+		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('2001:db8:1:100::1'), 'a different /56');
 		$this->assertStringContainsString('NOT BLOCKED', $this->requestFrom('203.0.113.7'));
+	}
+
+	public function testIpv6NetworksCanBeTrackedPer64()
+	{
+		$this->configure(array('blockNumber' => 2, 'ipv6PrefixLength' => 64));
+		$this->failedLogin('Admin', '2001:db8:1:2::1');
+		$this->failedLogin('Admin', '2001:db8:1:3::1');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->failedLogin('Admin', '2001:db8:1:2:aaaa::2');
+		$this->assertSame('2001:db8:1:2::/64', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
 	}
 
 	public function testBlockedNetworkIsNotBlockedAgain()
@@ -445,14 +506,14 @@ class FailedLoginTest extends IntegrationTestCase
 	public function testKnownAddressModeRecognisesTheNetworkOfAnIpv6Client()
 	{
 		// IPv6 clients switch to other addresses in their network all the time
-		$this->knownIp('2001:db8:1:2:aaaa:bbbb:cccc:9', 'Admin');
+		$this->knownIp('2001:db8:1:f0:aaaa:bbbb:cccc:9', 'Admin');
 		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
 		$this->assertSame(1, $this->tokenCount());
 	}
 
 	public function testKnownAddressModeDoesntRecogniseAnotherIpv6Network()
 	{
-		$this->knownIp('2001:db8:1:3:aaaa::9', 'Admin');
+		$this->knownIp('2001:db8:1:300:aaaa::9', 'Admin');
 		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
 		$this->assertSame(0, $this->tokenCount());
 	}
