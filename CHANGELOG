@@ -135,11 +135,11 @@
     for every token. The page is not cached and tells browsers not to send
     its address (which contains the token) to other sites and search engines
     not to index it
-  - Security: IPv6 clients are now tracked per network (default: /64, see
+  - Security: IPv6 clients are now tracked per network (default: /56, see
     the new "IPv6 Tracking Granularity" setting) instead of per address:
     failed logins are counted and blocks apply to the whole network, so an
     attacker can no longer start over by switching to another address in
-    their /64. IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
+    their network (a connection usually gets a /56, i.e. 256 /64s). IPv4-mapped, NAT64, 6to4 and Teredo addresses, which embed
     unrelated clients' IPv4 addresses, are still tracked individually
   - Security: the block page is never cached (Cache-Control: no-store) and,
     if no setting says otherwise, answers with the HTTP status 403 instead of
@@ -252,6 +252,57 @@
     Portuguese (Brazil and Portugal) is complete and is installed with the
     plugin and the component; the installation hint no longer shows markup
     and an empty link when installing from the command line
+  - Security: unblock links for any IP address ("User Block Message"
+    "for any IP address") need the site's address, $live_site in
+    configuration.php. Without it, Joomla builds the link from the host named
+    by the request of the failed login which got the address blocked - the
+    attacker's - so a link to the attacker's server (opened by mail scanners)
+    could hand them the token for unblocking their own address, again and
+    again. Without $live_site, such links are only sent where "only if the
+    user has logged in from that IP address before" sends them; the settings
+    page doesn't take the setting then and says what to add to
+    configuration.php, and the backend warns about a setting saved before
+  - Security: delays can no longer be used to run the server out of PHP
+    workers. A delayed response holds a worker for the whole delay, and an
+    attacker with many addresses (an IPv6 network gives plenty) could send
+    failed logins in parallel until none was left. At most "Responses
+    delayed at the same time" (default 5) responses are delayed at once;
+    further ones are answered without delay, and still counted and blocked.
+    The risk score adds no delay by default any more ("Delay Seconds Per
+    Risk Point" 0, before: 2, i.e. 4 seconds for a failed login as "admin")
+  - Security: the reverse DNS risk signal can no longer hold a request for
+    as long as the attacker's name servers like. The lookup is made by the
+    plugin over UDP, with the name servers of /etc/resolv.conf, and given up
+    on after 1 second (gethostbyaddr() can't be given a timeout, and the
+    system resolver retries for up to half a minute); no answer counts as no
+    record. Results are cached by the network an IPv6 client is tracked by,
+    not by its address, so switching addresses no longer means a new lookup
+    with every failed login, and the failed login is recorded before the
+    lookup. Without /etc/resolv.conf (e.g. on Windows) the signal is skipped
+  - Security (component): clearing and pruning the log need the core.admin
+    permission, as viewing it does (before: core.delete only, so a user who
+    may only delete entries of the lists could erase the log without being
+    able to read it); core.delete is still needed as well
+  - Security (component): adding and changing entries of the allow list need
+    the core.admin permission besides core.create / core.edit - an entry
+    exempts addresses from all protection, as changing the settings could
+    (removing entries still needs core.delete only). The block, .htaccess
+    block and allow forms no longer take networks larger than /8 (IPv4) or
+    /16 (IPv6): an allow list entry like 0.0.0.0/0 switched the protection
+    off, and a block of ::/0 entered from an IPv4 address shut out every
+    IPv6 visitor without the warning a block of one's own address gets
+  - Security: with proxy support on, a trusted proxy is no longer written to
+    the .htaccess file. Failed logins through it whose forwarding header
+    doesn't name the client are still counted against its address (not
+    counting them would let such requests fail logins without limit), and
+    blocked in the database - which only holds back requests resolving to
+    that address -, but the web server would turn away everybody coming
+    through the proxy. The component's .htaccess block form refuses it as
+    well. The help of the proxy setting warns against trusting a whole
+    address range of a CDN or hosting provider
+  - Component: the lists build their ORDER BY from the filter fields only,
+    with the column quoted as an identifier (before: escape(), which is for
+    string literals, relying on Joomla's check of the request)
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

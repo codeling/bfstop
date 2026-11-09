@@ -19,6 +19,7 @@ use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
@@ -30,9 +31,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 {
 	protected $autoloadLanguage = true;
 
-	// values of the "notifyBlockedUser" setting besides 0 (off) and 1 (only to
-	// users who logged in from the blocked address before)
-	private const NotifyBlockedAnyAddress = 2;
+	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
+	// users who logged in from the blocked address before, 2 for any address
+	// - which needs the site's $live_site, see effectiveNotifyBlockedUser()
+	public const NotifyBlockedKnownAddress = 1;
+	public const NotifyBlockedAnyAddress = 2;
 
 	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
 	// plugin is active for. Joomla's other applications - the installation
@@ -77,6 +80,15 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
 		// frontend, backend and the Web Services API
 		'enabledForOrigin' => self::OriginFrontend | self::OriginBackend | self::OriginApi,
+		// a delay ties up a PHP worker for its whole length, see delayResponse():
+		// the risk score adds none unless the administrator asks for it
+		'riskDelaySecondsPerPoint' => 0,
+		// what an IPv6 client is tracked by, see IpHelper::trackedAddress():
+		// a connection usually gets a /56 (or more), not just a /64, so a /64
+		// would let a client start over 256 times
+		'ipv6PrefixLength' => 56,
+		// at most this many responses are delayed at the same time
+		'delayMaxConcurrent' => 5,
 	);
 
 	private LoggerHelper $logger;
@@ -200,6 +212,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// the file only holds what is still blocked
 			$this->removeLiftedHtaccessBlocks();
 		}
+		if ($usehtaccess && IpHelper::overlapsTrustedProxy($logEntry->ipaddress, IpHelper::trustedProxies()))
+		{
+			// the failed logins came through a trusted proxy without a
+			// forwarding header which tells the client (see getAddress()):
+			// in the .htaccess file, this would turn away everybody coming
+			// through the proxy, so it is only blocked in the database
+			$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it is (or contains) a '.
+				'trusted proxy - check that the proxy sends the configured header', Log::ERROR);
+			$usehtaccess = false;
+		}
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
@@ -281,16 +303,54 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function whyNoUnblockMail($logEntry)
 	{
-		if ($this->getIntParam('notifyBlockedUser', 0) === self::NotifyBlockedAnyAddress)
+		$setting = $this->getIntParam('notifyBlockedUser', 0);
+		$mode = self::effectiveNotifyBlockedUser($setting, self::hasLiveSite());
+		if ($mode !== $setting)
+		{
+			$this->logger->log('Unblock links for any IP address need the site\'s address ($live_site in '.
+				'configuration.php): sending one only if the user has logged in from this address before', Log::WARNING);
+		}
+		if ($mode === self::NotifyBlockedAnyAddress)
 		{
 			return $this->mydb->hasCurrentUnblockToken($logEntry->username)
 				? 'there already is an unblock link for this user which can be used'
 				: null;
 		}
 		return $this->mydb->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
-			$logEntry->username, $this->getIntParam('ipv6PrefixLength', 64))
+			$logEntry->username, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))
 			? null
 			: 'the user has never logged in from this IP address';
+	}
+
+	/**
+	 * Whether the site's address is configured ($live_site in
+	 * configuration.php). Without it, Joomla builds every address it links to
+	 * - also Uri::root(), and so the unblock link - from the host the request
+	 * names, which is whatever the client sent.
+	 */
+	public static function hasLiveSite()
+	{
+		return trim((string) Factory::getApplication()->get('live_site', '')) !== '';
+	}
+
+	/**
+	 * The "notifyBlockedUser" setting as it is applied. The unblock email is
+	 * prepared in the request of the failed login which got the address
+	 * blocked, so the link in it has the host that request named, unless
+	 * $live_site is set. With links for any address (mode 2), that request is
+	 * an attacker's: a link to their own server would hand them the token
+	 * (mail scanners open every link), which unblocks their address - over
+	 * and over. Without $live_site, the links are therefore only sent as in
+	 * mode 1, where the request comes from an address the user logged in
+	 * from. The settings page doesn't take mode 2 without $live_site; this
+	 * covers a setting saved before, or $live_site removed later.
+	 */
+	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
+	{
+		$setting = (int) $setting;
+		return ($setting === self::NotifyBlockedAnyAddress && !$hasLiveSite)
+			? self::NotifyBlockedKnownAddress
+			: $setting;
 	}
 
 	private function getHtaccessPath()
@@ -516,7 +576,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function determineDelayDuration($riskScore = 0)
 	{
 		$baseDelay = $this->determineBaseDelayDuration();
-		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', 2);
+		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', self::DefaultSettings['riskDelaySecondsPerPoint']);
 		return $baseDelay + max(0, $riskScore) * $riskDelaySecondsPerPoint;
 	}
 
@@ -561,7 +621,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function trackedAddress($ipAddress)
 	{
-		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', 64));
+		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']));
 	}
 
 	/**
@@ -613,7 +673,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 		}
 		$username = mb_strimwidth($username, 0, 150, "...");
-		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username);
 
 		$logEntry = new \stdClass();
 		$logEntry->id = null;
@@ -633,6 +692,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// reached the block threshold, and each of them would tie up a
 		// worker for the whole delay.
 		$this->mydb->insertFailedLogin($logEntry);
+
+		// after recording it: a signal of the score may take time (the
+		// reverse DNS lookup), and parallel requests waiting for it must
+		// already count
+		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username,
+			$logEntry->ipaddress);
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
 
@@ -669,7 +734,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					$this->logger->log('Delay of '.round($delayDuration).'s cut to '.
 						$seconds.'s', Log::WARNING);
 				}
-				sleep($seconds);
+				$this->delayResponse($seconds);
 			}
 		}
 	}
@@ -684,6 +749,88 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	public static function cappedDelay($seconds)
 	{
 		return max(0, min((int) round($seconds), self::MaxDelaySeconds));
+	}
+
+	/**
+	 * The files of the slots for delayed responses (see delayResponse()), one
+	 * set per site (database), as the temporary directory may be shared.
+	 *
+	 * @return string[]
+	 */
+	public static function delaySlotFiles($count)
+	{
+		$app = Factory::getApplication();
+		$site = md5((string) $app->get('db').(string) $app->get('dbprefix'));
+		$files = array();
+		for ($i = 0; $i < max(1, (int) $count); ++$i)
+		{
+			$files[] = HtaccessHelper::lockDirectory().'/bfstop-delay-'.$site.'-'.$i.'.lock';
+		}
+		return $files;
+	}
+
+	/**
+	 * Holds back the response by $seconds - if fewer than
+	 * "delayMaxConcurrent" responses are being held back right now.
+	 *
+	 * A delay only slows down whoever waits for one answer before sending the
+	 * next request; for the whole time, it occupies a PHP worker, of which a
+	 * server has only so many. An attacker with many addresses (an IPv6
+	 * network gives plenty) sends failed logins in parallel instead, each of
+	 * them sleeping in a worker of its own, until there are none left for
+	 * anybody else. So a delayed response takes one of a fixed number of
+	 * slots - an exclusive lock on one of delaySlotFiles(), which the
+	 * operating system releases however the request ends - and if none is
+	 * free, the response goes out at once. The failed login has been counted
+	 * by then (see onUserLoginFailure()), so blocking is not affected.
+	 *
+	 * Not answering at all wouldn't help: PHP can't keep a connection open
+	 * without a worker, and a connection which is closed at once tells the
+	 * client just as quickly that the login failed. Holding connections open
+	 * cheaply is something only the web server or a proxy in front of it can
+	 * do (e.g. nginx's limit_req).
+	 *
+	 * @return bool whether the response was delayed
+	 */
+	private function delayResponse($seconds)
+	{
+		if ($seconds <= 0)
+		{
+			return false;
+		}
+		$maxConcurrent = max(1, $this->getIntParam('delayMaxConcurrent', self::DefaultSettings['delayMaxConcurrent']));
+		$opened = false;
+		foreach (self::delaySlotFiles($maxConcurrent) as $file)
+		{
+			$handle = @fopen($file, 'c');
+			if ($handle === false)
+			{
+				continue;
+			}
+			$opened = true;
+			if (!flock($handle, LOCK_EX | LOCK_NB))
+			{
+				fclose($handle);
+				continue;
+			}
+			try
+			{
+				sleep($seconds);
+			}
+			finally
+			{
+				flock($handle, LOCK_UN);
+				fclose($handle);
+			}
+			return true;
+		}
+		// without a way to count the delayed responses, there is no limit:
+		// not delaying is what keeps the server available
+		$this->logger->log($opened
+			? 'Not delaying the response: '.$maxConcurrent.' response(s) are being delayed already'
+			: 'Not delaying the response: could not create the lock files in '.HtaccessHelper::lockDirectory(),
+			$opened ? Log::INFO : Log::WARNING);
+		return false;
 	}
 
 	public function onUserLogin($event)

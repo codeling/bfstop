@@ -651,6 +651,34 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame('API', $view->getOriginName(3));
 	}
 
+	public function testListOrderingIsAnIdentifierFromTheFilterFields()
+	{
+		$clause = fn ($column, $direction) => \Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper::clause(
+			$this->db, $column, $direction, array('a.id', 'a.ipaddress'), 'a.id', 'ASC');
+		$this->assertSame($this->db->quoteName('a.ipaddress').' DESC', $clause('a.ipaddress', 'desc'));
+		$this->assertSame($this->db->quoteName('a.id').' ASC', $clause('a.notes', 'DESC; DROP TABLE x'));
+		$this->assertSame($this->db->quoteName('a.id').' ASC', $clause('(SELECT 1)', null));
+		$this->assertSame($this->db->quoteName('a.id').' DESC', $clause(null, 'DESC'));
+		// every list can still be sorted by every column it offers
+		foreach (array(AllowlistModel::class, BlocklistModel::class, FailedloginlistModel::class, UsernamestatsModel::class) as $class)
+		{
+			$model = $this->model($class);
+			$model->getState(); // populate the state now, so it doesn't overwrite what is set here
+			foreach ((new \ReflectionProperty($class, 'filter_fields'))->getValue($model) as $column)
+			{
+				foreach (array('ASC', 'DESC') as $direction)
+				{
+					$model->setState('list.ordering', $column);
+					$model->setState('list.direction', $direction);
+					$query = (new \ReflectionMethod($model, 'getListQuery'))->invoke($model);
+					$this->db->setQuery($query);
+					$this->assertIsArray($this->db->loadObjectList(), "$class $column $direction");
+					$this->assertStringContainsString($this->db->quoteName($column).' '.$direction, (string) $query);
+				}
+			}
+		}
+	}
+
 	public function testListsAreSortableByTheirColumnHeaders()
 	{
 		// a column a header sorts by which isn't among the model's filter
@@ -668,6 +696,168 @@ class ComponentTest extends IntegrationTestCase
 			{
 				$this->assertContains($column, $filterFields, "$view: column $column");
 			}
+		}
+	}
+
+	/**
+	 * Runs $test with the given $live_site of the site, and puts it back.
+	 */
+	private function withLiveSite($liveSite, callable $test)
+	{
+		$app = Factory::getApplication();
+		$original = $app->get('live_site', '');
+		$app->set('live_site', $liveSite);
+		try
+		{
+			return $test();
+		}
+		finally
+		{
+			$app->set('live_site', $original);
+		}
+	}
+
+	public function testUnblockLinksForAnyAddressNeedTheLiveSite()
+	{
+		// without $live_site, the link would have the host the attacker's
+		// request named, see Bfstop::effectiveNotifyBlockedUser()
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		$data = array('params' => array('enabledForOrigin' => array('1'), 'notifyBlockedUser' => '2'));
+		$validate = function () use (&$data)
+		{
+			$model = $this->model(SettingsModel::class);
+			return array($model->validate($this->settingsForm(), $data), $model->getErrors());
+		};
+		list($valid, $errors) = $this->withLiveSite('', $validate);
+		$this->assertFalse($valid);
+		$this->assertStringContainsString('$live_site', implode(' ', $errors));
+		list($valid) = $this->withLiveSite('https://www.example.org', $validate);
+		$this->assertIsArray($valid);
+		$this->assertSame('2', $valid['params']['notifyBlockedUser']);
+		foreach (array('0', '1') as $mode)
+		{
+			$data['params']['notifyBlockedUser'] = $mode;
+			list($valid) = $this->withLiveSite('', $validate);
+			$this->assertIsArray($valid, "mode $mode");
+		}
+	}
+
+	public function testSettingsPageProposesTheLiveSite()
+	{
+		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		$note = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::liveSiteNote();
+		$root = rtrim(\Joomla\CMS\Uri\Uri::root(), '/');
+		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);
+	}
+
+	public function testWarnsIfUnblockLinksForAnyAddressLackTheLiveSite()
+	{
+		$original = $this->getPluginParams();
+		$app = Factory::getApplication();
+		$warnings = function ($mode, $liveSite) use ($app)
+		{
+			$this->setPluginParams(json_encode(array('notifyBlockedUser' => $mode)));
+			return $this->withLiveSite($liveSite, function () use ($app)
+			{
+				$app->getMessageQueue(true);
+				$controller = new DisplayController(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'),
+					new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
+				$controller->warnIfUnblockLinksNeedLiveSite();
+				return count($app->getMessageQueue(true));
+			});
+		};
+		try
+		{
+			$this->assertSame(1, $warnings(2, ''));
+			$this->assertSame(0, $warnings(2, 'https://www.example.org'));
+			$this->assertSame(0, $warnings(1, ''));
+			$this->assertSame(0, $warnings(0, ''));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
+
+	/**
+	 * A user who has exactly the given permissions in com_bfstop.
+	 */
+	private static function userWith(array $actions)
+	{
+		return new class ($actions) extends \Joomla\CMS\User\User
+		{
+			private $actions;
+
+			public function __construct(array $actions)
+			{
+				parent::__construct();
+				$this->actions = $actions;
+			}
+
+			public function authorise($action, $assetname = null)
+			{
+				return $assetname === 'com_bfstop' && in_array($action, $this->actions, true);
+			}
+		};
+	}
+
+	public function testOnlyWhoMayReadTheLogMayClearIt()
+	{
+		// the log view needs core.admin: who may only delete entries of the
+		// lists must not be able to erase the log
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
+		$logFile = \Codeling\Plugin\System\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
+		$clear = function (array $actions) use ($app, $input, $logFile)
+		{
+			file_put_contents($logFile, "#<?php die('Forbidden.'); ?>\n2026-01-01T00:00:00+00:00 INFO an entry\n");
+			$app->loadIdentity(self::userWith($actions));
+			$controller = new \Codeling\Component\Bfstop\Administrator\Controller\LogController(
+				array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'), new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input);
+			$controller->clear();
+			clearstatcache();
+			return !(is_file($logFile) && str_contains((string) file_get_contents($logFile), 'an entry'));
+		};
+		try
+		{
+			$this->assertFalse($clear(array('core.manage', 'core.delete')), 'core.delete alone');
+			$this->assertFalse($clear(array('core.manage', 'core.admin')), 'core.admin alone');
+			$this->assertTrue($clear(array('core.manage', 'core.admin', 'core.delete')));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+			@unlink($logFile);
+		}
+	}
+
+	public function testChangingTheAllowListNeedsTheAdminPermission()
+	{
+		// an entry exempts addresses from all protection: like the settings,
+		// it needs core.admin, not only core.create / core.edit
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\AllowController(
+			array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+			new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
+		$allowAdd = new \ReflectionMethod($controller, 'allowAdd');
+		$allowEdit = new \ReflectionMethod($controller, 'allowEdit');
+		try
+		{
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create', 'core.edit')));
+			$this->assertFalse($allowAdd->invoke($controller, array()));
+			$this->assertFalse($allowEdit->invoke($controller, array('id' => 1), 'id'));
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.admin')));
+			$this->assertFalse($allowAdd->invoke($controller, array()), 'core.create is still needed');
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.admin', 'core.create', 'core.edit')));
+			$this->assertTrue($allowAdd->invoke($controller, array()));
+			$this->assertTrue($allowEdit->invoke($controller, array('id' => 1), 'id'));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
 		}
 	}
 }

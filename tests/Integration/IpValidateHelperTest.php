@@ -73,7 +73,8 @@ class IpValidateHelperTest extends IntegrationTestCase
 		return array(
 			array('203.0.113.5'),
 			array('203.0.113.0/24'),
-			array('203.0.113.0/0'),
+			array('44.0.0.0/8'),
+			array('2001::/16'),
 			array('203.0.113.0/32'),
 			array('2001:4860:4860::8888'),
 			array('2001:4860::/32'),
@@ -107,6 +108,21 @@ class IpValidateHelperTest extends IntegrationTestCase
 			'empty'                 => array('', 'COM_BFSTOP_IP_INVALID_ADDRESS', ''),
 			'invalid with subnet'   => array('1.2.3/24', 'COM_BFSTOP_IP_INVALID_ADDRESS', '1.2.3'),
 		);
+	}
+
+	public static function tooLargeNetworkProvider()
+	{
+		// a whole address family, or a large share of it
+		return array(array('203.0.113.0/0'), array('0.0.0.0/0'), array('128.0.0.0/1'), array('44.0.0.0/7'),
+			array('::/0'), array('2000::/3'), array('2001::/15'));
+	}
+
+	#[DataProvider('tooLargeNetworkProvider')]
+	public function testTooLargeNetworkIsRefused($range)
+	{
+		$this->assertFalse(IpValidateHelper::validIPRange($range));
+		$this->assertSame(array(array('message' => Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE', $range,
+			IpValidateHelper::MinPrefixIPv4, IpValidateHelper::MinPrefixIPv6), 'type' => 'warning')), $this->messages());
 	}
 
 	#[DataProvider('invalidRangeProvider')]
