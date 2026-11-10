@@ -87,10 +87,9 @@ class DisplayController extends BaseController
 	}
 
 	/**
-	 * Unblock links for any IP address were chosen (before this version
-	 * checked it, or $live_site was removed since), but they need $live_site:
-	 * the plugin only sends them as for "only known addresses", see
-	 * Bfstop::effectiveNotifyBlockedUser().
+	 * Unblock links were chosen (before this version checked it, or
+	 * $live_site was removed since), but they need $live_site: the plugin
+	 * sends none, see Bfstop::effectiveNotifyBlockedUser().
 	 */
 	function warnIfUnblockLinksNeedLiveSite()
 	{
