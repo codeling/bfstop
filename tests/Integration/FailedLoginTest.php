@@ -205,7 +205,7 @@ class FailedLoginTest extends IntegrationTestCase
 			$header = array('--server=HTTP_X_FORWARDED_FOR=203.0.113.99');
 			$this->failedLogin('Admin', self::Ip, $header);
 			$this->failedLogin('Admin', self::Ip, $header);
-			$this->assertStringContainsString('Require not ip 203.0.113.99', (string) file_get_contents($dir.'/.htaccess'));
+			$this->assertStringContainsString("-R '203.0.113.99'", (string) file_get_contents($dir.'/.htaccess'));
 		}
 		finally
 		{

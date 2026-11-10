@@ -1064,6 +1064,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->pruneKnownIps();
 			$this->mydb->pruneDnsCache();
 			$this->mydb->purgeExpiredUnblockTokens();
+			// whatever the mode is now: a block section of an earlier version
+			// grants access (see HtaccessHelper::LegacyLines). The update
+			// replaces it; this is for one it couldn't write
+			$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
+			if (is_file($htaccess->getFileName()) && !$htaccess->upgradeFormat())
+			{
+				$this->logger->log('Could not replace the block section of an earlier version in '.
+					$htaccess->getFileName().': it lets everybody who isn\'t blocked past the other access '.
+					'controls of the directory - make the file writable or remove the section by hand', Log::ERROR);
+			}
 			if ($this->getStringParam('blockMode', 'full') === 'htaccess')
 			{
 				$this->removeLiftedHtaccessBlocks();

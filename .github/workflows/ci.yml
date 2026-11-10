@@ -76,6 +76,24 @@ jobs:
         if: matrix.php != '8.1'
         run: phpunit -c tests/phpunit.xml.dist --testsuite unit
 
+  apache:
+    name: .htaccess blocks on Apache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Install Apache
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q apache2 apache2-utils
+          # the job starts its own Apache, with its own configuration
+          sudo systemctl stop apache2 || true
+      - name: The block section turns away blocked addresses and nothing else
+        run: tests/ci/apache-htaccess.sh
+
   # the Joomla!/PHP/database combinations live in tests/ci/matrix.json, a file
   # which the joomla-versions workflow can change (a workflow file it can't)
   matrix:

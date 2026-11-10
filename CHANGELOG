@@ -1,4 +1,16 @@
 2.0.0 (unreleased)
+  - Security: blocking through .htaccess no longer opens up the directory it
+    writes into. The block section of earlier versions held "Require all
+    granted", which Apache combines with the directory's other access
+    controls by "any of them is enough": everybody who wasn't blocked got
+    past HTTP authentication, "Require ip" and "Require all denied" in that
+    directory, and a blocked client got in with valid credentials. The
+    section now only denies (<If "-R '...'"> Require all denied </If>); the
+    update replaces the section of earlier versions (and says so if it
+    can't write the file), and the daily maintenance does as well. A CI job
+    checks the section against a real Apache
+  - .htaccess files with Windows line ends: their blocks are listed and
+    removed again (they used to stay in the file for ever)
   - Migrate to Joomla 5/6: PSR-4 namespaced classes (Codeling\Plugin\System\Bfstop),
     service provider, SubscriberInterface event handling
   - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6 and PHP 8.1); the

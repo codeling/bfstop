@@ -24,6 +24,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	// the version this update replaces, null for an installation
 	private $previousVersion = null;
 
+	// the .htaccess file whose block section of an earlier version could not
+	// be replaced, see replaceLegacyHtaccessSection()
+	private $htaccessNotRewritten = null;
+
 	// the bit of the "enabledForOrigin" setting for the Web Services API
 	// (Bfstop::OriginApi - the class of the version being replaced may be the
 	// one loaded while this runs)
@@ -119,6 +123,14 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 
 	public function postflight($type, $adapter)
 	{
+		if ($this->htaccessNotRewritten !== null)
+		{
+			Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+			Factory::getApplication()->enqueueMessage(
+				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_HTACCESS_NOT_REWRITTEN', htmlspecialchars($this->htaccessNotRewritten, ENT_QUOTES, 'UTF-8')),
+				'error'
+			);
+		}
 		// only for the update from a version before the settings moved, not
 		// for every later update
 		if ($this->updatesFromBefore200($type))
@@ -184,6 +196,14 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 				$params['enabledForOrigin'] = ((int) $params['enabledForOrigin']) | self::OriginApi;
 				$changed = true;
 			}
+			// whatever the blocking mode is now: the file may still hold the
+			// section of the time .htaccess blocking was used
+			$htaccessPath = (is_array($params) && (string) ($params['htaccessPath'] ?? '') !== '')
+				? (string) $params['htaccessPath'] : JPATH_ROOT;
+			if (!self::replaceLegacyHtaccessSection(rtrim($htaccessPath, '/\\').'/.htaccess'))
+			{
+				$this->htaccessNotRewritten = rtrim($htaccessPath, '/\\').'/.htaccess';
+			}
 			if ($changed)
 			{
 				$query = $db->getQuery(true)
@@ -201,5 +221,138 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			// if the extension row can't be found/updated, there's nothing we can do
 //			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
 		}
+	}
+
+	/**
+	 * Whether $value is an IP address, or a network in CIDR notation - all
+	 * that may get into a condition of the web server's configuration.
+	 */
+	private static function isAddressOrNetwork($value)
+	{
+		$parts = explode('/', (string) $value);
+		if (count($parts) > 2 || filter_var($parts[0], FILTER_VALIDATE_IP) === false)
+		{
+			return false;
+		}
+		return count($parts) === 1 || (preg_match('/^[0-9]{1,3}\z/', $parts[1]) === 1 &&
+			(int) $parts[1] <= (strpos($parts[0], ':') !== false ? 128 : 32));
+	}
+
+	/**
+	 * Replaces the block section which versions up to 2.0.0 wrote into the
+	 * .htaccess file - "<RequireAll> Require all granted, Require not ip ...
+	 * </RequireAll>" - by the form the plugin writes now (see the plugin's
+	 * HtaccessHelper), keeping the addresses, the 403 message and any lines
+	 * added by hand. Apache combines the authorization directives at the top
+	 * level of a configuration section with an implicit <RequireAny>, so the
+	 * "Require all granted" let everybody who wasn't blocked past every other
+	 * access control of the directory (HTTP authentication, "Require ip",
+	 * "Require all denied").
+	 *
+	 * Done here, without the plugin's classes: those of the version being
+	 * replaced may be the ones loaded in this request.
+	 *
+	 * @return bool false if the section is there and the file couldn't be written
+	 */
+	public static function replaceLegacyHtaccessSection($file)
+	{
+		if (!is_file($file))
+		{
+			return true;
+		}
+		$content = @file_get_contents($file);
+		if (!is_string($content))
+		{
+			return false;
+		}
+		$lines = explode("\n", $content);
+		$begin = null;
+		$end = null;
+		foreach ($lines as $i => $line)
+		{
+			if ($begin === null && strpos($line, '# BEGIN BFStop Blocks') !== false)
+			{
+				$begin = $i;
+			}
+			elseif ($begin !== null && strpos($line, '# END BFStop Blocks') !== false)
+			{
+				$end = $i;
+				break;
+			}
+		}
+		if ($begin === null || $end === null)
+		{
+			return true;
+		}
+		$addresses = array();
+		$errorDocument = null;
+		$other = array();
+		$legacy = false;
+		for ($i = $begin + 1; $i < $end; ++$i)
+		{
+			$line = trim($lines[$i]);
+			if ($line === '')
+			{
+				continue;
+			}
+			if (in_array($line, array('<RequireAll>', 'Require all granted', '</RequireAll>'), true))
+			{
+				$legacy = true;
+			}
+			elseif (strpos($line, 'Require not ip ') === 0)
+			{
+				$legacy = true;
+				$address = substr($line, strlen('Require not ip '));
+				if (self::isAddressOrNetwork($address))
+				{
+					$addresses[] = $address;
+				}
+			}
+			elseif (strpos($line, 'ErrorDocument 403 ') === 0)
+			{
+				$errorDocument = $line;
+			}
+			else
+			{
+				$other[] = rtrim($lines[$i], "\r");
+			}
+		}
+		if (!$legacy)
+		{
+			return true;
+		}
+		$section = array();
+		// as many addresses per <If> as HtaccessHelper::AddressesPerCondition
+		foreach (array_chunk(array_values(array_unique($addresses)), 50) as $chunk)
+		{
+			$conditions = array();
+			foreach ($chunk as $address)
+			{
+				$conditions[] = "-R '".$address."'";
+			}
+			$section[] = '<If "'.implode(' || ', $conditions).'">';
+			$section[] = 'Require all denied';
+			$section[] = '</If>';
+		}
+		if ($errorDocument !== null)
+		{
+			$section[] = $errorDocument;
+		}
+		array_splice($lines, $begin + 1, $end - $begin - 1, array_merge($section, $other));
+		$newContent = implode("\n", $lines);
+
+		// replaced as a whole, like HtaccessHelper::write() does
+		$target = is_link($file) ? (realpath($file) ?: $file) : $file;
+		$temporary = $target.'.bfstop-'.bin2hex(random_bytes(6));
+		if (@file_put_contents($temporary, $newContent) === strlen($newContent))
+		{
+			@chmod($temporary, fileperms($target) & 0777);
+			if (@rename($temporary, $target))
+			{
+				return true;
+			}
+		}
+		@unlink($temporary);
+		return @file_put_contents($target, $newContent, LOCK_EX) !== false;
 	}
 }
