@@ -56,7 +56,7 @@ class TokenunblockModel extends BaseDatabaseModel
 
 	/**
 	 * The IP address the block belongs to which the token was issued for, or
-	 * null if there is no such token.
+	 * null if there is no such token or block, or they can't be read.
 	 */
 	private function getBlockedIp($token)
 	{
@@ -98,6 +98,8 @@ class TokenunblockModel extends BaseDatabaseModel
 	 * unblock needs a POST. In addition, the token only unblocks from the IP
 	 * address it was issued for - the one that got blocked - so a scanner or
 	 * anyone else to whom the link was forwarded can't use it from elsewhere.
+	 * If that address can't be found, nothing is unblocked. (The view checks
+	 * the form token of the POST before.)
 	 *
 	 * @return string one of the Result* constants
 	 */
@@ -112,7 +114,15 @@ class TokenunblockModel extends BaseDatabaseModel
 			return self::ResultConfirm;
 		}
 		$blockedIp = $this->getBlockedIp($token);
-		if ($blockedIp !== null && !self::sameAddress($blockedIp, $requestIp))
+		if ($blockedIp === null)
+		{
+			// no such token, no block for it (any more), or the tables can't
+			// be read: without the block's address, the token can't be bound
+			// to it - so it doesn't unblock anything
+			$logger->log("com_bfstop-tokenunblock: No block found for the token.", Log::ERROR);
+			return self::ResultNotFound;
+		}
+		if (!self::sameAddress($blockedIp, $requestIp))
 		{
 			$logger->log("com_bfstop-tokenunblock: Token used from an IP address ".
 				"other than the blocked one.", Log::WARNING);
