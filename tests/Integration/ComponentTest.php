@@ -181,6 +181,20 @@ class ComponentTest extends IntegrationTestCase
 		$this->logger->errors = array(); // expected: "token not found" errors
 	}
 
+	public function testTokenOfABlockThatIsGoneUnblocksNothing()
+	{
+		// without the block, there is no address to bind the token to: it
+		// must not unblock from wherever it is used
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.5', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'orphan', 'block_id' => $blockId, 'crdate' => self::minutesAgo(1)));
+		$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE id='.(int) $blockId);
+		$this->db->execute();
+		$model = $this->model(TokenunblockModel::class);
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('orphan', true, '198.51.100.9', $this->logger));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock'));
+		$this->logger->errors = array(); // expected: "no block found"
+	}
+
 	public function testTokenUnblockComparesIpv6AddressesNotSpellings()
 	{
 		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8::1', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');

@@ -1,4 +1,8 @@
 2.0.0 (unreleased)
+  - Unblock page: confirming needs the form token of the page (a POST
+    another site makes the browser send unblocks nothing), and a token whose
+    block can't be found unblocks nothing either - the check that it is used
+    from the blocked address was skipped then
   - A login attempt is refused (503, "try again in a few minutes") if the
     block list can't be read; it used to count as not blocked. Other
     requests go on as before
