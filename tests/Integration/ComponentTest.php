@@ -877,9 +877,17 @@ class ComponentTest extends IntegrationTestCase
 		try
 		{
 			$app->loadIdentity(self::userWith($actions));
-			$controller = new \Codeling\Component\Bfstop\Administrator\Controller\HtblockController(
-				array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
-				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input);
+			// the tests run in the site application: the backend's controller
+			// would look for the site's models
+			$controller = new class(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input)
+				extends \Codeling\Component\Bfstop\Administrator\Controller\HtblockController
+			{
+				public function getModel($name = '', $prefix = '', $config = array())
+				{
+					return parent::getModel($name, $prefix ?: 'Administrator', $config);
+				}
+			};
 			$controller->save();
 			$app->getMessageQueue(true);
 			return (new HtaccessHelper($dir, null))->getDeniedIPs();
