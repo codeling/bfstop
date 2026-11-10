@@ -1,4 +1,9 @@
 2.0.0 (unreleased)
+  - Adding a .htaccess block, and a database block of a network wider than
+    /24 (IPv4) or /48 (IPv6), needs the "Configure" permission (core.admin)
+    of the component as well, like the allow list: such a block turns
+    addresses away which then can't lift it from within the site. The
+    "blocked message" setting is filtered as safe HTML explicitly
   - Unblock page: confirming needs the form token of the page (a POST
     another site makes the browser send unblocks nothing), and a token whose
     block can't be found unblocks nothing either - the check that it is used

@@ -912,7 +912,7 @@ class ComponentTest extends IntegrationTestCase
 		$dir = sys_get_temp_dir().'/bfstop-htblock-'.getmypid();
 		mkdir($dir);
 		$original = $this->getPluginParams();
-		$actions = array('core.manage', 'core.create');
+		$actions = array('core.manage', 'core.create', 'core.admin');
 		try
 		{
 			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
@@ -928,5 +928,69 @@ class ComponentTest extends IntegrationTestCase
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
+	}
+
+	public function testHtaccessBlocksNeedTheAdminPermission()
+	{
+		// an entry is part of the web server's configuration: nobody in it
+		// can lift it from within the site
+		$dir = sys_get_temp_dir().'/bfstop-htblock-admin-'.getmypid();
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create')));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.admin')),
+				'core.create is still needed');
+			$this->assertSame(array('192.0.2.0/24'),
+				$this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create', 'core.admin')));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	public function testWideNetworkBlocksNeedTheAdminPermission()
+	{
+		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\BlockController(
+			array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+			new MVCFactory('Codeling\\Component\\Bfstop'), Factory::getApplication(), Factory::getApplication()->getInput());
+		$allowSave = new \ReflectionMethod($controller, 'allowSave');
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		try
+		{
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create')));
+			foreach (array('203.0.113.5', '203.0.113.0/24', '2001:db8:1::/48', '2001:db8:1:2::/64', '') as $address)
+			{
+				$this->assertTrue($allowSave->invoke($controller, array('ipaddress' => $address), 'id'), $address);
+			}
+			foreach (array('203.0.0.0/16', '203.0.112.0/23', '2001:db8::/32', '2001:DB8::/47') as $address)
+			{
+				$this->assertFalse($allowSave->invoke($controller, array('ipaddress' => $address), 'id'), $address);
+			}
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create', 'core.admin')));
+			$this->assertTrue($allowSave->invoke($controller, array('ipaddress' => '203.0.0.0/16'), 'id'));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+		}
+	}
+
+	public function testBlockedMessageIsFilteredAsHtml()
+	{
+		// the plugin shows it as HTML to every blocked visitor
+		$model = $this->model(SettingsModel::class);
+		$valid = $model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+			'blockedMessage' => '<b>Blocked</b><script>alert(1)</script><img src=x onerror=alert(2)>')));
+		$this->assertIsArray($valid, implode(', ', $model->getErrors()));
+		$this->assertStringContainsString('<b>Blocked</b>', $valid['params']['blockedMessage']);
+		$this->assertStringNotContainsString('<script', $valid['params']['blockedMessage']);
+		$this->assertStringNotContainsString('onerror', $valid['params']['blockedMessage']);
 	}
 }
