@@ -595,8 +595,8 @@ class FailedLoginTest extends IntegrationTestCase
 	}
 
 	// without the site's $live_site, the link has the host the request of the
-	// attacker's failed login named: links for any address (mode 2) are then
-	// only sent where mode 1 would send them
+	// failed login named, which whoever sends it picks: no link is sent then,
+	// also not to a user who logged in from the address (others may share it)
 
 	public function testAnyAddressModeWithoutLiveSiteNeverSendsToAnAttackersAddress()
 	{
@@ -606,12 +606,17 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->assertSame(0, $this->tokenCount());
 	}
 
-	public function testAnyAddressModeWithoutLiveSiteSendsLinkIfTheUserLoggedInFromThere()
+	public function testNoUnblockLinkWithoutLiveSiteEvenIfTheUserLoggedInFromThere()
 	{
 		$this->liveSite = '';
-		$this->knownIp(self::Ip, 'Admin');
-		$this->blockWith(2);
-		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+		foreach (array(1, 2) as $mode)
+		{
+			$this->emptyTables();
+			$this->knownIp(self::Ip, 'Admin');
+			$this->blockWith($mode);
+			$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), "mode $mode: blocked");
+			$this->assertSame(0, $this->tokenCount(), "mode $mode");
+		}
 	}
 
 	public function testEffectiveNotifyBlockedUserSetting()
@@ -621,7 +626,7 @@ class FailedLoginTest extends IntegrationTestCase
 			$this->assertSame($setting, Bfstop::effectiveNotifyBlockedUser((string) $setting, true));
 		}
 		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(0, false));
-		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser(1, false));
-		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser('2', false));
+		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(1, false));
+		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser('2', false));
 	}
 }

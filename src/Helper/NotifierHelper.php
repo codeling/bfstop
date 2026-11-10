@@ -54,6 +54,20 @@ class NotifierHelper
 		return (string) Factory::getApplication()->get('sitename');
 	}
 
+	/**
+	 * The site's address for the mails, if it is configured ($live_site in
+	 * configuration.php). The mails are sent from the request of a failed
+	 * login, and without $live_site, Joomla builds every address (also
+	 * Uri::root()) from the host that request names - which whoever sends it
+	 * picks: a link in a genuine mail of the site to their server.
+	 */
+	public static function siteAddress()
+	{
+		return trim((string) Factory::getApplication()->get('live_site', '')) !== ''
+			? Uri::root()
+			: Text::_('PLG_SYSTEM_BFSTOP_SITE_ADDRESS_NOT_SET');
+	}
+
 	public function isNotificationAllowed($logtime, $maxNumber,
 		$table = '#__bfstop_failedlogin',
 		$timecol = 'logtime')
@@ -77,7 +91,7 @@ class NotifierHelper
 	{
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
-			Uri::root(),
+			self::siteAddress(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
@@ -89,7 +103,7 @@ class NotifierHelper
 	{
 		$bodys = Text::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
-			Uri::root())."\n";
+			self::siteAddress())."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":", 15).
 			LoggerHelper::singleLine($logEntry->username)."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":", 15).
@@ -141,7 +155,7 @@ class NotifierHelper
 		$body = $this->getFailedLoginBody($logEntry);
 		$subject = Text::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
-			Uri::root());
+			self::siteAddress());
 		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 

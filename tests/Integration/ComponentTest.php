@@ -717,7 +717,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
-	public function testUnblockLinksForAnyAddressNeedTheLiveSite()
+	public function testUnblockLinksNeedTheLiveSite()
 	{
 		// without $live_site, the link would have the host the attacker's
 		// request named, see Bfstop::effectiveNotifyBlockedUser()
@@ -734,12 +734,13 @@ class ComponentTest extends IntegrationTestCase
 		list($valid) = $this->withLiveSite('https://www.example.org', $validate);
 		$this->assertIsArray($valid);
 		$this->assertSame('2', $valid['params']['notifyBlockedUser']);
-		foreach (array('0', '1') as $mode)
-		{
-			$data['params']['notifyBlockedUser'] = $mode;
-			list($valid) = $this->withLiveSite('', $validate);
-			$this->assertIsArray($valid, "mode $mode");
-		}
+		// also links only for known addresses: others may share the address
+		$data['params']['notifyBlockedUser'] = '1';
+		list($valid) = $this->withLiveSite('', $validate);
+		$this->assertFalse($valid, 'mode 1');
+		$data['params']['notifyBlockedUser'] = '0';
+		list($valid) = $this->withLiveSite('', $validate);
+		$this->assertIsArray($valid, 'mode 0');
 	}
 
 	public function testSettingsPageProposesTheLiveSite()
@@ -750,7 +751,7 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);
 	}
 
-	public function testWarnsIfUnblockLinksForAnyAddressLackTheLiveSite()
+	public function testWarnsIfUnblockLinksLackTheLiveSite()
 	{
 		$original = $this->getPluginParams();
 		$app = Factory::getApplication();
@@ -770,7 +771,8 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$this->assertSame(1, $warnings(2, ''));
 			$this->assertSame(0, $warnings(2, 'https://www.example.org'));
-			$this->assertSame(0, $warnings(1, ''));
+			$this->assertSame(1, $warnings(1, ''));
+			$this->assertSame(0, $warnings(1, 'https://www.example.org'));
 			$this->assertSame(0, $warnings(0, ''));
 		}
 		finally

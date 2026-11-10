@@ -1,4 +1,14 @@
 2.0.0 (unreleased)
+  - Security: no addresses taken from the request in mails. Without the
+    site's $live_site, Joomla builds every address from the host the request
+    names, and the mails are prepared in the request of a failed login -
+    whoever sends it picks the host. Unblock links are therefore only sent
+    with $live_site set, also in "only if the user has logged in from that
+    IP address before" mode: other people may share the address (a NAT, an
+    office, an IPv6 network) and could get a genuine mail of the site sent
+    to the user with a link to their own server. The settings page doesn't
+    take unblock links without $live_site; the notifications to the
+    administrators name no address without it
   - Security: blocking through .htaccess no longer opens up the directory it
     writes into. The block section of earlier versions held "Require all
     granted", which Apache combines with the directory's other access

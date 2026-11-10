@@ -291,7 +291,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	/**
 	 * Anybody can make the plugin send an unblock email to a user: by failing
 	 * to log in with that username from an IP address until it is blocked.
-	 * To keep that from being used to flood somebody's inbox:
+	 * No email is sent without the site's address, see
+	 * effectiveNotifyBlockedUser(). To keep it from being used to flood
+	 * somebody's inbox:
 	 *
 	 * - by default (mode 1) the email is only sent if the user has logged in
 	 *   from the blocked IP address before - which is where somebody
@@ -305,10 +307,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		$setting = $this->getIntParam('notifyBlockedUser', 0);
 		$mode = self::effectiveNotifyBlockedUser($setting, self::hasLiveSite());
-		if ($mode !== $setting)
+		if ($mode === 0)
 		{
-			$this->logger->log('Unblock links for any IP address need the site\'s address ($live_site in '.
-				'configuration.php): sending one only if the user has logged in from this address before', Log::WARNING);
+			$this->logger->log('Unblock links need the site\'s address ($live_site in configuration.php): '.
+				'without it, the link would have the host the request of the failed login named', Log::WARNING);
+			return 'the site\'s address ($live_site) is not set';
 		}
 		if ($mode === self::NotifyBlockedAnyAddress)
 		{
@@ -337,20 +340,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * The "notifyBlockedUser" setting as it is applied. The unblock email is
 	 * prepared in the request of the failed login which got the address
 	 * blocked, so the link in it has the host that request named, unless
-	 * $live_site is set. With links for any address (mode 2), that request is
-	 * an attacker's: a link to their own server would hand them the token
-	 * (mail scanners open every link), which unblocks their address - over
-	 * and over. Without $live_site, the links are therefore only sent as in
-	 * mode 1, where the request comes from an address the user logged in
-	 * from. The settings page doesn't take mode 2 without $live_site; this
-	 * covers a setting saved before, or $live_site removed later.
+	 * $live_site is set - and whoever sends that request picks the host. Mode
+	 * 1 doesn't make that request trustworthy: it only says that the user has
+	 * logged in from the address before, and clients are tracked by their
+	 * network (an IPv6 /56, see IpHelper::trackedAddress()) behind which there
+	 * may be many other people (a NAT, an office, a campus). Any of them could
+	 * get a real mail of the site sent to the user with a link to their own
+	 * server (phishing; and mail scanners open every link, handing them the
+	 * token). So without $live_site, no unblock link is sent at all. The
+	 * settings page doesn't take modes 1 and 2 without $live_site; this covers
+	 * a setting saved before, or $live_site removed later.
 	 */
 	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
 	{
 		$setting = (int) $setting;
-		return ($setting === self::NotifyBlockedAnyAddress && !$hasLiveSite)
-			? self::NotifyBlockedKnownAddress
-			: $setting;
+		return $hasLiveSite ? $setting : 0;
 	}
 
 	private function getHtaccessPath()
