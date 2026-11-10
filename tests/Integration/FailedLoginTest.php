@@ -214,6 +214,35 @@ class FailedLoginTest extends IntegrationTestCase
 		}
 	}
 
+	public function testNetworkWithAllowedAddressesIsNotBlockedThroughHtaccess()
+	{
+		// an IPv6 client is blocked by its /56: in .htaccess, that would turn
+		// away the allowed hosts of the network too - the web server knows
+		// nothing of the allow list
+		$dir = sys_get_temp_dir().'/bfstop-allow-htaccess-'.getmypid();
+		mkdir($dir);
+		try
+		{
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
+			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir));
+			$this->failedLogin('Admin', '2001:db8:1:2a::5');
+			$this->failedLogin('Admin', '2001:db8:1:2a::5');
+			$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'),
+				'blocked in the database');
+			$this->assertStringNotContainsString('2001:db8:1::/56', (string) @file_get_contents($dir.'/.htaccess'));
+
+			// a network without allowed addresses is blocked in .htaccess
+			$this->failedLogin('Admin', '2001:db8:2:2a::5');
+			$this->failedLogin('Admin', '2001:db8:2:2a::5');
+			$this->assertStringContainsString("-R '2001:db8:2::/56'", (string) file_get_contents($dir.'/.htaccess'));
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
 	public function testBlockedAddressIsNotDelayed()
 	{
 		$this->configure(array('delayDuration' => 5, 'blockNumber' => 1));

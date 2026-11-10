@@ -1,4 +1,11 @@
 2.0.0 (unreleased)
+  - Security: no .htaccess block of a network with allowed addresses in it.
+    The web server knows nothing of the allow list: an IPv6 client is
+    blocked by its /56, and in .htaccess that turned away the allowed hosts
+    of the network too (it is now only blocked in the database, like a
+    trusted proxy). The backend's .htaccess form refuses an address or
+    network which overlaps the allow list - it only refused addresses which
+    were on it, and never noticed one for a network
   - Security: no addresses taken from the request in mails. Without the
     site's $live_site, Joomla builds every address from the host the request
     names, and the mails are prepared in the request of a failed login -

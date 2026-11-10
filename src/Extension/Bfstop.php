@@ -222,6 +222,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				'trusted proxy - check that the proxy sends the configured header', Log::ERROR);
 			$usehtaccess = false;
 		}
+		if ($usehtaccess)
+		{
+			// the web server knows nothing of the allow list: a network block
+			// (an IPv6 client is blocked by its /56, see trackedAddress())
+			// would turn away the allowed addresses in it before Joomla runs
+			$allowed = $this->mydb->allowListEntriesOverlapping($logEntry->ipaddress);
+			if ($allowed === null || count($allowed) > 0)
+			{
+				$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it contains '.
+					($allowed === null ? 'addresses of the allow list (which could not be read)'
+						: 'allowed address(es) '.implode(', ', $allowed)).' - it is only blocked in the database',
+					Log::WARNING);
+				$usehtaccess = false;
+			}
+		}
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&

@@ -862,4 +862,57 @@ class ComponentTest extends IntegrationTestCase
 			$app->loadIdentity($original);
 		}
 	}
+
+	/**
+	 * Saves the backend's ".htaccess block" form with $ipaddress, as a user
+	 * with $actions; returns the addresses in the file afterwards.
+	 */
+	private function saveHtaccessBlock($dir, $ipaddress, array $actions)
+	{
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
+		$input->post->set('jform', array('ipaddress' => $ipaddress));
+		try
+		{
+			$app->loadIdentity(self::userWith($actions));
+			$controller = new \Codeling\Component\Bfstop\Administrator\Controller\HtblockController(
+				array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input);
+			$controller->save();
+			$app->getMessageQueue(true);
+			return (new HtaccessHelper($dir, null))->getDeniedIPs();
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+			$input->post->set('jform', null);
+		}
+	}
+
+	public function testHtaccessBlockFormRefusesNetworksWithAllowedAddresses()
+	{
+		// the web server knows nothing of the allow list: a network in the
+		// .htaccess file would turn away the allowed addresses in it
+		$dir = sys_get_temp_dir().'/bfstop-htblock-'.getmypid();
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$actions = array('core.manage', 'core.create');
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.7', 'notes' => ''));
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.0/24', 'notes' => ''));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '203.0.113.0/24', $actions), 'contains an allowed address');
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '198.51.100.9', $actions), 'in an allowed network');
+			$this->assertSame(array('192.0.2.0/24'), $this->saveHtaccessBlock($dir, '192.0.2.0/24', $actions));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
 }

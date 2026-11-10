@@ -385,6 +385,33 @@ class DatabaseHelper
 		return count($this->loadMatchingEntries($ipaddress, '#__bfstop_allowlist', '', "Allowed")) > 0;
 	}
 
+	/**
+	 * The entries of the allow list which overlap the address or network
+	 * $entry (see IpHelper::overlapping()): what a block of $entry in the
+	 * .htaccess file would turn away as well - the web server knows nothing
+	 * of the allow list. isIPOnAllowList() only answers for an address. The
+	 * allow list is kept by the administrators (core.admin), so it is short;
+	 * if it can't be read, every entry is assumed to overlap.
+	 *
+	 * @return string[]|null null if the allow list could not be read
+	 */
+	public function allowListEntriesOverlapping($entry)
+	{
+		try
+		{
+			$query = $this->db->getQuery(true)
+				->select($this->db->quoteName('ipaddress'))
+				->from($this->db->quoteName('#__bfstop_allowlist'));
+			$this->db->setQuery($query);
+			return IpHelper::overlapping($entry, $this->db->loadColumn());
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return null;
+		}
+	}
+
 	public function blockIP($logEntry, $duration, $usehtaccess, $htaccessPath)
 	{
 		try
