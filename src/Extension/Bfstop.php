@@ -1282,7 +1282,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$blockIds = $this->mydb->getActiveBlockIds($ipaddress);
+		$blockIds = $this->mydb->getActiveBlockIdsOrNull($ipaddress);
+		if ($blockIds === null)
+		{
+			// the block list can't be read (see the previous error): browsing
+			// goes on, but a login attempt - the one thing the block is there
+			// to stop - is refused rather than let through unchecked
+			$loginAttempt = $this->isLoginAttemptRequest();
+			$this->logger->log('Could not find out whether '.$ipaddress.' is blocked'.
+				($loginAttempt ? ', refusing the login attempt' : ''), Log::ERROR);
+			if ($loginAttempt)
+			{
+				$this->refuseUnchecked();
+			}
+			return;
+		}
 		if (count($blockIds) > 0)
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".
@@ -1332,6 +1346,28 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			echo $message;
 			$this->getApplication()->close();
 		}
+	}
+
+	/**
+	 * Answers a login attempt whose address could not be checked against the
+	 * block list: 503 (it is not refused for good), with Retry-After.
+	 */
+	private function refuseUnchecked()
+	{
+		http_response_code(503);
+		header('Retry-After: 60');
+		foreach (self::blockedResponseHeaders() as $header)
+		{
+			header($header);
+		}
+		$message = Text::_('PLG_SYSTEM_BFSTOP_LOGIN_UNAVAILABLE');
+		if ($this->isApiRequest())
+		{
+			header('Content-Type: application/vnd.api+json; charset=utf-8');
+			$message = self::blockedApiResponse($message, 503);
+		}
+		echo $message;
+		$this->getApplication()->close();
 	}
 
 	/**

@@ -1,4 +1,7 @@
 2.0.0 (unreleased)
+  - A login attempt is refused (503, "try again in a few minutes") if the
+    block list can't be read; it used to count as not blocked. Other
+    requests go on as before
   - Parallel failed logins of one client which all reach the threshold
     block it once: each used to find it not blocked yet and block it, so a
     single burst counted as several earlier offences (making the block
