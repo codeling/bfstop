@@ -162,7 +162,8 @@
 				<option value="1">PLG_SYSTEM_BFSTOP_REMINDER_NOTIFY_1LEFT</option>
 				<option value="2">PLG_SYSTEM_BFSTOP_REMINDER_NOTIFY_2LEFT</option>
 			</field>
-			<field name="blockedMessage" type="text" size="40" default=""
+			<!-- shown as HTML to the blocked visitor (see the plugin's enforceBlock()) -->
+			<field name="blockedMessage" type="text" size="40" default="" filter="safehtml"
 				label="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_LABEL"
 				description="PLG_SYSTEM_BFSTOP_BLOCKED_MESSAGE_DESC" />
 			<field name="blockedMsgShowIP" type="list" validate="options" default="0"
