@@ -66,4 +66,22 @@ class NotifierHelperTest extends IntegrationTestCase
 			$this->assertStringContainsString($notSet, $text, $what);
 		}
 	}
+
+	public function testOnlyValidAddressesAreNotified()
+	{
+		$this->assertSame(array('admin@example.org', 'other@example.org'),
+			NotifierHelper::validAddresses(array(' admin@example.org', 'nonsense', '', 'ADMIN@example.org ', 'other@example.org')));
+		$notifier = new NotifierHelper($this->logger, new DatabaseHelper($this->logger),
+			'admin@example.org; not an address;other@example.org', -1, -1, false);
+		$this->assertSame(array('admin@example.org', 'other@example.org'), $notifier->getNotifyAddresses());
+	}
+
+	public function testAnInvalidRecipientDoesNotThrow()
+	{
+		// the mailer throws for one; this runs in the request of a failed login
+		$notifier = new NotifierHelper($this->logger, new DatabaseHelper($this->logger), '', -1, -1, false);
+		$result = $notifier->sendMail('subject', 'body', array('not an address'));
+		$this->assertNotTrue($result);
+		$this->logger->errors = array(); // expected: "not successful"
+	}
 }

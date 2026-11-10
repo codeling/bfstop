@@ -993,4 +993,27 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertStringNotContainsString('<script', $valid['params']['blockedMessage']);
 		$this->assertStringNotContainsString('onerror', $valid['params']['blockedMessage']);
 	}
+
+	public function testTrustedProxiesMustBeAddressesOrNetworks()
+	{
+		// whatever else is typed would be dropped silently by the plugin; a
+		// huge network would let anybody in it name any client address
+		$valid = function ($proxies)
+		{
+			$model = $this->model(SettingsModel::class);
+			return is_array($model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+				'useProxy' => '1', 'proxyIpAddress' => $proxies))));
+		};
+		foreach (array('', '192.0.2.1', '192.0.2.1, 198.51.100.0/24', "104.16.0.0/13\n2400:cb00::/32; 2a06:98c0::/29",
+			'10.0.0.0/8', '2001:db8::/16') as $proxies)
+		{
+			$this->assertTrue($valid($proxies), $proxies);
+		}
+		foreach (array('proxy.example.org', '192.0.2.1, nonsense', '192.0.2.0/33', '0.0.0.0/0', '10.0.0.0/7', '::/0',
+			'2001:db8::/15') as $proxies)
+		{
+			$this->assertFalse($valid($proxies), $proxies);
+		}
+		Factory::getApplication()->getMessageQueue(true);
+	}
 }

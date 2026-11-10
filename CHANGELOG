@@ -1,4 +1,10 @@
 2.0.0 (unreleased)
+  - Notification addresses are trimmed and checked: an invalid one (e.g.
+    of a user of the notified group) is left out and logged, instead of
+    making the mailer throw - which turned the failed login into an error
+    page. The trusted proxies of the settings must be addresses or networks
+    no wider than /8 (IPv4) or /16 (IPv6); anything else was dropped
+    silently
   - Adding a .htaccess block, and a database block of a network wider than
     /24 (IPv4) or /48 (IPv6), needs the "Configure" permission (core.admin)
     of the component as well, like the allow list: such a block turns

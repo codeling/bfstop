@@ -28,20 +28,54 @@ class NotifierHelper
 		$this->logger = $logger;
 		$this->db = $db;
 
-		$this->notifyAddresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
+		$addresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
 		$userEmail = $this->db->getUserEmailByID($userID);
 		if (!empty($userEmail))
 		{
-			$this->notifyAddresses = array_merge($this->notifyAddresses, array($userEmail));
+			$addresses[] = $userEmail;
 		}
 		if ($groupNotifEnabled)
 		{
-			$this->notifyAddresses = array_merge($this->notifyAddresses, $this->db->getUserGroupEmail($userGroup));
+			$addresses = array_merge($addresses, $this->db->getUserGroupEmail($userGroup));
 		}
+		$this->notifyAddresses = self::validAddresses($addresses, $logger);
 		if (count($this->notifyAddresses) == 0)
 		{
 			$this->logger->log('No notification address specified!', Log::DEBUG);
 		}
+	}
+
+	/**
+	 * $addresses without surrounding white space, duplicates and what isn't
+	 * an email address (which is logged). The mailer throws for an invalid
+	 * recipient - in the request of a failed login, an error page.
+	 *
+	 * @return string[]
+	 */
+	public static function validAddresses(array $addresses, ?LoggerHelper $logger = null)
+	{
+		$valid = array();
+		foreach ($addresses as $address)
+		{
+			$address = trim((string) $address);
+			if ($address === '')
+			{
+				continue;
+			}
+			if (filter_var($address, FILTER_VALIDATE_EMAIL) === false)
+			{
+				if ($logger !== null)
+				{
+					$logger->log('Not a valid email address, not notifying it: '.$address, Log::WARNING);
+				}
+				continue;
+			}
+			if (!in_array(strtolower($address), array_map('strtolower', $valid), true))
+			{
+				$valid[] = $address;
+			}
+		}
+		return $valid;
 	}
 
 	public function getNotifyAddresses()
@@ -122,16 +156,18 @@ class NotifierHelper
 			$this->logger->log("sendMail called with invalid argument: ".print_r($emailAddresses, true), Log::ERROR);
 			return false;
 		}
-		$mail = Factory::getContainer()->get(MailerFactoryInterface::class)->createMailer();
-		$mail->setSubject($subject);
-		$mail->setBody($body);
-		foreach ($emailAddresses as $recipient)
-		{
-			$mail->addRecipient($recipient);
-		}
+		// everything in the try: the mailer throws for an invalid recipient
+		// too, and this runs in the request of a failed login
 		try
 		{
-			$sendResult = $mail->Send();
+			$mail = Factory::getContainer()->get(MailerFactoryInterface::class)->createMailer();
+			$mail->setSubject($subject);
+			$mail->setBody($body);
+			foreach ($emailAddresses as $recipient)
+			{
+				$mail->addRecipient($recipient);
+			}
+			$sendResult = $mail->send();
 		}
 		catch (\Exception $e)
 		{
