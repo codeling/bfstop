@@ -243,6 +243,33 @@ class FailedLoginTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * Parallel failed logins of one client which all reach the threshold
+	 * must block it once: each extra block would count as an earlier offence
+	 * (a single burst making the block permanent with maxBlocksBefore) and
+	 * send mails of its own.
+	 */
+	public function testParallelFailedLoginsBlockOnce()
+	{
+		$this->configure(array('blockNumber' => 1, 'maxBlocksBefore' => 2));
+		$count = 8;
+		$processes = array();
+		$pipes = array();
+		for ($i = 0; $i < $count; ++$i)
+		{
+			$processes[$i] = proc_open($this->command('Admin', self::Ip, array('--live-site='.$this->liveSite)),
+				array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes[$i]);
+		}
+		foreach ($processes as $i => $process)
+		{
+			$output = stream_get_contents($pipes[$i][1]).stream_get_contents($pipes[$i][2]);
+			$this->assertSame(0, proc_close($process), $output);
+			$this->assertStringContainsString('DONE', $output);
+		}
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertNotSame(0, (int) $this->queryValue('SELECT duration FROM #__bfstop_bannedip'), 'not permanent');
+	}
+
 	public function testBlockedAddressIsNotDelayed()
 	{
 		$this->configure(array('delayDuration' => 5, 'blockNumber' => 1));

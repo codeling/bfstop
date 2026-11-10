@@ -161,19 +161,83 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return Route::_('index.php?option=com_users&view=reset');
 	}
 
+	/**
+	 * Blocks the client of $logEntry, if it isn't yet; the decision and the
+	 * new block happen under a lock per tracked address (see blockLocked()),
+	 * the mails after it.
+	 */
 	private function block($logEntry, $duration)
 	{
 		if ($this->getStringParam('blockMode', 'full') === 'off')
 		{
 			return;
 		}
-		// if the IP address is blocked we actually shouldn't be here in
-		// the first place I guess, but just to make sure
+		$block = $this->withBlockLock($logEntry->ipaddress, function () use ($logEntry, $duration)
+		{
+			return $this->blockLocked($logEntry, $duration);
+		});
+		if ($block !== null)
+		{
+			$this->notifyOfBlock($logEntry, $block['id'], $block['duration'], $block['targetedOtherAccounts']);
+		}
+	}
+
+	// lock files for the block decision, see withBlockLock(): the tracked
+	// addresses are spread over this many, so there is no file per address
+	private const BlockLockStripes = 64;
+
+	/**
+	 * Runs $decision while holding the lock for the tracked address $key.
+	 * Parallel failed logins of one client which all reach the threshold
+	 * would otherwise all find it not blocked yet and each block it: several
+	 * blocks at once - each counted as an earlier offence, so a single burst
+	 * could make the block permanent (maxBlocksBefore), or multiply its
+	 * duration - and a mail for each. If no lock can be taken (no writable
+	 * temporary directory), it runs without one, as before.
+	 */
+	private function withBlockLock($key, callable $decision)
+	{
+		$app = $this->getApplication();
+		$stripe = hexdec(substr(md5((string) $key), 0, 4)) % self::BlockLockStripes;
+		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-block-'.
+			md5((string) $app->get('db').(string) $app->get('dbprefix')).'-'.$stripe.'.lock';
+		$handle = @fopen($lockFile, 'c');
+		if ($handle === false || !flock($handle, LOCK_EX))
+		{
+			if ($handle !== false)
+			{
+				fclose($handle);
+			}
+			$this->logger->log('Could not lock '.$lockFile.', blocking without it', Log::WARNING);
+			return $decision();
+		}
+		try
+		{
+			return $decision();
+		}
+		finally
+		{
+			flock($handle, LOCK_UN);
+			fclose($handle);
+		}
+	}
+
+	/**
+	 * The part of block() under the lock: whether, how long and how to
+	 * block, and the block itself.
+	 *
+	 * @return array|null id, duration and targetedOtherAccounts of the new
+	 *                    block; null if nothing was blocked
+	 */
+	private function blockLocked($logEntry, $duration)
+	{
+		// a parallel request of the same client may have blocked it while
+		// this one waited for the lock
 		if ($this->mydb->isIPBlocked($this->clientAddress ?? $logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
-				' is already blocked!', Log::ERROR);
-			return;
+				' is already blocked', Log::INFO);
+			return null;
 		}
 		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', self::DefaultSettings['maxBlocksBefore']);
 		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
@@ -251,11 +315,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// doesn't exist
 			$this->logger->log('Could not block IP address '.$logEntry->ipaddress.
 				', see the previous errors', Log::ERROR);
-			return;
+			return null;
 		}
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', Log::INFO);
+		return array('id' => $id, 'duration' => $duration, 'targetedOtherAccounts' => $targetedOtherAccounts);
+	}
+
+	/**
+	 * The mails about the new block $id (after the lock: sending may take a
+	 * while).
+	 */
+	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
+	{
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),

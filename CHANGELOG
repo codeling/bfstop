@@ -1,4 +1,10 @@
 2.0.0 (unreleased)
+  - Parallel failed logins of one client which all reach the threshold
+    block it once: each used to find it not blocked yet and block it, so a
+    single burst counted as several earlier offences (making the block
+    permanent with "Permanent block after", or multiplying a progressive
+    duration) and sent a mail for each. The decision is now made under a
+    lock per tracked address
   - Security: no .htaccess block of a network with allowed addresses in it.
     The web server knows nothing of the allow list: an IPv6 client is
     blocked by its /56, and in .htaccess that turned away the allowed hosts
