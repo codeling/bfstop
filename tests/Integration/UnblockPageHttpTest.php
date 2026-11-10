@@ -232,10 +232,27 @@ class UnblockPageHttpTest extends IntegrationTestCase
 		// a POST another site makes the browser send (the token taken from
 		// a link the attacker got) must not unblock anything
 		$blockId = $this->token('realtoken', '127.0.0.1');
-		list($status, , $body) = $this->request('POST', self::Query, 'token=realtoken');
+		$unblocked = 'SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$blockId;
+
+		// without a session, Joomla's token check sends the browser away
+		// ("session expired")
+		list($status) = $this->request('POST', self::Query, 'token=realtoken');
+		$this->assertContains($status, array(303, 400));
+		$this->assertSame(1, $this->tokenCount(), 'the token is not used up');
+		$this->assertSame(0, (int) $this->queryValue($unblocked));
+
+		// with the session of the page, but not its form token
+		list(, $headers) = $this->request('GET', self::Query.'&token=realtoken');
+		$cookies = array();
+		foreach ($headers['set-cookie'] ?? array() as $setCookie)
+		{
+			$cookies[] = explode(';', $setCookie, 2)[0];
+		}
+		$this->assertNotSame(array(), $cookies, 'the page starts a session');
+		list($status, , $body) = $this->request('POST', self::Query, 'token=realtoken', implode('; ', $cookies));
 		$this->assertSame(400, $status);
 		$this->assertStringContainsString('Invalid call', $body);
 		$this->assertSame(1, $this->tokenCount(), 'the token is not used up');
-		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$blockId));
+		$this->assertSame(0, (int) $this->queryValue($unblocked));
 	}
 }
