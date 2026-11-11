@@ -257,21 +257,22 @@ class HtaccessHelper
 	 * line and write the result back, losing the lines the others added in
 	 * between. The lock is a file in the temporary directory, not the
 	 * .htaccess itself, which is replaced as a whole when written. If no lock
-	 * can be taken the change is done anyway, as before.
+	 * can be taken the change is done anyway, as before - also if somebody
+	 * else still holds it after LockWaitSeconds: waiting on would leave this
+	 * request (and all which get an address blocked after it) hanging for as
+	 * long as that one does, see LockHelper.
 	 */
 	private function locked(callable $change)
 	{
 		$lockFile = self::lockDirectory().'/bfstop-htaccess-'.md5($this->path).'.lock';
-		$handle = @fopen($lockFile, 'c');
-		if ($handle === false || !flock($handle, LOCK_EX))
+		$handle = LockHelper::acquire($lockFile, self::LockWaitSeconds);
+		if (!$handle)
 		{
 			if (!is_null($this->logger))
 			{
-				$this->logger->log("Could not lock '$lockFile', changing .htaccess without it", Log::WARNING);
-			}
-			if ($handle !== false)
-			{
-				fclose($handle);
+				$this->logger->log("Could not lock '$lockFile'".
+					($handle === null ? ' within '.self::LockWaitSeconds.' seconds' : '').
+					", changing .htaccess without it", Log::WARNING);
 			}
 			return $change();
 		}
@@ -281,10 +282,13 @@ class HtaccessHelper
 		}
 		finally
 		{
-			flock($handle, LOCK_UN);
-			fclose($handle);
+			LockHelper::release($handle);
 		}
 	}
+
+	// changing the file takes milliseconds: who holds its lock for this long
+	// is not going to let go of it
+	public const LockWaitSeconds = 10;
 
 	/**
 	 * Where lock files go (also those of the plugin, see Bfstop): Joomla's own

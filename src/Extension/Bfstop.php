@@ -14,6 +14,7 @@ use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
@@ -97,6 +98,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
+	// the lock which makes this request the only login of its address being
+	// handled right now, see awaitLoginTurn()
+	private $loginTurn = null;
 
 	public static function getSubscribedEvents(): array
 	{
@@ -241,6 +245,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', Log::INFO);
+		// the next login of this address sees the block now: it needn't wait
+		// for the mails
+		$this->endLoginTurn();
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
@@ -701,6 +708,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
 
+		$this->blockIfTooManyAttempts($logEntry, $riskScore);
+		// counted, and blocked if that was one too many: the next login of
+		// this address may be handled (see awaitLoginTurn()). The mail below
+		// and the delay take time it needn't wait for
+		$this->endLoginTurn();
+
 		// $username is what was typed; the entry only holds a hash of it if
 		// it isn't an account (see usernameForStorage())
 		if ($this->getBoolParam('notifyFailedOnlyExisting', false) &&
@@ -713,7 +726,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
 			$this->notifier->failedLogin($logEntry, $maxNumber);
 		}
-		$this->blockIfTooManyAttempts($logEntry, $riskScore);
 
 		$delayDuration = $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
 		if ($delayDuration > 0)
@@ -836,6 +848,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	public function onUserLogin($event)
 	{
 		$user = $event->getArgument(0);
+		// nothing to count: the next login of this address may be handled
+		$this->endLoginTurn();
 		$this->init();
 		if (!$this->isEnabledForCurrentOrigin())
 		{
@@ -1031,6 +1045,96 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $result;
 	}
 
+	/**
+	 * Whether the request submits a username and a password - what can be
+	 * guessed: a login as isLoginAttemptRequest() recognises it, but of the
+	 * API requests only those with HTTP Basic credentials, not those with a
+	 * token (a long random value, and what nearly every API request carries).
+	 */
+	private function isPasswordLoginRequest()
+	{
+		return $this->isApiRequest()
+			? ApiHelper::requestCredentialsArePassword()
+			: $this->isLoginAttemptRequest();
+	}
+
+	// the lock files of awaitLoginTurn(): an address always gets the same one
+	public const LoginTurnSlots = 64;
+
+	// how long a login waits for those of its address before it; if they are
+	// not done by then, it is handled alongside them
+	public const LoginTurnWaitSeconds = 5;
+
+	/**
+	 * The lock file for the logins of a client, by the key it is tracked
+	 * under (IpHelper::trackedAddress()), one set of files per site (see
+	 * delaySlotFiles()). A fixed number of files, not one per address: a
+	 * visitor with many addresses must not be able to fill the directory.
+	 * Which one an address gets depends on the site's secret, so nobody can
+	 * pick addresses which share the file of somebody else's.
+	 */
+	public static function loginTurnFile($trackedAddress)
+	{
+		$app = Factory::getApplication();
+		$site = md5((string) $app->get('db').(string) $app->get('dbprefix'));
+		$slot = hexdec(substr(hash_hmac('sha256', (string) $trackedAddress, (string) $app->get('secret', '')), 0, 7))
+			% self::LoginTurnSlots;
+		return HtaccessHelper::lockDirectory().'/bfstop-login-'.$site.'-'.$slot.'.lock';
+	}
+
+	/**
+	 * Lets the logins of one address be handled one after the other.
+	 *
+	 * A failed login is only known - and counted - once Joomla has checked
+	 * the password, long after this request was let through as not blocked.
+	 * Logins sent at the same time would therefore all be let through and
+	 * all get their password checked, however few attempts are allowed: as
+	 * many as the server handles in parallel, with every burst. So a request
+	 * which submits a password waits here until the one before it from the
+	 * same address has been counted (onUserLoginFailure()) or has succeeded
+	 * (onUserLogin()) - or has ended otherwise, the operating system
+	 * releases the lock then. After that, the caller looks at the block list
+	 * again.
+	 *
+	 * The wait is limited (LoginTurnWaitSeconds), and without a lock file
+	 * (no writable temporary directory) there is none: the login is handled
+	 * as before then, it must never become impossible to log in.
+	 *
+	 * @return bool whether the block list has to be looked at again
+	 */
+	private function awaitLoginTurn($ipAddress)
+	{
+		if ($this->loginTurn !== null)
+		{
+			return false;
+		}
+		$file = self::loginTurnFile($this->trackedAddress($ipAddress));
+		$handle = LockHelper::acquire($file, self::LoginTurnWaitSeconds);
+		if ($handle === false)
+		{
+			$this->logger->log('Could not create the lock file '.$file.
+				': logins from the same address are not handled one at a time', Log::WARNING);
+			return false;
+		}
+		if ($handle === null)
+		{
+			$this->logger->log('Login from '.$ipAddress.' waited '.self::LoginTurnWaitSeconds.
+				's for other logins from this address, handling it alongside them', Log::INFO);
+			return true;
+		}
+		$this->loginTurn = $handle;
+		return true;
+	}
+
+	private function endLoginTurn()
+	{
+		if ($this->loginTurn !== null)
+		{
+			LockHelper::release($this->loginTurn);
+			$this->loginTurn = null;
+		}
+	}
+
 	public function onAfterInitialise($event)
 	{
 		$this->init();
@@ -1134,13 +1238,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * The headers of the page shown to a blocked client.
 	 *
 	 * It must never be cached: a cache (browser, proxy, CDN) which kept it
-	 * would show it to other visitors of the same URL.
+	 * would show it to other visitors of the same URL. It is no page of the
+	 * site either: not for search engines (it is what a crawler gets for
+	 * every address of the site while its own is blocked), and with its type
+	 * and character set named - the server's defaults are not necessarily
+	 * those of the message - and not to be guessed by the browser.
 	 */
 	public static function blockedResponseHeaders()
 	{
 		return array(
 			'Cache-Control: no-store, no-cache, must-revalidate, private',
 			'Pragma: no-cache',
+			'Content-Type: text/html; charset=utf-8',
+			'X-Content-Type-Options: nosniff',
+			'X-Robots-Tag: noindex, nofollow',
 		);
 	}
 
@@ -1181,6 +1292,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$blockIds = $this->mydb->getActiveBlockIds($ipaddress);
+		if (count($blockIds) === 0 && $this->getStringParam('blockMode', 'full') !== 'off' &&
+			$this->isPasswordLoginRequest() && $this->awaitLoginTurn($ipaddress))
+		{
+			// the logins before this one may have got the address blocked
+			$blockIds = $this->mydb->getActiveBlockIds($ipaddress);
+		}
 		if (count($blockIds) > 0)
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".

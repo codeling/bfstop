@@ -152,11 +152,25 @@ class DnsHelper
 	}
 
 	/**
+	 * Whether $name is a host name: labels of letters, digits, hyphens and
+	 * underscores. The labels of a DNS name may hold any bytes, and what a
+	 * PTR record holds is up to whoever owns the address: a name of anything
+	 * else is no name of a host - and nothing to store (the cache is a table
+	 * of text) or to show anywhere.
+	 */
+	public static function isHostName($name)
+	{
+		return strlen($name) <= 253 &&
+			preg_match('/^[A-Za-z0-9_-]{1,63}(?:\.[A-Za-z0-9_-]{1,63})*\z/', $name) === 1;
+	}
+
+	/**
 	 * What the response $packet to the query $id says.
 	 *
 	 * @return string|null|false the host name of the (first) PTR record; null
 	 *                           if there is none (NXDOMAIN, no such record, an
-	 *                           error of the server); false if $packet is no
+	 *                           error of the server, a record which names no
+	 *                           host, see isHostName()); false if $packet is no
 	 *                           (well-formed) response to the query
 	 */
 	public static function parsePtrResponse($packet, $id)
@@ -199,7 +213,7 @@ class DnsHelper
 			if ($record['type'] === self::TypePtr && $record['class'] === self::ClassIn)
 			{
 				$host = self::readName($packet, $offset, $ignored);
-				return ($host === null || $host === '') ? null : $host;
+				return ($host !== null && self::isHostName($host)) ? $host : null;
 			}
 			// e.g. the CNAME of a classless delegation (RFC 2317)
 			$offset += $record['length'];
