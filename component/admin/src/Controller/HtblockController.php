@@ -76,9 +76,14 @@ class HtblockController extends FormController
 		}
 		$ipaddress = $validData['ipaddress'];
 		$db = new DatabaseHelper($logger);
-		if ($db->isIPOnAllowList($ipaddress))
+		// the web server knows nothing of the allow list: a network in the
+		// file would also turn away the allowed addresses in it (and an
+		// address in an allowed network); null: the list couldn't be read
+		$allowed = $db->allowListEntriesOverlapping($ipaddress);
+		if ($allowed === null || count($allowed) > 0)
 		{
-			$logger->log("IP address '$ipaddress' is on allow list! Will not block it via .htaccess", Log::INFO);
+			$logger->log("'$ipaddress' overlaps the allow list (".($allowed === null ? 'which could not be read' :
+				implode(', ', $allowed)).")! Will not block it via .htaccess", Log::INFO);
 			$this->returnToFormWithMessage($ipaddress, Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'));
 			return false;
 		}

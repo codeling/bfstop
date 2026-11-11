@@ -94,16 +94,15 @@ class SettingsModel extends AdminModel
 	}
 
 	/**
-	 * Unblock links for any IP address (Bfstop::NotifyBlockedAnyAddress) are
-	 * only safe with the site's $live_site, see
+	 * Unblock links are only safe with the site's $live_site, see
 	 * Bfstop::effectiveNotifyBlockedUser(): without it, the settings page
-	 * doesn't take that value.
+	 * doesn't take them (for any IP address or only known ones).
 	 */
 	public function validate($form, $data, $group = null)
 	{
 		$valid = parent::validate($form, $data, $group);
 		if (is_array($valid) && !Bfstop::hasLiveSite() &&
-			(int) ($valid['params']['notifyBlockedUser'] ?? 0) === Bfstop::NotifyBlockedAnyAddress)
+			(int) ($valid['params']['notifyBlockedUser'] ?? 0) !== 0)
 		{
 			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
 			return false;
