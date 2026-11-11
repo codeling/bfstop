@@ -159,6 +159,33 @@ class SettingsModel extends AdminModel
 		return (int) $table->extension_id;
 	}
 
+	/**
+	 * The settings are not checked out for editing. The record is a row of
+	 * Joomla's extensions table, which has the columns for it: FormController
+	 * would check out the plugin with "Save" (the Plugin Manager then shows
+	 * it as locked by whoever changed the settings last) - or, given another
+	 * id, any other extension.
+	 */
+	public function checkout($pk = null)
+	{
+		return true;
+	}
+
+	/**
+	 * Only ever the plugin, whatever id is given: also releases it if an
+	 * earlier version left it checked out. That it can't be (somebody else
+	 * holds it) is no error of saving the settings.
+	 */
+	public function checkin($pks = array())
+	{
+		$id = $this->resolvePluginExtensionId();
+		if ($id > 0)
+		{
+			parent::checkin($id);
+		}
+		return true;
+	}
+
 	// the default cleanCache() only clears the "com_bfstop" group, but the
 	// enabled-plugins list (with params) that PluginHelper::getPlugin() reads
 	// at runtime is cached under "com_plugins" - without this override, a

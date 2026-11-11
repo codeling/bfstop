@@ -30,8 +30,8 @@ $settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
 	<input type="hidden" name="filter_username" value="<?php echo $this->escape($this->filterUsername); ?>" />
 	<?php endif; ?>
 	<?php echo HTMLHelper::_('form.token'); ?>
-	<input type="hidden" name="filter_order" value="<?php echo $this->sortColumn; ?>" />
-	<input type="hidden" name="filter_order_Dir" value="<?php echo $this->sortDirection; ?>" />
+	<input type="hidden" name="filter_order" value="<?php echo $this->escape($this->sortColumn); ?>" />
+	<input type="hidden" name="filter_order_Dir" value="<?php echo $this->escape($this->sortDirection); ?>" />
 	<div class="row">
 		<div id="j-main-container" class="span10 j-toggle-main col-md-10">
 			<table class="adminlist table table-striped">

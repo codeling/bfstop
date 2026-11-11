@@ -27,7 +27,7 @@ foreach ($this->items as $i => $item): ?>
 			<span><?php echo (int) $item->attempts; ?></span>
 		</div>
 	</td>
-	<td><?php echo $item->first_attempt; ?></td>
-	<td><?php echo $item->last_attempt; ?></td>
+	<td><?php echo $this->escape($item->first_attempt); ?></td>
+	<td><?php echo $this->escape($item->last_attempt); ?></td>
 </tr>
 <?php endforeach;
