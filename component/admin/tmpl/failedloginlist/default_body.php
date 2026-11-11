@@ -11,9 +11,9 @@ use Codeling\Component\Bfstop\Administrator\Helper\LinkHelper;
 
 foreach ($this->items as $i => $item): ?>
 <tr>
-	<td><?php echo $item->id; ?></td>
+	<td><?php echo (int) $item->id; ?></td>
 	<td><a href="<?php echo $this->escape(LinkHelper::getIpInfoLink($item->ipaddress));?>"><?php echo $this->escape($item->ipaddress); ?></a></td>
-	<td><?php echo $item->logtime; ?></td>
+	<td><?php echo $this->escape($item->logtime); ?></td>
 	<td><?php echo $this->escape($item->username); ?></td>
 	<td><?php echo $this->getOriginName($item->origin); ?></td>
 </tr>

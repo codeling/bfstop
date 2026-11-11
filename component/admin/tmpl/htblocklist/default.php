@@ -14,8 +14,8 @@ use Joomla\CMS\HTML\HTMLHelper;
 <form method="post" name="adminForm" id="adminForm">
 	<input type="hidden" name="task" value="unblock" />
 	<?php echo HTMLHelper::_('form.token'); ?>
-	<input type="hidden" name="filter_order" value="<?php echo $this->sortColumn; ?>" />
-	<input type="hidden" name="filter_order_Dir" value="<?php echo $this->sortDirection; ?>" />
+	<input type="hidden" name="filter_order" value="<?php echo $this->escape($this->sortColumn); ?>" />
+	<input type="hidden" name="filter_order_Dir" value="<?php echo $this->escape($this->sortDirection); ?>" />
 	<input type="hidden" name="boxchecked" value="0" />
 
 	<div class="row">
