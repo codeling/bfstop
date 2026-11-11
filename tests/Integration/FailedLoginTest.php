@@ -205,13 +205,69 @@ class FailedLoginTest extends IntegrationTestCase
 			$header = array('--server=HTTP_X_FORWARDED_FOR=203.0.113.99');
 			$this->failedLogin('Admin', self::Ip, $header);
 			$this->failedLogin('Admin', self::Ip, $header);
-			$this->assertStringContainsString('Require not ip 203.0.113.99', (string) file_get_contents($dir.'/.htaccess'));
+			$this->assertStringContainsString("-R '203.0.113.99'", (string) file_get_contents($dir.'/.htaccess'));
 		}
 		finally
 		{
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
+	}
+
+	public function testNetworkWithAllowedAddressesIsNotBlockedThroughHtaccess()
+	{
+		// an IPv6 client is blocked by its /56: in .htaccess, that would turn
+		// away the allowed hosts of the network too - the web server knows
+		// nothing of the allow list
+		$dir = sys_get_temp_dir().'/bfstop-allow-htaccess-'.getmypid();
+		mkdir($dir);
+		try
+		{
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
+			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir));
+			$this->failedLogin('Admin', '2001:db8:1:2a::5');
+			$this->failedLogin('Admin', '2001:db8:1:2a::5');
+			$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'),
+				'blocked in the database');
+			$this->assertStringNotContainsString('2001:db8:1::/56', (string) @file_get_contents($dir.'/.htaccess'));
+
+			// a network without allowed addresses is blocked in .htaccess
+			$this->failedLogin('Admin', '2001:db8:2:2a::5');
+			$this->failedLogin('Admin', '2001:db8:2:2a::5');
+			$this->assertStringContainsString("-R '2001:db8:2::/56'", (string) file_get_contents($dir.'/.htaccess'));
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	/**
+	 * Parallel failed logins of one client which all reach the threshold
+	 * must block it once: each extra block would count as an earlier offence
+	 * (a single burst making the block permanent with maxBlocksBefore) and
+	 * send mails of its own.
+	 */
+	public function testParallelFailedLoginsBlockOnce()
+	{
+		$this->configure(array('blockNumber' => 1, 'maxBlocksBefore' => 2));
+		$count = 8;
+		$processes = array();
+		$pipes = array();
+		for ($i = 0; $i < $count; ++$i)
+		{
+			$processes[$i] = proc_open($this->command('Admin', self::Ip, array('--live-site='.$this->liveSite)),
+				array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes[$i]);
+		}
+		foreach ($processes as $i => $process)
+		{
+			$output = stream_get_contents($pipes[$i][1]).stream_get_contents($pipes[$i][2]);
+			$this->assertSame(0, proc_close($process), $output);
+			$this->assertStringContainsString('DONE', $output);
+		}
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertNotSame(0, (int) $this->queryValue('SELECT duration FROM #__bfstop_bannedip'), 'not permanent');
 	}
 
 	public function testBlockedAddressIsNotDelayed()
@@ -595,8 +651,8 @@ class FailedLoginTest extends IntegrationTestCase
 	}
 
 	// without the site's $live_site, the link has the host the request of the
-	// attacker's failed login named: links for any address (mode 2) are then
-	// only sent where mode 1 would send them
+	// failed login named, which whoever sends it picks: no link is sent then,
+	// also not to a user who logged in from the address (others may share it)
 
 	public function testAnyAddressModeWithoutLiveSiteNeverSendsToAnAttackersAddress()
 	{
@@ -606,12 +662,17 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->assertSame(0, $this->tokenCount());
 	}
 
-	public function testAnyAddressModeWithoutLiveSiteSendsLinkIfTheUserLoggedInFromThere()
+	public function testNoUnblockLinkWithoutLiveSiteEvenIfTheUserLoggedInFromThere()
 	{
 		$this->liveSite = '';
-		$this->knownIp(self::Ip, 'Admin');
-		$this->blockWith(2);
-		$this->assertSame(1, $this->tokenCount("username = 'Admin'"));
+		foreach (array(1, 2) as $mode)
+		{
+			$this->emptyTables();
+			$this->knownIp(self::Ip, 'Admin');
+			$this->blockWith($mode);
+			$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), "mode $mode: blocked");
+			$this->assertSame(0, $this->tokenCount(), "mode $mode");
+		}
 	}
 
 	public function testEffectiveNotifyBlockedUserSetting()
@@ -621,7 +682,7 @@ class FailedLoginTest extends IntegrationTestCase
 			$this->assertSame($setting, Bfstop::effectiveNotifyBlockedUser((string) $setting, true));
 		}
 		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(0, false));
-		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser(1, false));
-		$this->assertSame(1, Bfstop::effectiveNotifyBlockedUser('2', false));
+		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(1, false));
+		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser('2', false));
 	}
 }

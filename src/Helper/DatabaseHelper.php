@@ -225,6 +225,8 @@ class DatabaseHelper
 	 * thousand IPv6 clients were blocked, and a way for them to slow the site
 	 * down (the SQL was MySQL-only at first, see issue #206, and the source
 	 * of #117, #134 and #142).
+	 *
+	 * @return object[]|null null if the table could not be read
 	 */
 	private function loadMatchingEntries($ipaddress, $table, $additionalWhere, $action)
 	{
@@ -252,7 +254,7 @@ class DatabaseHelper
 		catch (\Exception $e)
 		{
 			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return array();
+			return null;
 		}
 	}
 
@@ -313,12 +315,28 @@ class DatabaseHelper
 	 */
 	public function getActiveBlockIds($ipaddress)
 	{
+		return $this->getActiveBlockIdsOrNull($ipaddress) ?? array();
+	}
+
+	/**
+	 * getActiveBlockIds(), but null if the block list could not be read -
+	 * for whoever must not take that for "not blocked".
+	 *
+	 * @return int[]|null
+	 */
+	public function getActiveBlockIdsOrNull($ipaddress)
+	{
 		$activeWhere = " AND (t.duration=0 OR ".
 			$this->addMinutesSql('t.crdate', 't.duration')." >= ".
 			$this->db->quote(date("Y-m-d H:i:s")).")".
 			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE t.id = u.block_id)";
+		$entries = $this->loadMatchingEntries($ipaddress, '#__bfstop_bannedip', $activeWhere, "Blocked");
+		if ($entries === null)
+		{
+			return null;
+		}
 		$ids = array();
-		foreach ($this->loadMatchingEntries($ipaddress, '#__bfstop_bannedip', $activeWhere, "Blocked") as $entry)
+		foreach ($entries as $entry)
 		{
 			$ids[] = (int)$entry->id;
 		}
@@ -382,7 +400,35 @@ class DatabaseHelper
 
 	public function isIPOnAllowList($ipaddress)
 	{
-		return count($this->loadMatchingEntries($ipaddress, '#__bfstop_allowlist', '', "Allowed")) > 0;
+		// an allow list which can't be read allows nothing
+		return count($this->loadMatchingEntries($ipaddress, '#__bfstop_allowlist', '', "Allowed") ?? array()) > 0;
+	}
+
+	/**
+	 * The entries of the allow list which overlap the address or network
+	 * $entry (see IpHelper::overlapping()): what a block of $entry in the
+	 * .htaccess file would turn away as well - the web server knows nothing
+	 * of the allow list. isIPOnAllowList() only answers for an address. The
+	 * allow list is kept by the administrators (core.admin), so it is short;
+	 * if it can't be read, every entry is assumed to overlap.
+	 *
+	 * @return string[]|null null if the allow list could not be read
+	 */
+	public function allowListEntriesOverlapping($entry)
+	{
+		try
+		{
+			$query = $this->db->getQuery(true)
+				->select($this->db->quoteName('ipaddress'))
+				->from($this->db->quoteName('#__bfstop_allowlist'));
+			$this->db->setQuery($query);
+			return IpHelper::overlapping($entry, $this->db->loadColumn());
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return null;
+		}
 	}
 
 	public function blockIP($logEntry, $duration, $usehtaccess, $htaccessPath)

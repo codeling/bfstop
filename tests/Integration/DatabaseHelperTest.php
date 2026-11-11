@@ -488,4 +488,15 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame(array(), $this->helper->getActiveBlockIds(''));
 		$this->assertSame(array(), $this->helper->getActiveBlockIds('203.0.113.0/24'), 'a network is no client address');
 	}
+
+	public function testAllowListEntriesOverlapping()
+	{
+		$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.7', 'notes' => ''));
+		$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
+		// isIPOnAllowList() only answers for an address
+		$this->assertFalse($this->helper->isIPOnAllowList('203.0.113.0/24'));
+		$this->assertSame(array('203.0.113.7'), $this->helper->allowListEntriesOverlapping('203.0.113.0/24'));
+		$this->assertSame(array('2001:db8:1:7f::9'), $this->helper->allowListEntriesOverlapping('2001:db8:1::/56'));
+		$this->assertSame(array(), $this->helper->allowListEntriesOverlapping('198.51.100.0/24'));
+	}
 }

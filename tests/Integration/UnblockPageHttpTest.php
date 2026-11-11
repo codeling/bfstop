@@ -87,11 +87,19 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	}
 
 	/** @return array [status, lower-cased headers, body] */
-	private function request($method, $query, $post = '')
+	private function request($method, $query, $post = '', $cookie = '')
 	{
+		$header = array();
+		if ($method === 'POST')
+		{
+			$header[] = 'Content-Type: application/x-www-form-urlencoded';
+		}
+		if ($cookie !== '')
+		{
+			$header[] = 'Cookie: '.$cookie;
+		}
 		$context = stream_context_create(array('http' => array('method' => $method, 'ignore_errors' => true,
-			'follow_location' => 0, 'content' => $post,
-			'header' => $method === 'POST' ? 'Content-Type: application/x-www-form-urlencoded' : '')));
+			'follow_location' => 0, 'content' => $post, 'header' => implode("\r\n", $header))));
 		$body = file_get_contents('http://127.0.0.1:'.$this->port.'/index.php?'.$query, false, $context);
 		$headers = array();
 		foreach ($http_response_header as $line)
@@ -107,6 +115,27 @@ class UnblockPageHttpTest extends IntegrationTestCase
 			}
 		}
 		return array($status, $headers, $body);
+	}
+
+	/**
+	 * Opens the link with $token and confirms on the page, the way a user does:
+	 * the POST carries the session cookie and the form token of the page.
+	 *
+	 * @return array as request()
+	 */
+	private function confirm($token)
+	{
+		list($status, $headers, $body) = $this->request('GET', self::Query.'&token='.rawurlencode($token));
+		$this->assertSame(200, $status, 'the confirmation page');
+		$this->assertMatchesRegularExpression('/<input type="hidden" name="([0-9a-f]{32})" value="1"/', $body,
+			'the form has a form token');
+		preg_match('/<input type="hidden" name="([0-9a-f]{32})" value="1"/', $body, $m);
+		$cookies = array();
+		foreach ($headers['set-cookie'] ?? array() as $setCookie)
+		{
+			$cookies[] = explode(';', $setCookie, 2)[0];
+		}
+		return $this->request('POST', self::Query, 'token='.rawurlencode($token).'&'.$m[1].'=1', implode('; ', $cookies));
 	}
 
 	private function token($token, $blockedIp = '203.0.113.9')
@@ -144,7 +173,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	public function testWrongIpAddressIsForbidden()
 	{
 		$this->token('realtoken', '203.0.113.9'); // the request comes from 127.0.0.1
-		list($status, , $body) = $this->request('POST', self::Query, 'token=realtoken');
+		list($status, , $body) = $this->confirm('realtoken');
 		$this->assertSame(403, $status);
 		$this->assertStringContainsString('only unblock the IP address it was issued for', $body, 'the message is still shown');
 		$this->assertSame(1, $this->tokenCount());
@@ -152,7 +181,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 
 	public function testUnknownTokenIsNotFound()
 	{
-		list($status, , $body) = $this->request('POST', self::Query, 'token=unknowntoken');
+		list($status, , $body) = $this->confirm('unknowntoken');
 		$this->assertSame(404, $status);
 		$this->assertStringContainsString('Could not unblock', $body);
 	}
@@ -160,13 +189,13 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	public function testUnblockSucceeds()
 	{
 		$blockId = $this->token('realtoken', '127.0.0.1');
-		list($status, , $body) = $this->request('POST', self::Query, 'token=realtoken');
+		list($status, , $body) = $this->confirm('realtoken');
 		$this->assertSame(200, $status);
 		$this->assertStringContainsString('Successfully unblocked', $body);
 		$this->assertSame(0, $this->tokenCount());
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$blockId));
 		// and using the link again finds nothing
-		list($status) = $this->request('POST', self::Query, 'token=realtoken');
+		list($status) = $this->confirm('realtoken');
 		$this->assertSame(404, $status);
 	}
 
@@ -174,11 +203,13 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	{
 		$this->configure(array('useHttpError' => 0));
 		$this->token('realtoken', '203.0.113.9');
-		foreach (array(array('GET', self::Query, ''), array('POST', self::Query, 'token=unknowntoken'),
-			array('POST', self::Query, 'token=realtoken')) as $request)
+		list($status, , $body) = $this->request('GET', self::Query);
+		$this->assertSame(200, $status, 'the message must reach the user: no token');
+		$this->assertNotSame('', trim(strip_tags($body)));
+		foreach (array('unknowntoken', 'realtoken') as $token)
 		{
-			list($status, , $body) = $this->request(...$request);
-			$this->assertSame(200, $status, 'the message must reach the user: '.implode(' ', $request));
+			list($status, , $body) = $this->confirm($token);
+			$this->assertSame(200, $status, 'the message must reach the user: '.$token);
 			$this->assertNotSame('', trim(strip_tags($body)));
 		}
 	}
@@ -186,12 +217,42 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	public function testTheLinkIsKeptSecret()
 	{
 		$this->token('realtoken');
-		foreach (array(array('GET', self::Query.'&token=realtoken', ''), array('POST', self::Query, 'token=unknowntoken')) as $request)
+		foreach (array('open' => fn () => $this->request('GET', self::Query.'&token=realtoken'),
+			'confirm' => fn () => $this->confirm('unknowntoken')) as $request)
 		{
-			list(, $headers) = $this->request(...$request);
+			list(, $headers) = $request();
 			$this->assertStringContainsString('no-store', implode(',', $headers['cache-control'] ?? array()), 'not cached');
 			$this->assertSame(array('no-referrer'), $headers['referrer-policy'] ?? null);
 			$this->assertSame(array('noindex, nofollow'), $headers['x-robots-tag'] ?? null);
 		}
+	}
+
+	public function testConfirmingNeedsTheFormToken()
+	{
+		// a POST another site makes the browser send (the token taken from
+		// a link the attacker got) must not unblock anything
+		$blockId = $this->token('realtoken', '127.0.0.1');
+		$unblocked = 'SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$blockId;
+
+		// without a session, Joomla's token check sends the browser away
+		// ("session expired")
+		list($status) = $this->request('POST', self::Query, 'token=realtoken');
+		$this->assertContains($status, array(303, 400));
+		$this->assertSame(1, $this->tokenCount(), 'the token is not used up');
+		$this->assertSame(0, (int) $this->queryValue($unblocked));
+
+		// with the session of the page, but not its form token
+		list(, $headers) = $this->request('GET', self::Query.'&token=realtoken');
+		$cookies = array();
+		foreach ($headers['set-cookie'] ?? array() as $setCookie)
+		{
+			$cookies[] = explode(';', $setCookie, 2)[0];
+		}
+		$this->assertNotSame(array(), $cookies, 'the page starts a session');
+		list($status, , $body) = $this->request('POST', self::Query, 'token=realtoken', implode('; ', $cookies));
+		$this->assertSame(400, $status);
+		$this->assertStringContainsString('Invalid call', $body);
+		$this->assertSame(1, $this->tokenCount(), 'the token is not used up');
+		$this->assertSame(0, (int) $this->queryValue($unblocked));
 	}
 }

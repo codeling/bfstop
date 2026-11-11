@@ -169,4 +169,52 @@ class InstallerScriptTest extends IntegrationTestCase
 			}
 		}
 	}
+
+	/**
+	 * Versions up to 2.0.0 wrote a block section with "Require all granted"
+	 * into the .htaccess file, which Apache ORs with the directory's other
+	 * access controls: the update replaces it, whatever the blocking mode is
+	 * now, and says so if it can't.
+	 */
+	public function testUpdateReplacesTheBlockSectionOfEarlierVersions()
+	{
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$dir = sys_get_temp_dir().'/bfstop-update-htaccess-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$legacy = "# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\nRequire not ip 192.0.2.1\n".
+			"ErrorDocument 403 \"Go away\"\n</RequireAll>\n# END BFStop Blocks\n\nAuthType Basic\nRequire valid-user\n";
+		$notRewritten = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_HTACCESS_NOT_REWRITTEN', $dir.'/.htaccess'));
+		try
+		{
+			file_put_contents($dir.'/.htaccess', $legacy);
+			$this->update('2.0.0', array('blockMode' => 'full', 'htaccessPath' => $dir));
+			$this->assertSame("# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1'\">\nRequire all denied\n</If>\nErrorDocument 403 \"Go away\"\n".
+				"# END BFStop Blocks\n\nAuthType Basic\nRequire valid-user\n", file_get_contents($dir.'/.htaccess'));
+			$this->assertNotContains($notRewritten, array_map('strip_tags', $this->messages()));
+
+			// nothing to do for a section of the current form, or no file
+			$current = file_get_contents($dir.'/.htaccess');
+			$this->update('2.0.0', array('blockMode' => 'htaccess', 'htaccessPath' => $dir));
+			$this->assertSame($current, file_get_contents($dir.'/.htaccess'));
+			$this->assertTrue(\PlgsystembfstopInstallerScript::replaceLegacyHtaccessSection($dir.'/none/.htaccess'));
+
+			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+			{
+				file_put_contents($dir.'/.htaccess', $legacy);
+				chmod($dir.'/.htaccess', 0444);
+				chmod($dir, 0555);
+				$this->update('2.0.0', array('blockMode' => 'full', 'htaccessPath' => $dir));
+				$this->assertContains($notRewritten, array_map('strip_tags', $this->messages()));
+			}
+		}
+		finally
+		{
+			@chmod($dir, 0755);
+			@chmod($dir.'/.htaccess', 0644);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+			$this->setPluginParams($original);
+		}
+	}
 }

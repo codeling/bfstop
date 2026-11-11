@@ -181,6 +181,20 @@ class ComponentTest extends IntegrationTestCase
 		$this->logger->errors = array(); // expected: "token not found" errors
 	}
 
+	public function testTokenOfABlockThatIsGoneUnblocksNothing()
+	{
+		// without the block, there is no address to bind the token to: it
+		// must not unblock from wherever it is used
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.5', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->insert('#__bfstop_unblock_token', array('token' => 'orphan', 'block_id' => $blockId, 'crdate' => self::minutesAgo(1)));
+		$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE id='.(int) $blockId);
+		$this->db->execute();
+		$model = $this->model(TokenunblockModel::class);
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('orphan', true, '198.51.100.9', $this->logger));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock'));
+		$this->logger->errors = array(); // expected: "no block found"
+	}
+
 	public function testTokenUnblockComparesIpv6AddressesNotSpellings()
 	{
 		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8::1', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
@@ -717,7 +731,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
-	public function testUnblockLinksForAnyAddressNeedTheLiveSite()
+	public function testUnblockLinksNeedTheLiveSite()
 	{
 		// without $live_site, the link would have the host the attacker's
 		// request named, see Bfstop::effectiveNotifyBlockedUser()
@@ -734,12 +748,13 @@ class ComponentTest extends IntegrationTestCase
 		list($valid) = $this->withLiveSite('https://www.example.org', $validate);
 		$this->assertIsArray($valid);
 		$this->assertSame('2', $valid['params']['notifyBlockedUser']);
-		foreach (array('0', '1') as $mode)
-		{
-			$data['params']['notifyBlockedUser'] = $mode;
-			list($valid) = $this->withLiveSite('', $validate);
-			$this->assertIsArray($valid, "mode $mode");
-		}
+		// also links only for known addresses: others may share the address
+		$data['params']['notifyBlockedUser'] = '1';
+		list($valid) = $this->withLiveSite('', $validate);
+		$this->assertFalse($valid, 'mode 1');
+		$data['params']['notifyBlockedUser'] = '0';
+		list($valid) = $this->withLiveSite('', $validate);
+		$this->assertIsArray($valid, 'mode 0');
 	}
 
 	public function testSettingsPageProposesTheLiveSite()
@@ -750,7 +765,7 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);
 	}
 
-	public function testWarnsIfUnblockLinksForAnyAddressLackTheLiveSite()
+	public function testWarnsIfUnblockLinksLackTheLiveSite()
 	{
 		$original = $this->getPluginParams();
 		$app = Factory::getApplication();
@@ -770,7 +785,8 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$this->assertSame(1, $warnings(2, ''));
 			$this->assertSame(0, $warnings(2, 'https://www.example.org'));
-			$this->assertSame(0, $warnings(1, ''));
+			$this->assertSame(1, $warnings(1, ''));
+			$this->assertSame(0, $warnings(1, 'https://www.example.org'));
 			$this->assertSame(0, $warnings(0, ''));
 		}
 		finally
@@ -859,5 +875,153 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$app->loadIdentity($original);
 		}
+	}
+
+	/**
+	 * Saves the backend's ".htaccess block" form with $ipaddress, as a user
+	 * with $actions; returns the addresses in the file afterwards.
+	 */
+	private function saveHtaccessBlock($dir, $ipaddress, array $actions)
+	{
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
+		$input->post->set('jform', array('ipaddress' => $ipaddress));
+		try
+		{
+			$app->loadIdentity(self::userWith($actions));
+			// the tests run in the site application: the backend's controller
+			// would look for the site's models
+			$controller = new class(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input)
+				extends \Codeling\Component\Bfstop\Administrator\Controller\HtblockController
+			{
+				public function getModel($name = '', $prefix = '', $config = array())
+				{
+					return parent::getModel($name, $prefix ?: 'Administrator', $config);
+				}
+			};
+			$controller->save();
+			$app->getMessageQueue(true);
+			return (new HtaccessHelper($dir, null))->getDeniedIPs();
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+			$input->post->set('jform', null);
+		}
+	}
+
+	public function testHtaccessBlockFormRefusesNetworksWithAllowedAddresses()
+	{
+		// the web server knows nothing of the allow list: a network in the
+		// .htaccess file would turn away the allowed addresses in it
+		$dir = sys_get_temp_dir().'/bfstop-htblock-'.getmypid();
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$actions = array('core.manage', 'core.create', 'core.admin');
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.7', 'notes' => ''));
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.0/24', 'notes' => ''));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '203.0.113.0/24', $actions), 'contains an allowed address');
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '198.51.100.9', $actions), 'in an allowed network');
+			$this->assertSame(array('192.0.2.0/24'), $this->saveHtaccessBlock($dir, '192.0.2.0/24', $actions));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	public function testHtaccessBlocksNeedTheAdminPermission()
+	{
+		// an entry is part of the web server's configuration: nobody in it
+		// can lift it from within the site
+		$dir = sys_get_temp_dir().'/bfstop-htblock-admin-'.getmypid();
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create')));
+			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.admin')),
+				'core.create is still needed');
+			$this->assertSame(array('192.0.2.0/24'),
+				$this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create', 'core.admin')));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	public function testWideNetworkBlocksNeedTheAdminPermission()
+	{
+		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\BlockController(
+			array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+			new MVCFactory('Codeling\\Component\\Bfstop'), Factory::getApplication(), Factory::getApplication()->getInput());
+		$allowSave = new \ReflectionMethod($controller, 'allowSave');
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		try
+		{
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create')));
+			foreach (array('203.0.113.5', '203.0.113.0/24', '2001:db8:1::/48', '2001:db8:1:2::/64', '') as $address)
+			{
+				$this->assertTrue($allowSave->invoke($controller, array('ipaddress' => $address), 'id'), $address);
+			}
+			foreach (array('203.0.0.0/16', '203.0.112.0/23', '2001:db8::/32', '2001:DB8::/47') as $address)
+			{
+				$this->assertFalse($allowSave->invoke($controller, array('ipaddress' => $address), 'id'), $address);
+			}
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.create', 'core.admin')));
+			$this->assertTrue($allowSave->invoke($controller, array('ipaddress' => '203.0.0.0/16'), 'id'));
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+		}
+	}
+
+	public function testBlockedMessageIsFilteredAsHtml()
+	{
+		// the plugin shows it as HTML to every blocked visitor
+		$model = $this->model(SettingsModel::class);
+		$valid = $model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+			'blockedMessage' => '<b>Blocked</b><script>alert(1)</script><img src=x onerror=alert(2)>')));
+		$this->assertIsArray($valid, implode(', ', $model->getErrors()));
+		$this->assertStringContainsString('<b>Blocked</b>', $valid['params']['blockedMessage']);
+		$this->assertStringNotContainsString('<script', $valid['params']['blockedMessage']);
+		$this->assertStringNotContainsString('onerror', $valid['params']['blockedMessage']);
+	}
+
+	public function testTrustedProxiesMustBeAddressesOrNetworks()
+	{
+		// whatever else is typed would be dropped silently by the plugin; a
+		// huge network would let anybody in it name any client address
+		$valid = function ($proxies)
+		{
+			$model = $this->model(SettingsModel::class);
+			return is_array($model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+				'useProxy' => '1', 'proxyIpAddress' => $proxies))));
+		};
+		foreach (array('', '192.0.2.1', '192.0.2.1, 198.51.100.0/24', "104.16.0.0/13\n2400:cb00::/32; 2a06:98c0::/29",
+			'10.0.0.0/8', '2001:db8::/16') as $proxies)
+		{
+			$this->assertTrue($valid($proxies), $proxies);
+		}
+		foreach (array('proxy.example.org', '192.0.2.1, nonsense', '192.0.2.0/33', '0.0.0.0/0', '10.0.0.0/7', '::/0',
+			'2001:db8::/15') as $proxies)
+		{
+			$this->assertFalse($valid($proxies), $proxies);
+		}
+		Factory::getApplication()->getMessageQueue(true);
 	}
 }

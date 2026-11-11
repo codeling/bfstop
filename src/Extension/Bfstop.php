@@ -161,19 +161,83 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return Route::_('index.php?option=com_users&view=reset');
 	}
 
+	/**
+	 * Blocks the client of $logEntry, if it isn't yet; the decision and the
+	 * new block happen under a lock per tracked address (see blockLocked()),
+	 * the mails after it.
+	 */
 	private function block($logEntry, $duration)
 	{
 		if ($this->getStringParam('blockMode', 'full') === 'off')
 		{
 			return;
 		}
-		// if the IP address is blocked we actually shouldn't be here in
-		// the first place I guess, but just to make sure
+		$block = $this->withBlockLock($logEntry->ipaddress, function () use ($logEntry, $duration)
+		{
+			return $this->blockLocked($logEntry, $duration);
+		});
+		if ($block !== null)
+		{
+			$this->notifyOfBlock($logEntry, $block['id'], $block['duration'], $block['targetedOtherAccounts']);
+		}
+	}
+
+	// lock files for the block decision, see withBlockLock(): the tracked
+	// addresses are spread over this many, so there is no file per address
+	private const BlockLockStripes = 64;
+
+	/**
+	 * Runs $decision while holding the lock for the tracked address $key.
+	 * Parallel failed logins of one client which all reach the threshold
+	 * would otherwise all find it not blocked yet and each block it: several
+	 * blocks at once - each counted as an earlier offence, so a single burst
+	 * could make the block permanent (maxBlocksBefore), or multiply its
+	 * duration - and a mail for each. If no lock can be taken (no writable
+	 * temporary directory), it runs without one, as before.
+	 */
+	private function withBlockLock($key, callable $decision)
+	{
+		$app = $this->getApplication();
+		$stripe = hexdec(substr(md5((string) $key), 0, 4)) % self::BlockLockStripes;
+		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-block-'.
+			md5((string) $app->get('db').(string) $app->get('dbprefix')).'-'.$stripe.'.lock';
+		$handle = @fopen($lockFile, 'c');
+		if ($handle === false || !flock($handle, LOCK_EX))
+		{
+			if ($handle !== false)
+			{
+				fclose($handle);
+			}
+			$this->logger->log('Could not lock '.$lockFile.', blocking without it', Log::WARNING);
+			return $decision();
+		}
+		try
+		{
+			return $decision();
+		}
+		finally
+		{
+			flock($handle, LOCK_UN);
+			fclose($handle);
+		}
+	}
+
+	/**
+	 * The part of block() under the lock: whether, how long and how to
+	 * block, and the block itself.
+	 *
+	 * @return array|null id, duration and targetedOtherAccounts of the new
+	 *                    block; null if nothing was blocked
+	 */
+	private function blockLocked($logEntry, $duration)
+	{
+		// a parallel request of the same client may have blocked it while
+		// this one waited for the lock
 		if ($this->mydb->isIPBlocked($this->clientAddress ?? $logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
-				' is already blocked!', Log::ERROR);
-			return;
+				' is already blocked', Log::INFO);
+			return null;
 		}
 		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', self::DefaultSettings['maxBlocksBefore']);
 		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
@@ -222,6 +286,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				'trusted proxy - check that the proxy sends the configured header', Log::ERROR);
 			$usehtaccess = false;
 		}
+		if ($usehtaccess)
+		{
+			// the web server knows nothing of the allow list: a network block
+			// (an IPv6 client is blocked by its /56, see trackedAddress())
+			// would turn away the allowed addresses in it before Joomla runs
+			$allowed = $this->mydb->allowListEntriesOverlapping($logEntry->ipaddress);
+			if ($allowed === null || count($allowed) > 0)
+			{
+				$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it contains '.
+					($allowed === null ? 'addresses of the allow list (which could not be read)'
+						: 'allowed address(es) '.implode(', ', $allowed)).' - it is only blocked in the database',
+					Log::WARNING);
+				$usehtaccess = false;
+			}
+		}
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
@@ -236,11 +315,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// doesn't exist
 			$this->logger->log('Could not block IP address '.$logEntry->ipaddress.
 				', see the previous errors', Log::ERROR);
-			return;
+			return null;
 		}
 
 		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
 			' into block list', Log::INFO);
+		return array('id' => $id, 'duration' => $duration, 'targetedOtherAccounts' => $targetedOtherAccounts);
+	}
+
+	/**
+	 * The mails about the new block $id (after the lock: sending may take a
+	 * while).
+	 */
+	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
+	{
 		// send email notification to admin
 		$this->notifier->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
@@ -291,7 +379,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	/**
 	 * Anybody can make the plugin send an unblock email to a user: by failing
 	 * to log in with that username from an IP address until it is blocked.
-	 * To keep that from being used to flood somebody's inbox:
+	 * No email is sent without the site's address, see
+	 * effectiveNotifyBlockedUser(). To keep it from being used to flood
+	 * somebody's inbox:
 	 *
 	 * - by default (mode 1) the email is only sent if the user has logged in
 	 *   from the blocked IP address before - which is where somebody
@@ -305,10 +395,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		$setting = $this->getIntParam('notifyBlockedUser', 0);
 		$mode = self::effectiveNotifyBlockedUser($setting, self::hasLiveSite());
-		if ($mode !== $setting)
+		if ($mode === 0)
 		{
-			$this->logger->log('Unblock links for any IP address need the site\'s address ($live_site in '.
-				'configuration.php): sending one only if the user has logged in from this address before', Log::WARNING);
+			$this->logger->log('Unblock links need the site\'s address ($live_site in configuration.php): '.
+				'without it, the link would have the host the request of the failed login named', Log::WARNING);
+			return 'the site\'s address ($live_site) is not set';
 		}
 		if ($mode === self::NotifyBlockedAnyAddress)
 		{
@@ -337,20 +428,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * The "notifyBlockedUser" setting as it is applied. The unblock email is
 	 * prepared in the request of the failed login which got the address
 	 * blocked, so the link in it has the host that request named, unless
-	 * $live_site is set. With links for any address (mode 2), that request is
-	 * an attacker's: a link to their own server would hand them the token
-	 * (mail scanners open every link), which unblocks their address - over
-	 * and over. Without $live_site, the links are therefore only sent as in
-	 * mode 1, where the request comes from an address the user logged in
-	 * from. The settings page doesn't take mode 2 without $live_site; this
-	 * covers a setting saved before, or $live_site removed later.
+	 * $live_site is set - and whoever sends that request picks the host. Mode
+	 * 1 doesn't make that request trustworthy: it only says that the user has
+	 * logged in from the address before, and clients are tracked by their
+	 * network (an IPv6 /56, see IpHelper::trackedAddress()) behind which there
+	 * may be many other people (a NAT, an office, a campus). Any of them could
+	 * get a real mail of the site sent to the user with a link to their own
+	 * server (phishing; and mail scanners open every link, handing them the
+	 * token). So without $live_site, no unblock link is sent at all. The
+	 * settings page doesn't take modes 1 and 2 without $live_site; this covers
+	 * a setting saved before, or $live_site removed later.
 	 */
 	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
 	{
 		$setting = (int) $setting;
-		return ($setting === self::NotifyBlockedAnyAddress && !$hasLiveSite)
-			? self::NotifyBlockedKnownAddress
-			: $setting;
+		return $hasLiveSite ? $setting : 0;
 	}
 
 	private function getHtaccessPath()
@@ -1064,6 +1156,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->pruneKnownIps();
 			$this->mydb->pruneDnsCache();
 			$this->mydb->purgeExpiredUnblockTokens();
+			// whatever the mode is now: a block section of an earlier version
+			// grants access (see HtaccessHelper::LegacyLines). The update
+			// replaces it; this is for one it couldn't write
+			$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
+			if (is_file($htaccess->getFileName()) && !$htaccess->upgradeFormat())
+			{
+				$this->logger->log('Could not replace the block section of an earlier version in '.
+					$htaccess->getFileName().': it lets everybody who isn\'t blocked past the other access '.
+					'controls of the directory - make the file writable or remove the section by hand', Log::ERROR);
+			}
 			if ($this->getStringParam('blockMode', 'full') === 'htaccess')
 			{
 				$this->removeLiftedHtaccessBlocks();
@@ -1180,7 +1282,21 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$blockIds = $this->mydb->getActiveBlockIds($ipaddress);
+		$blockIds = $this->mydb->getActiveBlockIdsOrNull($ipaddress);
+		if ($blockIds === null)
+		{
+			// the block list can't be read (see the previous error): browsing
+			// goes on, but a login attempt - the one thing the block is there
+			// to stop - is refused rather than let through unchecked
+			$loginAttempt = $this->isLoginAttemptRequest();
+			$this->logger->log('Could not find out whether '.$ipaddress.' is blocked'.
+				($loginAttempt ? ', refusing the login attempt' : ''), Log::ERROR);
+			if ($loginAttempt)
+			{
+				$this->refuseUnchecked();
+			}
+			return;
+		}
 		if (count($blockIds) > 0)
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".
@@ -1230,6 +1346,28 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			echo $message;
 			$this->getApplication()->close();
 		}
+	}
+
+	/**
+	 * Answers a login attempt whose address could not be checked against the
+	 * block list: 503 (it is not refused for good), with Retry-After.
+	 */
+	private function refuseUnchecked()
+	{
+		http_response_code(503);
+		header('Retry-After: 60');
+		foreach (self::blockedResponseHeaders() as $header)
+		{
+			header($header);
+		}
+		$message = Text::_('PLG_SYSTEM_BFSTOP_LOGIN_UNAVAILABLE');
+		if ($this->isApiRequest())
+		{
+			header('Content-Type: application/vnd.api+json; charset=utf-8');
+			$message = self::blockedApiResponse($message, 503);
+		}
+		echo $message;
+		$this->getApplication()->close();
 	}
 
 	/**
