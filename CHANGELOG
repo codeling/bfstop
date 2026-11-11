@@ -303,6 +303,50 @@
   - Component: the lists build their ORDER BY from the filter fields only,
     with the column quoted as an identifier (before: escape(), which is for
     string literals, relying on Joomla's check of the request)
+  - Security: logins from one address are handled one after the other. A
+    failed login is only counted once Joomla has checked its password, long
+    after the request was let through as not blocked - so of logins sent at
+    the same time, all had their password checked, however few attempts were
+    allowed: as many as the server handles in parallel, with every burst
+    (30 of 100 on a test server with "Allowed attempts" at 10). A request
+    which submits a password (the login of frontend and backend, HTTP Basic
+    credentials for the API - not API tokens) now waits until the login of
+    the same address before it has been counted or has succeeded, then
+    the block list is looked at again. The wait is limited to 5 seconds, and
+    there is none without a writable temporary directory. The notification
+    of a failed login is now sent after the address was blocked, not before
+  - Security: the plugin no longer waits without limit for the lock of the
+    .htaccess file. A request which held it and hung (or another user of a
+    shared server holding the lock file) left every request which got an
+    address blocked after it hanging too, each in a PHP worker; after 10
+    seconds the file is now changed without the lock
+  - Security: a reverse DNS (PTR) record only counts, and is only cached, if
+    it names a host (letters, digits, hyphens, underscores). The record is
+    whatever the owner of the address puts there; a name of other bytes
+    could not be stored, so the lookup was repeated with every failed login
+  - The page shown to a blocked client names its type and character set
+    (Content-Type, X-Content-Type-Options: nosniff) and is not to be indexed
+    (X-Robots-Tag)
+  - Security (component): the "settings.edit" task, inherited from Joomla's
+    FormController, checked out the row of Joomla's extensions table named
+    by the request - any extension, not only the plugin - for a user with
+    just core.edit, by a GET request without token; the extension was then
+    locked for editing by others. The settings tasks need core.admin
+    throughout and check nothing out any more ("Save" used to leave the
+    plugin checked out in the Plugin Manager)
+  - Security (component): unblocking only lifts blocks which exist. Block
+    ids are handed out in order, so a request to unblock ids which were not
+    in use yet lifted the blocks to come before they were made - a way for
+    a user with core.delete to switch blocking off without the permission
+    to change the settings
+  - Security (component): the proxy addresses of the settings are checked.
+    An entry which is no IP address or network was silently ignored (the
+    plugin then takes the proxy for the client of every request, and blocks
+    it), and networks larger than /8 (IPv4) or /16 (IPv6) were accepted:
+    with 0.0.0.0/0, every visitor could choose the address their failed
+    logins are counted against
+  - Component: the list views escape everything they print, also what can
+    only be a number, a date or one of the sort columns
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

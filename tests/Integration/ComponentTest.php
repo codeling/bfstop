@@ -860,4 +860,102 @@ class ComponentTest extends IntegrationTestCase
 			$app->loadIdentity($original);
 		}
 	}
+
+	public function testProxyListRule()
+	{
+		$test = fn ($value) => $this->formRuleResult('proxylist.php', 'JFormRuleProxylist', $value);
+		foreach (array('', '10.0.0.1', '10.0.0.1, 10.0.0.2', "192.0.2.0/24;2001:db8::1\n2001:db8:1::/48",
+			'10.0.0.0/8', '2400:cb00::/32', '2a06:98c0::/29', '2001:DB8::1') as $list)
+		{
+			$this->assertTrue($test($list), $list);
+		}
+		// what the plugin would ignore - and then take the proxy for the client
+		foreach (array('10.0.0', '10.0.0.1/33', '10.0.0.1/', '10.0.0.1/8/8', 'proxy.example.org', '10.0.0.1 - 10.0.0.9',
+			'10.0.0.1, x', '2001:db8::/129', '10.0.0.1/1e1') as $list)
+		{
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($list), $list);
+		}
+		// trusting everybody lets every visitor name the address they are counted by
+		foreach (array('0.0.0.0/0', '::/0', '128.0.0.0/1', '10.0.0.0/7', '2000::/3', '2001:db8::/15') as $list)
+		{
+			$this->assertInstanceOf(\UnexpectedValueException::class, $test($list), $list);
+		}
+		$message = $test('<img src=x onerror=alert(1)>')->getMessage();
+		$this->assertStringNotContainsString('<img', $message, 'Joomla shows the message as HTML');
+		$this->assertStringContainsString('&lt;img', $message);
+		// and the settings form uses it
+		$field = $this->settingsForm()->getFieldXml('proxyIpAddress', 'params');
+		$this->assertSame('proxylist', (string) $field['validate']);
+	}
+
+	public function testUnblockingLiftsOnlyBlocksWhichExist()
+	{
+		$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.80',
+			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		// block ids are handed out in order: entries for the ids to come would
+		// lift the next blocks before they are made
+		$this->assertTrue(UnblockHelper::unblockDB($this->db, array($id, $id + 1, $id + 2, 0, -1, 'x'), 0, $this->logger));
+		$this->assertSame(array((string) $id),
+			array_map('strval', $this->db->setQuery('SELECT block_id FROM #__bfstop_unblock')->loadColumn()));
+		$next = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81',
+			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$next));
+		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.81'));
+	}
+
+	public function testSettingsCheckOutNoExtension()
+	{
+		// the settings are a row of Joomla's extensions table: the tasks the
+		// controller inherits must not lock rows of it for editing - neither
+		// the plugin's nor, by the id a request names, anybody else's
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$other = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE element='com_content'");
+		$plugin = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$this->assertGreaterThan(0, $other);
+		$checkedOut = fn ($id) => (int) $this->queryValue('SELECT checked_out FROM #__extensions WHERE extension_id='.$id);
+		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\SettingsController(
+			array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+			new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input);
+		$allowAdd = new \ReflectionMethod($controller, 'allowAdd');
+		$allowEdit = new \ReflectionMethod($controller, 'allowEdit');
+		$user = function (array $actions)
+		{
+			$user = self::userWith($actions);
+			$user->id = 4242;
+			$user->guest = 0;
+			return $user;
+		};
+		try
+		{
+			$input->set('extension_id', $other);
+			foreach (array(array('core.manage', 'core.edit', 'core.create'), array('core.manage', 'core.admin')) as $actions)
+			{
+				$app->loadIdentity($user($actions));
+				$isAdmin = in_array('core.admin', $actions, true);
+				$controller->edit();
+				$this->assertSame(0, $checkedOut($other), 'settings.edit checked out another extension');
+				$this->assertSame(0, $checkedOut($plugin));
+				$this->assertSame($isAdmin, $allowEdit->invoke($controller, array('extension_id' => $other), 'extension_id'));
+				$this->assertSame($isAdmin, $allowAdd->invoke($controller, array()));
+			}
+			$model = $this->model(SettingsModel::class);
+			$this->assertTrue($model->checkout($other));
+			$this->assertTrue($model->checkout($plugin));
+			$this->assertSame(0, $checkedOut($other));
+			$this->assertSame(0, $checkedOut($plugin), 'what "Save" does after saving');
+			// a plugin left checked out by an earlier version is released
+			$this->db->setQuery('UPDATE #__extensions SET checked_out=4242 WHERE extension_id IN ('.$plugin.','.$other.')')->execute();
+			$this->assertTrue($model->checkin($other));
+			$this->assertSame(0, $checkedOut($plugin));
+			$this->assertSame(4242, $checkedOut($other), 'only ever the plugin');
+		}
+		finally
+		{
+			$input->set('extension_id', null);
+			$app->loadIdentity($original);
+			$this->db->setQuery('UPDATE #__extensions SET checked_out=0, checked_out_time=NULL WHERE extension_id IN ('.$plugin.','.$other.')')->execute();
+		}
+	}
 }
