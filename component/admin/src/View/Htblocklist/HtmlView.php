@@ -70,7 +70,9 @@ class HtmlView extends BaseHtmlView
 			// for selected lines
 			ToolbarHelper::custom('htblocklist.unblock', 'unpublish.png', 'unpublish_f2.png', 'COM_BFSTOP_UNBLOCK', true);
 		}
-		if ($user->authorise('core.create', 'com_bfstop'))
+		// an entry is part of the web server's configuration, see
+		// HtblockController::save()
+		if ($user->authorise('core.create', 'com_bfstop') && $user->authorise('core.admin', 'com_bfstop'))
 		{
 			ToolbarHelper::addNew('htblock.add');
 		}
