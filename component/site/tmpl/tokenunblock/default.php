@@ -7,6 +7,7 @@
 **/
 defined('_JEXEC') or die;
 
+use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
 
 ?>
@@ -16,6 +17,7 @@ use Joomla\CMS\Language\Text;
 <?php // no action: posts to this very URL, which the plugin lets a blocked IP reach ?>
 <form method="post">
 	<input type="hidden" name="token" value="<?php echo $this->escape($this->token); ?>" />
+	<?php echo HTMLHelper::_('form.token'); ?>
 	<button type="submit" class="btn btn-primary"><?php echo Text::_('COM_BFSTOP_UNBLOCKTOKEN_BUTTON'); ?></button>
 </form>
 <?php endif; ?>
