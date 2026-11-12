@@ -55,6 +55,47 @@ class SettingsController extends FormController
 		return $user && $user->authorise('core.admin', 'com_bfstop');
 	}
 
+	/**
+	 * FormController's other tasks ("settings.edit", "settings.add",
+	 * "settings.reload") ask these, and by default they are answered with
+	 * core.edit and core.create: the settings are for who may change them.
+	 */
+	protected function allowEdit($data = array(), $key = 'id')
+	{
+		return $this->allowSave($data, $key);
+	}
+
+	protected function allowAdd($data = array())
+	{
+		return $this->allowSave($data);
+	}
+
+	/**
+	 * There is nothing to open for editing: the settings are one page, shown
+	 * by the view. FormController::edit() would check out the record the
+	 * request names - with this model's table any row of Joomla's extensions
+	 * table, for a plain GET request without a token - and leave it locked
+	 * for the other administrators.
+	 */
+	public function edit($key = null, $urlVar = null)
+	{
+		$this->setRedirect(Route::_('index.php?option=com_bfstop&view=settings', false));
+		return $this->allowSave();
+	}
+
+	/**
+	 * Leaves the page without saving: forgets what was typed in (kept after
+	 * a save which was refused). FormController::cancel() would also check
+	 * in the record the request names.
+	 */
+	public function cancel($key = null)
+	{
+		$this->checkToken();
+		$this->app->setUserState('com_bfstop.edit.settings.data', null);
+		$this->setRedirect(Route::_('index.php?option=com_bfstop&view=settings', false));
+		return true;
+	}
+
 	protected function getRedirectToItemAppend($recordId = null, $urlVar = 'id')
 	{
 		return '';

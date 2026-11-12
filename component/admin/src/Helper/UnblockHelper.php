@@ -73,6 +73,17 @@ class UnblockHelper
 			try
 			{
 				$id = (int) $id;
+				// only blocks which exist: block ids are handed out in order, so
+				// an entry for one which doesn't exist yet would lift a block
+				// to come in advance - whoever may unblock could switch the
+				// blocking off that way, which takes the permission to change
+				// the settings
+				$db->setQuery('SELECT COUNT(*) FROM #__bfstop_bannedip WHERE id='.$id);
+				if ((int) $db->loadResult() === 0)
+				{
+					$logger->log("com_bfstop unblock: There is no block $id", Log::INFO);
+					continue;
+				}
 				$sql = 'SELECT * FROM #__bfstop_unblock WHERE block_id='.$id;
 				$db->setQuery($sql);
 				$unblockEntry = $db->loadObject();

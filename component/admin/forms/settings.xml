@@ -100,7 +100,7 @@
 				<option value="HTTP_FORWARDED_FOR">Forwarded-For</option>
 				<option value="HTTP_CLIENT_IP">Client-Ip</option>
 			</field>
-			<field name="proxyIpAddress" type="text" size="40" default="" validate="proxyaddresses"
+			<field name="proxyIpAddress" type="text" size="40" default="" validate="proxylist"
 				label="PLG_SYSTEM_BFSTOP_PROXY_IP_LABEL"
 				description="PLG_SYSTEM_BFSTOP_PROXY_IP_DESC" />
 		</fieldset>
