@@ -18,6 +18,7 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Router\Route;
+use Joomla\CMS\Session\Session;
 
 class HtmlView extends BaseHtmlView
 {
@@ -41,10 +42,12 @@ class HtmlView extends BaseHtmlView
 		$this->showConfirmation = false;
 		$logger = LogHelper::getLogger();
 		$this->model = $this->getModel();
-		$result = $this->model->process($this->token,
-			$input->getMethod() === 'POST',
-			IpHelper::getAddress($logger),
-			$logger);
+		$isPost = $input->getMethod() === 'POST';
+		// the confirmation is a form of this page: a POST without its form
+		// token (one another site makes the browser send) unblocks nothing
+		$result = ($isPost && !Session::checkToken('post'))
+			? TokenunblockModel::ResultInvalid
+			: $this->model->process($this->token, $isPost, IpHelper::getAddress($logger), $logger);
 		switch ($result)
 		{
 			case TokenunblockModel::ResultConfirm:

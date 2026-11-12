@@ -46,8 +46,13 @@ class HtblockController extends FormController
 	{
 		$this->checkToken();
 		// this fully overrides FormController::save(), so it doesn't
-		// inherit the base class's automatic allowSave()/core.create check
-		if (!Factory::getApplication()->getIdentity()->authorise('core.create', 'com_bfstop'))
+		// inherit the base class's automatic allowSave()/core.create check.
+		// An entry is part of the web server's configuration: it turns
+		// addresses away before Joomla runs, so nobody can lift it from
+		// within the site who is in it - core.admin as well, like the
+		// settings (which choose the file) and the allow list
+		$user = Factory::getApplication()->getIdentity();
+		if (!$user || !$user->authorise('core.create', 'com_bfstop') || !$user->authorise('core.admin', 'com_bfstop'))
 		{
 			$this->returnToFormWithMessage('', Text::_('COM_BFSTOP_NOT_AUTHORISED'));
 			return false;
