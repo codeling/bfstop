@@ -230,6 +230,37 @@ class IpHelper
 	}
 
 	/**
+	 * The entries of $list (addresses or networks) which overlap the address
+	 * or network $entry: contain it, are contained in it, or are the same.
+	 * Malformed entries never overlap.
+	 *
+	 * @return string[]
+	 */
+	public static function overlapping($entry, array $list)
+	{
+		$network = self::network($entry);
+		if ($network === null)
+		{
+			return array();
+		}
+		$result = array();
+		foreach ($list as $other)
+		{
+			$otherNetwork = self::network($other);
+			if ($otherNetwork === null || strlen($otherNetwork[0]) !== strlen($network[0]))
+			{
+				continue;
+			}
+			$mask = self::prefixMask(min($network[1], $otherNetwork[1]), strlen($network[0]));
+			if (($network[0] & $mask) === ($otherNetwork[0] & $mask))
+			{
+				$result[] = $other;
+			}
+		}
+		return $result;
+	}
+
+	/**
 	 * Whether the address or network $entry contains one of the
 	 * $trustedProxies (addresses or networks) or part of one of them.
 	 *
@@ -243,25 +274,7 @@ class IpHelper
 	 */
 	public static function overlapsTrustedProxy($entry, array $trustedProxies)
 	{
-		$network = self::network($entry);
-		if ($network === null)
-		{
-			return false;
-		}
-		foreach ($trustedProxies as $proxy)
-		{
-			$proxyNetwork = self::network($proxy);
-			if ($proxyNetwork === null || strlen($proxyNetwork[0]) !== strlen($network[0]))
-			{
-				continue;
-			}
-			$mask = self::prefixMask(min($network[1], $proxyNetwork[1]), strlen($network[0]));
-			if (($network[0] & $mask) === ($proxyNetwork[0] & $mask))
-			{
-				return true;
-			}
-		}
-		return false;
+		return count(self::overlapping($entry, $trustedProxies)) > 0;
 	}
 
 	/**

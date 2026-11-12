@@ -28,20 +28,54 @@ class NotifierHelper
 		$this->logger = $logger;
 		$this->db = $db;
 
-		$this->notifyAddresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
+		$addresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
 		$userEmail = $this->db->getUserEmailByID($userID);
 		if (!empty($userEmail))
 		{
-			$this->notifyAddresses = array_merge($this->notifyAddresses, array($userEmail));
+			$addresses[] = $userEmail;
 		}
 		if ($groupNotifEnabled)
 		{
-			$this->notifyAddresses = array_merge($this->notifyAddresses, $this->db->getUserGroupEmail($userGroup));
+			$addresses = array_merge($addresses, $this->db->getUserGroupEmail($userGroup));
 		}
+		$this->notifyAddresses = self::validAddresses($addresses, $logger);
 		if (count($this->notifyAddresses) == 0)
 		{
 			$this->logger->log('No notification address specified!', Log::DEBUG);
 		}
+	}
+
+	/**
+	 * $addresses without surrounding white space, duplicates and what isn't
+	 * an email address (which is logged). The mailer throws for an invalid
+	 * recipient - in the request of a failed login, an error page.
+	 *
+	 * @return string[]
+	 */
+	public static function validAddresses(array $addresses, ?LoggerHelper $logger = null)
+	{
+		$valid = array();
+		foreach ($addresses as $address)
+		{
+			$address = trim((string) $address);
+			if ($address === '')
+			{
+				continue;
+			}
+			if (filter_var($address, FILTER_VALIDATE_EMAIL) === false)
+			{
+				if ($logger !== null)
+				{
+					$logger->log('Not a valid email address, not notifying it: '.$address, Log::WARNING);
+				}
+				continue;
+			}
+			if (!in_array(strtolower($address), array_map('strtolower', $valid), true))
+			{
+				$valid[] = $address;
+			}
+		}
+		return $valid;
 	}
 
 	public function getNotifyAddresses()
@@ -52,6 +86,20 @@ class NotifierHelper
 	public function getSiteName()
 	{
 		return (string) Factory::getApplication()->get('sitename');
+	}
+
+	/**
+	 * The site's address for the mails, if it is configured ($live_site in
+	 * configuration.php). The mails are sent from the request of a failed
+	 * login, and without $live_site, Joomla builds every address (also
+	 * Uri::root()) from the host that request names - which whoever sends it
+	 * picks: a link in a genuine mail of the site to their server.
+	 */
+	public static function siteAddress()
+	{
+		return trim((string) Factory::getApplication()->get('live_site', '')) !== ''
+			? Uri::root()
+			: Text::_('PLG_SYSTEM_BFSTOP_SITE_ADDRESS_NOT_SET');
 	}
 
 	public function isNotificationAllowed($logtime, $maxNumber,
@@ -77,7 +125,7 @@ class NotifierHelper
 	{
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
-			Uri::root(),
+			self::siteAddress(),
 			$this->db->getFormattedFailedList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
@@ -89,7 +137,7 @@ class NotifierHelper
 	{
 		$bodys = Text::sprintf('PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT',
 			$this->getSiteName(),
-			Uri::root())."\n";
+			self::siteAddress())."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME').":", 15).
 			LoggerHelper::singleLine($logEntry->username)."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS').":", 15).
@@ -108,16 +156,18 @@ class NotifierHelper
 			$this->logger->log("sendMail called with invalid argument: ".print_r($emailAddresses, true), Log::ERROR);
 			return false;
 		}
-		$mail = Factory::getContainer()->get(MailerFactoryInterface::class)->createMailer();
-		$mail->setSubject($subject);
-		$mail->setBody($body);
-		foreach ($emailAddresses as $recipient)
-		{
-			$mail->addRecipient($recipient);
-		}
+		// everything in the try: the mailer throws for an invalid recipient
+		// too, and this runs in the request of a failed login
 		try
 		{
-			$sendResult = $mail->Send();
+			$mail = Factory::getContainer()->get(MailerFactoryInterface::class)->createMailer();
+			$mail->setSubject($subject);
+			$mail->setBody($body);
+			foreach ($emailAddresses as $recipient)
+			{
+				$mail->addRecipient($recipient);
+			}
+			$sendResult = $mail->send();
 		}
 		catch (\Exception $e)
 		{
@@ -141,7 +191,7 @@ class NotifierHelper
 		$body = $this->getFailedLoginBody($logEntry);
 		$subject = Text::sprintf("PLG_SYSTEM_BFSTOP_FAILED_LOGIN_ATTEMPT",
 			$this->getSiteName(),
-			Uri::root());
+			self::siteAddress());
 		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 

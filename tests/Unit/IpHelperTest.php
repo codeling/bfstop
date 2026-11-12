@@ -291,4 +291,20 @@ class IpHelperTest extends TestCase
 		}
 		$this->assertFalse(IpHelper::overlapsTrustedProxy('192.0.2.10', array()));
 	}
+
+	public function testOverlapping()
+	{
+		$list = array('203.0.113.7', '198.51.100.0/24', '2001:db8:1:7f::9', 'nonsense', '10.0.0.0/8');
+		// contains an entry, is contained in one, is one
+		$this->assertSame(array('203.0.113.7'), IpHelper::overlapping('203.0.113.0/24', $list));
+		$this->assertSame(array('198.51.100.0/24'), IpHelper::overlapping('198.51.100.9', $list));
+		$this->assertSame(array('198.51.100.0/24'), IpHelper::overlapping('198.51.100.0/25', $list));
+		$this->assertSame(array('10.0.0.0/8'), IpHelper::overlapping('10.0.0.0/8', $list));
+		// an IPv6 client tracked by its /56 contains another host of it
+		$this->assertSame(array('2001:db8:1:7f::9'), IpHelper::overlapping('2001:db8:1::/56', $list));
+		$this->assertSame(array(), IpHelper::overlapping('2001:db8:2::/56', $list));
+		$this->assertSame(array(), IpHelper::overlapping('192.0.2.0/24', $list));
+		$this->assertSame(array(), IpHelper::overlapping('nonsense', $list));
+		$this->assertSame(array(), IpHelper::overlapping('203.0.113.0/24', array()));
+	}
 }

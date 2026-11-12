@@ -29,7 +29,34 @@ class HtaccessHelper
 
 	private $logger;
 
+	/**
+	 * The block section of earlier versions: a <RequireAll> of "Require all
+	 * granted" and one "Require not ip" line per address. Still read (and
+	 * replaced by the current form whenever the section is written, see
+	 * upgradeFormat()), never written: Apache combines the authorization
+	 * directives at the top level of a configuration section with an implicit
+	 * <RequireAny>, so the "Require all granted" in it let everybody who isn't
+	 * blocked past every other access control of the directory - HTTP
+	 * authentication ("Require valid-user"), "Require ip", "Require all denied".
+	 */
 	public const BlockPrefix = 'Require not ip ';
+	private const LegacyLines = array('<RequireAll>', 'Require all granted', '</RequireAll>');
+
+	/**
+	 * The block section only denies: an <If> holding "Require all denied" for
+	 * requests from a blocked address. A request it doesn't match keeps
+	 * whatever authorization the directory has; one it matches is refused,
+	 * whatever that is (AuthMerging Off: the <If> replaces it).
+	 */
+	private const DenyLine = 'Require all denied';
+	private const EndIfLine = '</If>';
+	private const ErrorDocumentPrefix = 'ErrorDocument 403 ';
+
+	/**
+	 * Addresses per <If>: Apache reads configuration lines of up to 8 KB, an
+	 * <If> line holds about 50 characters per address.
+	 */
+	public const AddressesPerCondition = 50;
 
 	/**
 	 * The most addresses the block section holds. Apache reads the file again
@@ -57,31 +84,6 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Get .htaccess lines before custom lines
-	 *
-	 * @var array
-	 */
-	private function getHeader()
-	{
-		return array(
-			'<RequireAll>',
-			'Require all granted'
-		);
-	}
-
-	/**
-	 * Get .htaccess lines after custom lines
-	 *
-	 * @var array
-	 */
-	private function getFooter()
-	{
-		return array(
-			'</RequireAll>'
-		);
-	}
-
-	/**
 	 * Check if .htaccess file is found, readable and writeable.
 	 *
 	 * @return array
@@ -99,32 +101,98 @@ class HtaccessHelper
 	}
 
 	/**
+	 * What the block section holds: the blocked addresses (in the order they
+	 * were added), the ErrorDocument 403 line (or null) and any other lines,
+	 * which somebody wrote into it by hand. Read from both the current and
+	 * the earlier form (see LegacyLines).
+	 *
+	 * @return array{addresses: string[], errorDocument: string|null, other: string[], legacy: bool}
+	 */
+	private function parseSection()
+	{
+		$section = array('addresses' => array(), 'errorDocument' => null, 'other' => array(), 'legacy' => false);
+		foreach ($this->extract() as $line)
+		{
+			$trimmed = trim($line);
+			if ($trimmed === '' || $trimmed === self::DenyLine || $trimmed === self::EndIfLine)
+			{
+				continue;
+			}
+			if (in_array($trimmed, self::LegacyLines, true))
+			{
+				$section['legacy'] = true;
+			}
+			elseif (strpos($trimmed, self::BlockPrefix) === 0)
+			{
+				$section['legacy'] = true;
+				$section['addresses'][] = substr($trimmed, strlen(self::BlockPrefix));
+			}
+			elseif (strpos($trimmed, '<If ') === 0)
+			{
+				preg_match_all("/-R '([^']*)'/", $trimmed, $matches);
+				foreach ($matches[1] as $address)
+				{
+					$section['addresses'][] = $address;
+				}
+			}
+			elseif (strpos($trimmed, self::ErrorDocumentPrefix) === 0)
+			{
+				$section['errorDocument'] = $trimmed;
+			}
+			else
+			{
+				$section['other'][] = $line;
+			}
+		}
+		$section['addresses'] = array_values(array_unique($section['addresses']));
+		return $section;
+	}
+
+	/**
+	 * The lines of the block section for $section (see parseSection()). Only
+	 * addresses and networks get into a condition: what is written there is
+	 * part of the web server's configuration.
+	 *
+	 * @return string[]
+	 */
+	private static function renderSection(array $section)
+	{
+		$addresses = array_values(array_filter($section['addresses'], array(IpHelper::class, 'isValidIpOrSubnet')));
+		$lines = array();
+		foreach (array_chunk($addresses, self::AddressesPerCondition) as $chunk)
+		{
+			$conditions = array();
+			foreach ($chunk as $address)
+			{
+				$conditions[] = "-R '".$address."'";
+			}
+			$lines[] = '<If "'.implode(' || ', $conditions).'">';
+			$lines[] = self::DenyLine;
+			$lines[] = self::EndIfLine;
+		}
+		if ($section['errorDocument'] !== null)
+		{
+			$lines[] = $section['errorDocument'];
+		}
+		return array_merge($lines, $section['other']);
+	}
+
+	/**
 	 * Return array of denied IP addresses from .htaccess.
 	 *
 	 * @return array
 	 */
 	public function getDeniedIPs()
 	{
-		$lines = $this->getLines(self::BlockPrefix);
-
-		$addresses = array();
-		foreach ($lines as $line)
-		{
-			// the list is shown in the backend, and what it holds is whatever
-			// somebody wrote into the file: only addresses and subnets are
-			// passed on
-			$address = substr($line, strlen(self::BlockPrefix));
-			if (IpHelper::isValidIpOrSubnet($address))
-			{
-				$addresses[] = $address;
-			}
-		}
-
-		return $addresses;
+		// the list is shown in the backend, and what it holds is whatever
+		// somebody wrote into the file: only addresses and subnets are
+		// passed on
+		return array_values(array_filter($this->parseSection()['addresses'],
+			array(IpHelper::class, 'isValidIpOrSubnet')));
 	}
 
 	/**
-	 * Add 'deny from $IP' to .htaccess.
+	 * Blocks $IP in .htaccess.
 	 *
 	 * @param string $IP
 	 * @return boolean
@@ -146,12 +214,26 @@ class HtaccessHelper
 		}
 		return $this->locked(function () use ($IP)
 		{
-			return $this->addLine(self::BlockPrefix . $IP);
+			$section = $this->parseSection();
+			if (!in_array($IP, $section['addresses'], true))
+			{
+				if (count($section['addresses']) >= self::MaxBlockLines)
+				{
+					if (!is_null($this->logger))
+					{
+						$this->logger->log("Not adding '$IP' to .htaccess: it holds ".count($section['addresses']).
+							" addresses already", Log::ERROR);
+					}
+					return false;
+				}
+				$section['addresses'][] = $IP;
+			}
+			return $this->insert(self::renderSection($section));
 		});
 	}
 
 	/**
-	 * Remove 'deny from $IP' from .htaccess.
+	 * Lifts the block of $IP in .htaccess.
 	 *
 	 * @param string $IP
 	 * @return boolean
@@ -160,7 +242,50 @@ class HtaccessHelper
 	{
 		return $this->locked(function () use ($IP)
 		{
-			return $this->removeLine(self::BlockPrefix . $IP);
+			$section = $this->parseSection();
+			$key = array_search((string) $IP, $section['addresses'], true);
+			if ($key === false && !$section['legacy'])
+			{
+				return true;
+			}
+			if ($key !== false)
+			{
+				unset($section['addresses'][$key]);
+			}
+			return $this->insert(self::renderSection($section));
+		});
+	}
+
+	/**
+	 * Whether the file still has a block section of an earlier version, which
+	 * grants access (see LegacyLines).
+	 */
+	public function hasLegacySection()
+	{
+		return $this->parseSection()['legacy'];
+	}
+
+	/**
+	 * Replaces a block section of an earlier version (see LegacyLines) by the
+	 * current form, keeping the blocked addresses and the 403 message.
+	 *
+	 * @return bool whether the file has no such section (any more)
+	 */
+	public function upgradeFormat()
+	{
+		return $this->locked(function ()
+		{
+			$section = $this->parseSection();
+			if (!$section['legacy'])
+			{
+				return true;
+			}
+			if (!is_null($this->logger))
+			{
+				$this->logger->log('Replacing the block section of an earlier version in '.$this->path.
+					' - it let everybody who isn\'t blocked past the other access controls of the directory', Log::WARNING);
+			}
+			return $this->insert(self::renderSection($section));
 		});
 	}
 
@@ -224,15 +349,13 @@ class HtaccessHelper
 			return false;
 		}
 
-		$line = 'ErrorDocument 403 "' . addcslashes($message, '"\\') . '"';
+		$line = self::ErrorDocumentPrefix.'"'.addcslashes($message, '"\\').'"';
 
 		return $this->locked(function () use ($line)
 		{
-			$otherLines = $this->getLines('ErrorDocument 403 ', true, true);
-
-			$insertion = array_merge($this->getHeader(), array($line), $otherLines, $this->getFooter());
-
-			return $this->insert($insertion);
+			$section = $this->parseSection();
+			$section['errorDocument'] = $line;
+			return $this->insert(self::renderSection($section));
 		});
 	}
 
@@ -245,7 +368,13 @@ class HtaccessHelper
 	{
 		return $this->locked(function ()
 		{
-			return $this->removeLine('', 'ErrorDocument 403 ');
+			$section = $this->parseSection();
+			if ($section['errorDocument'] === null && !$section['legacy'])
+			{
+				return true;
+			}
+			$section['errorDocument'] = null;
+			return $this->insert(self::renderSection($section));
 		});
 	}
 
@@ -314,113 +443,6 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Return array of (prefixed) lines from .htaccess.
-	 *
-	 * @param string $prefixes
-	 * @return array
-	 */
-	private function getLines($prefixes = false, $onlyBody = false, $exceptPrefix = false)
-	{
-		$allLines = $this->extract();
-
-		if ($onlyBody)
-		{
-			$allLines = array_diff($allLines, $this->getHeader(), $this->getFooter());
-		}
-
-		if (!$prefixes)
-		{
-			return $allLines;
-		}
-
-		if (!is_array($prefixes))
-		{
-			$prefixes = array($prefixes);
-		}
-
-		$prefixedLines = array();
-		foreach ($allLines as $line)
-		{
-			foreach ($prefixes as $prefix)
-			{
-				if (strpos($line, $prefix) === 0)
-				{
-					$prefixedLines[] = $line;
-				}
-			}
-		}
-
-		if ($exceptPrefix)
-		{
-			$prefixedLines = array_diff($allLines, $prefixedLines);
-		}
-
-		return $prefixedLines;
-	}
-
-	/**
-	 * Add single line to .htaccess.
-	 *
-	 * @param string $line
-	 * @return boolean
-	 */
-	private function addLine($line)
-	{
-		$existing = $this->getLines(false, true);
-		if (!in_array($line, $existing, true) && count($existing) >= self::MaxBlockLines)
-		{
-			if (!is_null($this->logger))
-			{
-				$this->logger->log("Not adding '$line' to .htaccess: it holds ".count($existing).
-					" lines already", Log::ERROR);
-			}
-			return false;
-		}
-		$insertion = array_merge($this->getHeader(), $existing, array($line), $this->getFooter());
-
-		return $this->insert(array_unique($insertion));
-	}
-
-	/**
-	 * Remove single line from .htaccess.
-	 *
-	 * @param string $line
-	 * @param string $prefix
-	 * @return boolean
-	 */
-	private function removeLine($line, $prefix = false)
-	{
-		$insertion = $this->getLines();
-
-		if ($prefix !== false)
-		{
-			$lineKey = false;
-			$prefixLength = strlen($prefix);
-			foreach ($insertion as $key => $line)
-			{
-				if (substr($line, 0, $prefixLength) === $prefix)
-				{
-					$lineKey = $key;
-					break;
-				}
-			}
-		}
-		else
-		{
-			$lineKey = array_search($line, $insertion);
-		}
-
-		if ($lineKey === false)
-		{
-			return true;
-		}
-
-		unset($insertion[$lineKey]);
-
-		return $this->insert($insertion);
-	}
-
-	/**
 	 * Replaces the file as a whole: the new content is written next to it and
 	 * renamed over it. Writing into the file itself would truncate it first,
 	 * and a request served (or a crash) in between would see a part of it - for
@@ -471,7 +493,9 @@ class HtaccessHelper
 				}
 				if ($state)
 				{
-					$result[] = $markerline;
+					// a file saved with Windows line ends (e.g. uploaded by FTP
+					// in ASCII mode) has a \r at the end of every line
+					$result[] = rtrim($markerline, "\r");
 				}
 				if (strpos($markerline, '# BEGIN ' . self::$marker) !== false)
 				{

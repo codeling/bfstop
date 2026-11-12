@@ -37,6 +37,10 @@ the site only needs to be set up again when the database schema changes.
   Actions workflows (`check-workflows.php`: every action pinned to a commit
   SHA, with its release in a comment; Dependabot proposes the updates); the
   scripts are kept identical in the com_bfstop repository.
+- `ci/apache-htaccess.sh`: the block section `HtaccessHelper` writes, checked
+  against a real Apache 2.4 (CI job ".htaccess blocks on Apache"): it turns
+  away the blocked addresses and doesn't open up what the directory's other
+  access controls keep out.
 - `performance/`: not a test, a comparison of what two versions of the plugin
   (by default 1.5.2 and the checkout) cost a Joomla site, see its README. Not
   run by phpunit or CI.

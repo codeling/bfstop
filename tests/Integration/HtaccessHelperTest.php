@@ -72,7 +72,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertNotFalse($h->denyIP('203.0.113.5'));
 		$this->assertSame(array('203.0.113.5'), array_values($h->getDeniedIPs()));
 		$this->assertSame(
-			"# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\nRequire not ip 203.0.113.5\n</RequireAll>\n# END BFStop Blocks\n\n",
+			"# BEGIN BFStop Blocks\n<If \"-R '203.0.113.5'\">\nRequire all denied\n</If>\n# END BFStop Blocks\n\n",
 			$this->content());
 	}
 
@@ -231,7 +231,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		file_put_contents($this->dir.'/.htaccess', "RewriteEngine On\n");
 		chmod($this->dir.'/.htaccess', 0640);
 		$this->assertTrue($this->helper()->denyIP('203.0.113.5'));
-		$this->assertStringContainsString('Require not ip 203.0.113.5', $this->content());
+		$this->assertStringContainsString("-R '203.0.113.5'", $this->content());
 		$this->assertStringContainsString('RewriteEngine On', $this->content());
 		$this->assertSame(0640, fileperms($this->dir.'/.htaccess') & 0777, 'the permissions are kept');
 		$this->assertSame(array('.htaccess'), array_values(array_diff(scandir($this->dir), array('.', '..'))));
@@ -246,7 +246,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		{
 			$this->assertTrue($this->helper()->denyIP('203.0.113.5'));
 			$this->assertTrue(is_link($this->dir.'/.htaccess'));
-			$this->assertStringContainsString('Require not ip 203.0.113.5', file_get_contents($real));
+			$this->assertStringContainsString("-R '203.0.113.5'", file_get_contents($real));
 		}
 		finally
 		{
@@ -276,5 +276,96 @@ class HtaccessHelperTest extends IntegrationTestCase
 			"Require not ip 203.0.113.5\nRequire not ip \"><script>alert(1)</script>\nRequire not ip 2001:db8::/32\n".
 			"Require not ip 203.0.113.0/99\n</RequireAll>\n# END BFStop Blocks\n");
 		$this->assertSame(array('203.0.113.5', '2001:db8::/32'), $this->helper()->getDeniedIPs());
+	}
+
+	/**
+	 * Apache combines the authorization directives at the top level of a
+	 * section with an implicit <RequireAny>: a "Require all granted" in the
+	 * block section would let everybody who isn't blocked past the other
+	 * access controls of the directory (HTTP authentication, "Require ip").
+	 * The section must only ever deny.
+	 */
+	public function testTheBlockSectionOnlyDenies()
+	{
+		$auth = "AuthType Basic\nAuthName \"Staff\"\nAuthUserFile /srv/.htpasswd\nRequire valid-user\n";
+		file_put_contents($this->dir.'/.htaccess', $auth);
+		$h = $this->helper();
+		$h->denyIP('203.0.113.5');
+		$h->denyIP('2001:db8:1::/56');
+		$h->edit403Message('Blocked');
+		$content = $this->content();
+		$this->assertStringNotContainsString('Require all granted', $content);
+		$this->assertStringNotContainsString('RequireAll', $content);
+		$this->assertStringContainsString("<If \"-R '203.0.113.5' || -R '2001:db8:1::/56'\">\nRequire all denied\n</If>\n", $content);
+		$this->assertStringEndsWith($auth, $content);
+	}
+
+	public function testTheSectionOfEarlierVersionsIsReplaced()
+	{
+		file_put_contents($this->dir.'/.htaccess', "# top\n# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\n".
+			"Require not ip 192.0.2.1\nRequire not ip 2001:db8::/32\nErrorDocument 403 \"Go away\"\nHeader set X-Hand 1\n".
+			"</RequireAll>\n# END BFStop Blocks\n# bottom\n");
+		$h = $this->helper();
+		$this->assertTrue($h->hasLegacySection());
+		$this->assertSame(array('192.0.2.1', '2001:db8::/32'), $h->getDeniedIPs());
+		$this->assertTrue($h->upgradeFormat());
+		$this->assertSame("# top\n# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1' || -R '2001:db8::/32'\">\nRequire all denied\n</If>\n".
+			"ErrorDocument 403 \"Go away\"\nHeader set X-Hand 1\n# END BFStop Blocks\n# bottom\n", $this->content());
+		$this->assertFalse($h->hasLegacySection());
+		$this->assertTrue($h->upgradeFormat(), 'nothing left to do');
+	}
+
+	public function testAnyChangeReplacesTheSectionOfEarlierVersions()
+	{
+		$legacy = "# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\nRequire not ip 192.0.2.1\n</RequireAll>\n# END BFStop Blocks\n";
+		foreach (array(
+			'deny'           => function ($h) { return $h->denyIP('192.0.2.2'); },
+			'undeny'         => function ($h) { return $h->undenyIP('192.0.2.1'); },
+			'undeny absent'  => function ($h) { return $h->undenyIP('198.51.100.1'); },
+			'403 message'    => function ($h) { return $h->edit403Message('Go away'); },
+			'no 403 message' => function ($h) { return $h->remove403Message(); },
+		) as $what => $change)
+		{
+			file_put_contents($this->dir.'/.htaccess', $legacy);
+			$this->assertTrue($change($this->helper()), $what);
+			$this->assertStringNotContainsString('Require all granted', $this->content(), $what);
+			$this->assertFalse($this->helper()->hasLegacySection(), $what);
+		}
+	}
+
+	public function testManyAddressesAreSplitIntoSeveralConditions()
+	{
+		$h = $this->helper();
+		$addresses = array();
+		for ($i = 1; $i <= HtaccessHelper::AddressesPerCondition * 2 + 1; ++$i)
+		{
+			$addresses[] = '198.51.'.intdiv($i, 250).'.'.($i % 250);
+		}
+		foreach ($addresses as $address)
+		{
+			$h->denyIP($address);
+		}
+		$this->assertSame(3, substr_count($this->content(), '<If '));
+		$this->assertSame(3, substr_count($this->content(), "Require all denied\n</If>"));
+		// Apache reads configuration lines of up to 8 KB
+		$this->assertLessThan(8192, max(array_map('strlen', explode("\n", $this->content()))));
+		$this->assertSame($addresses, $h->getDeniedIPs());
+	}
+
+	/**
+	 * A file saved with Windows line ends (an FTP upload in ASCII mode) has a
+	 * \r at the end of every line: its blocks must still be listed and
+	 * removable, or the web server would keep them for ever.
+	 */
+	public function testWindowsLineEnds()
+	{
+		file_put_contents($this->dir.'/.htaccess', "RewriteEngine On\r\n# BEGIN BFStop Blocks\r\n<If \"-R '192.0.2.9'\">\r\n".
+			"Require all denied\r\n</If>\r\n# END BFStop Blocks\r\nRewriteRule ^a$ b\r\n");
+		$h = $this->helper();
+		$this->assertSame(array('192.0.2.9'), $h->getDeniedIPs());
+		$this->assertTrue($h->undenyIP('192.0.2.9'));
+		$this->assertSame(array(), $h->getDeniedIPs());
+		$this->assertSame("RewriteEngine On\r\n# BEGIN BFStop Blocks\n# END BFStop Blocks\nRewriteRule ^a$ b\r\n", $this->content(),
+			'the lines outside the section are left as they are');
 	}
 }

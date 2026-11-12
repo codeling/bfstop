@@ -590,4 +590,43 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->insert('#__bfstop_unblock', array('block_id' => $blockId, 'source' => 0, 'crdate' => self::minutesAgo(0)));
 		$this->assertNotBlocked();
 	}
+
+	/**
+	 * Renames the block table for $test, so that it can't be read.
+	 */
+	private function withoutBlockTable(callable $test)
+	{
+		$db = $this->db;
+		$table = $db->getPrefix().'bfstop_bannedip';
+		$rename = function ($from, $to) use ($db)
+		{
+			$db->setQuery($db->getServerType() === 'postgresql'
+				? 'ALTER TABLE '.$db->quoteName($from).' RENAME TO '.$db->quoteName($to)
+				: 'RENAME TABLE '.$db->quoteName($from).' TO '.$db->quoteName($to));
+			$db->execute();
+		};
+		$rename($table, $table.'_off');
+		try
+		{
+			return $test();
+		}
+		finally
+		{
+			$rename($table.'_off', $table);
+		}
+	}
+
+	public function testLoginAttemptIsRefusedIfTheBlockListCantBeRead()
+	{
+		// "can't tell" must not pass for "not blocked" where it matters: a
+		// login attempt is refused (503, so not for good); browsing goes on
+		$this->configure();
+		list($login, $page) = $this->withoutBlockTable(function ()
+		{
+			return array($this->request('option=com_users&task=user.login'), $this->request('option=com_content'));
+		});
+		$this->assertStringNotContainsString('NOT BLOCKED', $login);
+		$this->assertStringContainsString('STATUS: 503', $login);
+		$this->assertStringContainsString('NOT BLOCKED', $page);
+	}
 }
