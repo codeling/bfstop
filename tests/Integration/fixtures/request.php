@@ -12,9 +12,15 @@
 // "option=com_users&task=user.login"). With --admin it is a request to the
 // backend, by a guest, or with --admin=<username> by that user; with --api
 // one to the Web Services API. --server=NAME=VALUE sets $_SERVER[NAME] (e.g.
-// a header).
+// a header). --then=failure:USERNAME or --then=login:USERNAME lets the login
+// of that user fail or succeed afterwards, and prints before and after it
+// whether the request holds the lock for the logins of its address ("LOGIN
+// TURN HELD" or "FREE", see Bfstop::awaitLoginTurn()).
 // Used by PluginEventsTest; needs the same environment as the tests.
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Application\AdministratorApplication;
 use Joomla\CMS\Application\ApiApplication;
 use Joomla\CMS\Factory;
@@ -75,3 +81,25 @@ if (!in_array('--no-route', $argv, true))
 	$app->getDispatcher()->dispatch($event, new Event($event, array()));
 }
 echo "NOT BLOCKED\n";
+foreach (array_slice($argv, 3) as $option)
+{
+	if (strncmp($option, '--then=', 7) !== 0)
+	{
+		continue;
+	}
+	// the lock is the request's if nobody else can take it (a second handle
+	// of this process is somebody else to flock())
+	$loginTurn = function () use ($argv)
+	{
+		$handle = LockHelper::acquire(Bfstop::loginTurnFile(
+			IpHelper::trackedAddress($argv[1], Bfstop::DefaultSettings['ipv6PrefixLength'])), 0);
+		LockHelper::release($handle);
+		return 'LOGIN TURN '.($handle === null ? 'HELD' : 'FREE')."\n";
+	};
+	echo $loginTurn();
+	list($outcome, $username) = explode(':', substr($option, 7), 2);
+	$name = $outcome === 'login' ? 'onUserLogin' : 'onUserLoginFailure';
+	$app->getDispatcher()->dispatch($name, new Event($name,
+		array(array('username' => $username, 'status' => $outcome === 'login' ? 1 : 4), array())));
+	echo $loginTurn();
+}

@@ -84,6 +84,30 @@ class DnsHelperTest extends TestCase
 			'a CNAME only');
 	}
 
+	public function testRecordWhichNamesNoHostIsNoRecord()
+	{
+		// the labels of a name can hold any bytes, and the owner of the
+		// address chooses them
+		foreach (array("\xff\xfe.example.org", "<script>alert(1)</script>.example.org", "a b.example.org",
+			"host\n.example.org", "'; DROP TABLE x; --.example.org", "h\0st.example.org") as $name)
+		{
+			$labels = '';
+			foreach (explode('.', $name) as $label)
+			{
+				$labels .= chr(strlen($label)).$label;
+			}
+			$this->assertNull(DnsHelper::parsePtrResponse(self::response(7, array(self::record(12, $labels."\0"))), 7),
+				addcslashes($name, "\0..\37\177..\377"));
+		}
+		$this->assertTrue(DnsHelper::isHostName('static-203-0-113-5.cust_1.example.org'));
+		$this->assertTrue(DnsHelper::isHostName('localhost'));
+		$this->assertFalse(DnsHelper::isHostName(''));
+		$this->assertFalse(DnsHelper::isHostName('host..example.org'));
+		$this->assertFalse(DnsHelper::isHostName("host.example.org\n"));
+		$this->assertFalse(DnsHelper::isHostName(str_repeat('a', 64).'.example.org'));
+		$this->assertFalse(DnsHelper::isHostName(implode('.', array_fill(0, 64, 'abc'))), 'longer than 253');
+	}
+
 	public function testWhatIsNoResponseToTheQuery()
 	{
 		$good = self::response(7, array(self::record(12, self::encodeName('host.example.org'))));

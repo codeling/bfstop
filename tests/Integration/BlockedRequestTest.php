@@ -236,6 +236,10 @@ class BlockedRequestTest extends IntegrationTestCase
 		$headers = Bfstop::blockedResponseHeaders();
 		$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
 		$this->assertContains('Pragma: no-cache', $headers);
+		// nor indexed, and what it is isn't left to the browser to guess
+		$this->assertContains('X-Robots-Tag: noindex, nofollow', $headers);
+		$this->assertContains('Content-Type: text/html; charset=utf-8', $headers);
+		$this->assertContains('X-Content-Type-Options: nosniff', $headers);
 		foreach ($headers as $header)
 		{
 			$this->assertStringStartsNotWith('HTTP/', $header, 'the status is set with http_response_code()');

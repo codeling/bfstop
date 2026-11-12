@@ -40,4 +40,23 @@ class ApiHelperTest extends TestCase
 		$this->assertSame('', ApiHelper::credentialsUsername(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw==')));
 		$this->assertSame('', ApiHelper::credentialsUsername(array(), 'Bearer abc'));
 	}
+
+	public function testOnlyBasicCredentialsAreAPassword()
+	{
+		$this->assertTrue(ApiHelper::credentialsArePassword(array('PHP_AUTH_USER' => 'bob', 'PHP_AUTH_PW' => 'x')));
+		$this->assertTrue(ApiHelper::credentialsArePassword(array('PHP_AUTH_PW' => 'x')));
+		$this->assertTrue(ApiHelper::credentialsArePassword(array('PHP_AUTH_USER' => 'bob')));
+		$this->assertTrue(ApiHelper::credentialsArePassword(
+			array('HTTP_AUTHORIZATION' => 'Basic '.base64_encode('carol:x'))));
+		$this->assertTrue(ApiHelper::credentialsArePassword(
+			array('REDIRECT_HTTP_AUTHORIZATION' => 'basic '.base64_encode('dave:x'))));
+		$this->assertTrue(ApiHelper::credentialsArePassword(array(), 'Basic '.base64_encode('erin:x')));
+		$this->assertTrue(ApiHelper::credentialsArePassword(array('HTTP_AUTHORIZATION' => 'Basic !!!')), 'not base64');
+
+		$this->assertFalse(ApiHelper::credentialsArePassword(array()));
+		$this->assertFalse(ApiHelper::credentialsArePassword(array('HTTP_AUTHORIZATION' => 'Bearer c2hhMjU2OjQyOmFiYw==')));
+		$this->assertFalse(ApiHelper::credentialsArePassword(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw==')));
+		$this->assertFalse(ApiHelper::credentialsArePassword(array(), 'Bearer abc'));
+		$this->assertFalse(ApiHelper::credentialsArePassword(array('PHP_AUTH_USER' => array('x'))), 'not a string');
+	}
 }

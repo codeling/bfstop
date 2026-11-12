@@ -36,17 +36,12 @@ class ApiHelper
 	 */
 	public static function credentialsUsername(array $server, ?string $authorizationHeader = null): ?string
 	{
-		$value = function ($name) use ($server)
-		{
-			return (isset($server[$name]) && is_string($server[$name])) ? $server[$name] : '';
-		};
+		$value = self::serverValue($server);
 		if ($value('PHP_AUTH_USER') !== '' || $value('PHP_AUTH_PW') !== '')
 		{
 			return $value('PHP_AUTH_USER');
 		}
-		$authorization = trim($value('HTTP_AUTHORIZATION') !== '' ? $value('HTTP_AUTHORIZATION')
-			: ($value('REDIRECT_HTTP_AUTHORIZATION') !== '' ? $value('REDIRECT_HTTP_AUTHORIZATION')
-				: (string) $authorizationHeader));
+		$authorization = self::authorization($server, $authorizationHeader);
 		if (strncasecmp($authorization, 'Basic ', 6) === 0)
 		{
 			$decoded = base64_decode(trim(substr($authorization, 6)), true);
@@ -60,9 +55,51 @@ class ApiHelper
 	}
 
 	/**
+	 * Whether the credentials an API request carries are a username and a
+	 * password (HTTP Basic authentication), which can be guessed - unlike a
+	 * token, which is a long random value. Parameters as for
+	 * credentialsUsername().
+	 */
+	public static function credentialsArePassword(array $server, ?string $authorizationHeader = null): bool
+	{
+		$value = self::serverValue($server);
+		return $value('PHP_AUTH_USER') !== '' || $value('PHP_AUTH_PW') !== '' ||
+			strncasecmp(self::authorization($server, $authorizationHeader), 'Basic ', 6) === 0;
+	}
+
+	private static function serverValue(array $server): \Closure
+	{
+		return function ($name) use ($server)
+		{
+			return (isset($server[$name]) && is_string($server[$name])) ? $server[$name] : '';
+		};
+	}
+
+	private static function authorization(array $server, ?string $authorizationHeader): string
+	{
+		$value = self::serverValue($server);
+		return trim($value('HTTP_AUTHORIZATION') !== '' ? $value('HTTP_AUTHORIZATION')
+			: ($value('REDIRECT_HTTP_AUTHORIZATION') !== '' ? $value('REDIRECT_HTTP_AUTHORIZATION')
+				: (string) $authorizationHeader));
+	}
+
+	/**
 	 * credentialsUsername() for the current request.
 	 */
 	public static function requestCredentialsUsername(): ?string
+	{
+		return self::credentialsUsername($_SERVER, self::requestAuthorizationHeader());
+	}
+
+	/**
+	 * credentialsArePassword() for the current request.
+	 */
+	public static function requestCredentialsArePassword(): bool
+	{
+		return self::credentialsArePassword($_SERVER, self::requestAuthorizationHeader());
+	}
+
+	private static function requestAuthorizationHeader(): ?string
 	{
 		$authorizationHeader = null;
 		// with mod_php, Apache doesn't always pass the header on in $_SERVER;
@@ -76,6 +113,6 @@ class ApiHelper
 				$authorizationHeader = isset($headers['authorization']) ? (string) $headers['authorization'] : null;
 			}
 		}
-		return self::credentialsUsername($_SERVER, $authorizationHeader);
+		return $authorizationHeader;
 	}
 }
