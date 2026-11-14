@@ -1148,8 +1148,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			: $this->isLoginAttemptRequest();
 	}
 
-	// the lock files of awaitLoginTurn(): an address always gets the same one
-	public const LoginTurnSlots = 64;
+	// the lock files of awaitLoginTurn(): an address always gets the same one.
+	// Addresses which share a file wait for each other's logins too (each at
+	// most LoginTurnWaitSeconds), so when many addresses log in at once - an
+	// attack from many - the more files, the less often a user's login waits
+	// for one of them: with 100 such addresses about 1 in 11 does, with 64
+	// files 4 in 5. Each file is empty; it is created when first used and
+	// kept (deleting a lock file which others may be waiting for is unsafe)
+	public const LoginTurnSlots = 1024;
 
 	// how long a login waits for those of its address before it; if they are
 	// not done by then, it is handled alongside them
