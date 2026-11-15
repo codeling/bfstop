@@ -656,6 +656,52 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * The block being edited, by the form of the backend: as an edit view
+	 * loads it.
+	 */
+	private function blockForm($id)
+	{
+		if (!defined('JPATH_COMPONENT'))
+		{
+			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		}
+		\Joomla\CMS\Form\Form::addFormPath(getenv('COM_BFSTOP_ROOT').'/admin/forms');
+		$model = $this->model(BlockModel::class);
+		$model->getState(); // populated now, so it doesn't overwrite the id
+		$model->setState('block.id', $id);
+		return $model->getForm();
+	}
+
+	public function testEditingABlockKeepsADurationTheListDoesNotName()
+	{
+		// the edit form's list only goes up to a day, but the settings offer a
+		// week and the progressive block duration doubles it: without an
+		// option for its value, the browser selected the first one -
+		// unlimited - and saving the block, even unchanged, made it permanent
+		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		$listed = count(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/block.xml')
+			->xpath('//field[@name="duration"]/option'));
+		foreach (array(10080 => '7 days', 2880 => '2 days', 1440 => null, 0 => null) as $duration => $added)
+		{
+			$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.90',
+				'crdate' => self::minutesAgo(0), 'duration' => $duration), 'id');
+			$form = $this->blockForm($id);
+			$this->assertSame((string) $duration, (string) $form->getValue('duration'));
+			$options = array();
+			foreach ($form->getXml()->xpath('//field[@name="duration"]/option') as $option)
+			{
+				$options[(string) $option['value']] = (string) $option;
+			}
+			$this->assertCount($listed + ($added === null ? 0 : 1), $options, (string) $duration);
+			if ($added !== null)
+			{
+				$this->assertSame($added, $options[(string) $duration]);
+			}
+			$this->assertMatchesRegularExpression('#<option value="'.$duration.'" selected#', $form->getInput('duration'));
+		}
+	}
+
 	public function testFailedLoginListNamesTheOrigins()
 	{
 		$view = (new \ReflectionClass(\Codeling\Component\Bfstop\Administrator\View\Failedloginlist\HtmlView::class))

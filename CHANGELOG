@@ -1,4 +1,9 @@
 2.0.0 (unreleased)
+  - Backend: editing a block whose duration isn't one of those the form
+    lists (a week or 30 days from the settings, or what the progressive
+    block duration made of a duration) showed - and saved - "unlimited":
+    saving such a block, even unchanged, made it permanent. The form now has
+    an option for the block's own duration
   - Notification addresses are trimmed and checked: an invalid one (e.g.
     of a user of the notified group) is left out and logged, instead of
     making the mailer throw - which turned the failed login into an error
