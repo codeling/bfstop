@@ -416,6 +416,20 @@ class DatabaseHelperTest extends IntegrationTestCase
 		$this->assertSame(array('203.0.113.1', '203.0.113.4'), $addresses);
 	}
 
+	public function testBlockedAddresses()
+	{
+		$this->assertSame(array(), $this->helper->getBlockedAddresses());
+		foreach (array(array('203.0.113.1', 120), array('203.0.113.2', 10), array('203.0.113.2', 300),
+			array('2001:db8:1::/56', 10)) as list($ip, $minutesAgo))
+		{
+			$this->insert('#__bfstop_bannedip', array('ipaddress' => $ip,
+				'crdate' => self::minutesAgo($minutesAgo), 'duration' => 60));
+		}
+		$addresses = $this->helper->getBlockedAddresses();
+		sort($addresses);
+		$this->assertSame(array('2001:db8:1::/56', '203.0.113.1', '203.0.113.2'), $addresses);
+	}
+
 	public function testFailedLoginsAreLimited()
 	{
 		for ($i = 0; $i < 12; ++$i)

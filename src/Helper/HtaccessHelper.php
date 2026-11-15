@@ -302,29 +302,85 @@ class HtaccessHelper
 	 */
 	public function removeLiftedBlocks(DatabaseHelper $db)
 	{
-		$addresses = $db->getAddressesWithoutActiveBlock();
-		if (count($addresses) === 0)
+		$removed = $this->removeAddresses($db->getAddressesWithoutActiveBlock(), 'the block is over');
+		return $removed === false ? 0 : $removed;
+	}
+
+	/**
+	 * Takes every address with a block in the database out of the file,
+	 * whether the block is still active or not: for a file which doesn't
+	 * block any more - another blocking mode or another file was chosen. The
+	 * plugin wrote these entries, and nothing would take them out once their
+	 * blocks are over: the web server would refuse the addresses for good.
+	 * The blocks themselves stay in the database, which Joomla goes by.
+	 * Entries without a block in the database - added by hand - are left
+	 * alone.
+	 *
+	 * @return int|false the number of entries removed; false if the block
+	 *                   list couldn't be read or the file couldn't be written
+	 */
+	public function removeDatabaseBlocks(DatabaseHelper $db)
+	{
+		$addresses = $db->getBlockedAddresses();
+		if ($addresses === null)
+		{
+			return false;
+		}
+		return $this->removeAddresses($addresses, 'the file is not what blocks');
+	}
+
+	/**
+	 * Takes out of the file what nothing else would: with blocking through
+	 * it ($blocksThroughFile), the addresses whose blocks are over (see
+	 * removeLiftedBlocks()), otherwise every address the plugin has blocked
+	 * (see removeDatabaseBlocks()).
+	 *
+	 * @return int|false the number of entries removed; false on an error
+	 */
+	public function removeStaleBlocks(DatabaseHelper $db, $blocksThroughFile)
+	{
+		if (!file_exists($this->path))
 		{
 			return 0;
 		}
-		$present = $this->getDeniedIPs();
-		$removed = 0;
-		foreach ($addresses as $address)
+		return $blocksThroughFile ? $this->removeLiftedBlocks($db) : $this->removeDatabaseBlocks($db);
+	}
+
+	/**
+	 * Takes $addresses out of the block section, in one change of the file.
+	 *
+	 * @param string[] $addresses
+	 * @param string   $reason    for the log
+	 * @return int|false the number of entries removed; false if the file
+	 *                   couldn't be written
+	 */
+	public function removeAddresses(array $addresses, $reason = '')
+	{
+		$addresses = array_values(array_unique(array_map('strval', $addresses)));
+		if (count($addresses) === 0 || !file_exists($this->path))
 		{
-			if (in_array($address, $present, true))
-			{
-				if (!is_null($this->logger))
-				{
-					$this->logger->log('Block of '.$address.' is over, removing it from '.
-						$this->getFileName(), Log::INFO);
-				}
-				if ($this->undenyIP($address))
-				{
-					++$removed;
-				}
-			}
+			return 0;
 		}
-		return $removed;
+		return $this->locked(function () use ($addresses, $reason)
+		{
+			$section = $this->parseSection();
+			$removed = array_values(array_intersect($section['addresses'], $addresses));
+			if (count($removed) === 0)
+			{
+				return 0;
+			}
+			$section['addresses'] = array_values(array_diff($section['addresses'], $addresses));
+			if (!$this->insert(self::renderSection($section)))
+			{
+				return false;
+			}
+			if (!is_null($this->logger))
+			{
+				$this->logger->log('Removed '.implode(', ', $removed).' from '.$this->path.
+					($reason !== '' ? ': '.$reason : ''), Log::INFO);
+			}
+			return count($removed);
+		});
 	}
 
 	/**

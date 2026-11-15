@@ -217,4 +217,59 @@ class InstallerScriptTest extends IntegrationTestCase
 			$this->setPluginParams($original);
 		}
 	}
+
+	public function testUninstallRemovesTheBlockSection()
+	{
+		// nothing would ever take the addresses out of it again: the web
+		// server would refuse them for good
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$dir = sys_get_temp_dir().'/bfstop-uninstall-htaccess-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$section = "# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1' || -R '2001:db8::/56'\">\nRequire all denied\n</If>\n".
+			"ErrorDocument 403 \"Go away\"\n";
+		$notRemoved = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UNINSTALL_HTACCESS_NOT_REMOVED', $dir.'/.htaccess'));
+		$uninstall = function ()
+		{
+			list($script, $adapter) = $this->script();
+			$script->uninstall($adapter);
+		};
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
+			file_put_contents($dir.'/.htaccess', $section."# END BFStop Blocks\n\nAuthType Basic\nRequire valid-user\n");
+			$uninstall();
+			$this->assertSame("AuthType Basic\nRequire valid-user\n", file_get_contents($dir.'/.htaccess'));
+
+			// what somebody else wrote into the section stays
+			file_put_contents($dir.'/.htaccess', "Options -Indexes\n".$section."Header set X-Test 1\n# END BFStop Blocks\n");
+			$uninstall();
+			$this->assertSame("Options -Indexes\n# BEGIN BFStop Blocks\nHeader set X-Test 1\n# END BFStop Blocks\n",
+				file_get_contents($dir.'/.htaccess'));
+			$this->assertNotContains($notRemoved, array_map('strip_tags', $this->messages()));
+
+			// no file, no section: nothing to do
+			$this->assertTrue(\PlgsystembfstopInstallerScript::removeHtaccessSection($dir.'/none/.htaccess'));
+			file_put_contents($dir.'/.htaccess', "AuthType Basic\n");
+			$this->assertTrue(\PlgsystembfstopInstallerScript::removeHtaccessSection($dir.'/.htaccess'));
+			$this->assertSame("AuthType Basic\n", file_get_contents($dir.'/.htaccess'));
+
+			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+			{
+				file_put_contents($dir.'/.htaccess', $section."# END BFStop Blocks\n");
+				chmod($dir.'/.htaccess', 0444);
+				chmod($dir, 0555);
+				$uninstall();
+				$this->assertContains($notRemoved, array_map('strip_tags', $this->messages()));
+			}
+		}
+		finally
+		{
+			@chmod($dir, 0755);
+			@chmod($dir.'/.htaccess', 0644);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+			$this->setPluginParams($original);
+		}
+	}
 }

@@ -223,6 +223,57 @@ class BlockedRequestTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * The entries of the time the file blocked: with another blocking mode,
+	 * nothing would take them out, also once their blocks are over.
+	 */
+	public function testMaintenanceTakesTheBlocksOutOfAnHtaccessFileWhichNoLongerBlocks()
+	{
+		$dir = sys_get_temp_dir().'/bfstop-maintenance-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		try
+		{
+			$this->configure(array('blockMode' => 'full', 'htaccessPath' => $dir));
+			$this->block('203.0.113.50', 120, 60);   // ran out
+			$this->block('203.0.113.51', 10, 60);    // still active: in the database
+			$helper = new HtaccessHelper($dir, $this->logger);
+			foreach (array('203.0.113.50', '203.0.113.51', '203.0.113.52') as $ip)
+			{
+				$helper->denyIP($ip);                // .52: added by hand, no block in the database
+			}
+			$this->assertNotBlocked();
+			$this->assertSame(array('203.0.113.52'), (new HtaccessHelper($dir, $this->logger))->getDeniedIPs());
+			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.51'));
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	public function testMaintenanceTakesBlocksOutOfTheHtaccessFileBeforeItPurgesThem()
+	{
+		// without the block in the database, the entry couldn't be told from
+		// one added by hand any more, and would stay for good
+		$dir = sys_get_temp_dir().'/bfstop-maintenance-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		try
+		{
+			$this->configure(array('blockMode' => 'htaccess', 'htaccessPath' => $dir, 'deleteOld' => 1));
+			$this->block('203.0.113.53', 3 * 7 * 24 * 60, 60);   // ran out three weeks ago
+			(new HtaccessHelper($dir, $this->logger))->denyIP('203.0.113.53');
+			$this->assertNotBlocked();
+			$this->assertSame(array(), (new HtaccessHelper($dir, $this->logger))->getDeniedIPs());
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), 'purged');
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
 	public function testMaintenanceRunsOnlyOncePerDay()
 	{
 		$this->configure(array('lastPurge' => time() - 3600));

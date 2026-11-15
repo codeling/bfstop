@@ -367,6 +367,26 @@ class DatabaseHelper
 		}
 	}
 
+	/**
+	 * Every address and network of the block list, whether its block is
+	 * active or not.
+	 *
+	 * @return string[]|null null if the block list could not be read
+	 */
+	public function getBlockedAddresses()
+	{
+		try
+		{
+			$this->db->setQuery('SELECT DISTINCT ipaddress FROM #__bfstop_bannedip');
+			return $this->db->loadColumn();
+		}
+		catch (\Exception $e)
+		{
+			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
+			return null;
+		}
+	}
+
 	public function isIPBlocked($ipaddress)
 	{
 		return (count($this->getActiveBlockIds($ipaddress)) > 0);

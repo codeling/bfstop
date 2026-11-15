@@ -544,6 +544,93 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * The plugin only takes entries out of the .htaccess file which blocks:
+	 * the file which did until the settings were changed would keep refusing
+	 * the addresses for good, also once their blocks are over or lifted.
+	 */
+	public function testTheHtaccessFileWhichNoLongerBlocksIsTidiedWhenTheSettingsAreSaved()
+	{
+		$former = sys_get_temp_dir().'/bfstop-former-'.bin2hex(random_bytes(4));
+		$other = sys_get_temp_dir().'/bfstop-other-'.bin2hex(random_bytes(4));
+		mkdir($former);
+		mkdir($other);
+		$original = $this->getPluginParams();
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.80', 'crdate' => self::minutesAgo(10), 'duration' => 60));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81', 'crdate' => self::minutesAgo(120), 'duration' => 60));
+		$htaccess = new HtaccessHelper($former, $this->logger);
+		$fill = function () use ($htaccess)
+		{
+			foreach (array('203.0.113.80', '203.0.113.81', '203.0.113.82') as $ip)
+			{
+				$htaccess->denyIP($ip);              // .82: added by hand, no block in the database
+			}
+		};
+		$save = function (array $stored, array $params)
+		{
+			$this->setPluginParams(json_encode($stored));
+			$model = $this->model(SettingsModel::class);
+			$model->getState();
+			$this->assertTrue($model->save(array('params' => $params + array('logLevel' => 8))), implode(', ', $model->getErrors()));
+		};
+		$blocking = array('blockMode' => 'htaccess', 'htaccessPath' => $former);
+		try
+		{
+			$fill();
+			$save($blocking, $blocking + array('blockNumber' => 8));
+			$this->assertSame(array('203.0.113.80', '203.0.113.81', '203.0.113.82'), $htaccess->getDeniedIPs(), 'still the file which blocks');
+			$save($blocking, array('blockMode' => 'htaccess', 'htaccessPath' => $former.'/'));
+			$this->assertSame(array('203.0.113.80', '203.0.113.81', '203.0.113.82'), $htaccess->getDeniedIPs(), 'the same directory');
+
+			$save($blocking, array('blockMode' => 'htaccess', 'htaccessPath' => $other));
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs(), 'another file');
+
+			$fill();
+			$save($blocking, array('blockMode' => 'loginonly', 'htaccessPath' => $former));
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs(), 'another blocking mode');
+			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.80'), 'the block stays in the database');
+
+			// what the file holds of the time it blocked comes out with an
+			// unblock as well
+			$fill();
+			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $former)));
+			UnblockHelper::removeLiftedHtaccessBlocks($this->logger);
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs());
+
+			$this->assertNull(SettingsModel::formerHtaccessDirectory(array('blockMode' => 'full'), array('blockMode' => 'htaccess')));
+			$this->assertNull(SettingsModel::formerHtaccessDirectory(array('blockMode' => 'htaccess'),
+				array('blockMode' => 'htaccess', 'htaccessPath' => JPATH_ROOT)), 'no path is the site\'s root');
+			$this->assertSame(JPATH_ROOT, SettingsModel::formerHtaccessDirectory(array('blockMode' => 'htaccess', 'htaccessPath' => ''),
+				array('blockMode' => 'off')));
+
+			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+			{
+				Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+				Factory::getApplication()->getMessageQueue(true);
+				$fill();
+				chmod($former.'/.htaccess', 0444);
+				chmod($former, 0555);
+				$save($blocking, array('blockMode' => 'full', 'htaccessPath' => $former));
+				$messages = array_map(function ($message) { return $message['message']; },
+					Factory::getApplication()->getMessageQueue(true));
+				$this->assertContains(\Joomla\CMS\Language\Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NOT_TIDIED',
+					htmlspecialchars($former.'/.htaccess', ENT_QUOTES, 'UTF-8')), $messages);
+				$this->assertCount(3, $htaccess->getDeniedIPs());
+			}
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			foreach (array($former, $other) as $dir)
+			{
+				@chmod($dir, 0755);
+				@chmod($dir.'/.htaccess', 0644);
+				@unlink($dir.'/.htaccess');
+				@rmdir($dir);
+			}
+		}
+	}
+
 	public function testInstallerScriptHintAndVersionCheck()
 	{
 		require_once getenv('COM_BFSTOP_ROOT').'/installscript.php';

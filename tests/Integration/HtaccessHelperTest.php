@@ -8,6 +8,7 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -331,6 +332,49 @@ class HtaccessHelperTest extends IntegrationTestCase
 			$this->assertStringNotContainsString('Require all granted', $this->content(), $what);
 			$this->assertFalse($this->helper()->hasLegacySection(), $what);
 		}
+	}
+
+	public function testRemovingSeveralAddressesAtOnce()
+	{
+		$h = $this->helper();
+		$this->assertSame(0, $h->removeAddresses(array('203.0.113.5')), 'no file');
+		$this->assertFileDoesNotExist($this->dir.'/.htaccess');
+		foreach (array('203.0.113.5', '203.0.113.6', '2001:db8:1::/56', '198.51.100.7') as $ip)
+		{
+			$h->denyIP($ip);
+		}
+		$this->assertSame(2, $h->removeAddresses(array('203.0.113.6', '2001:db8:1::/56', '192.0.2.1')));
+		$this->assertSame(array('203.0.113.5', '198.51.100.7'), $h->getDeniedIPs());
+		$this->assertSame(0, $h->removeAddresses(array('192.0.2.1')));
+	}
+
+	/**
+	 * A block of the plugin from the time the file blocked: once it doesn't,
+	 * all of them come out, active or not; with blocking through the file,
+	 * only those whose blocks are over. What was added by hand stays.
+	 */
+	public function testStaleBlocksDependOnWhetherTheFileBlocks()
+	{
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.5', 'crdate' => self::minutesAgo(120), 'duration' => 60));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.6', 'crdate' => self::minutesAgo(10), 'duration' => 60));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8:1::/56', 'crdate' => self::minutesAgo(10), 'duration' => 0));
+		$db = new DatabaseHelper($this->logger);
+		$h = $this->helper();
+		$this->assertSame(0, $h->removeStaleBlocks($db, false), 'no file');
+		$this->assertFileDoesNotExist($this->dir.'/.htaccess');
+		$deny = function () use ($h)
+		{
+			foreach (array('203.0.113.5', '203.0.113.6', '2001:db8:1::/56', '198.51.100.7') as $ip)
+			{
+				$h->denyIP($ip);                     // .7: added by hand
+			}
+		};
+		$deny();
+		$this->assertSame(1, $h->removeStaleBlocks($db, true));
+		$this->assertSame(array('203.0.113.6', '2001:db8:1::/56', '198.51.100.7'), $h->getDeniedIPs());
+		$deny();
+		$this->assertSame(3, $h->removeStaleBlocks($db, false));
+		$this->assertSame(array('198.51.100.7'), $h->getDeniedIPs());
 	}
 
 	public function testManyAddressesAreSplitIntoSeveralConditions()

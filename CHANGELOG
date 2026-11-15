@@ -1,4 +1,15 @@
 2.0.0 (unreleased)
+  - .htaccess: the plugin only took the addresses whose blocks were over out
+    of the file while blocking through .htaccess was chosen, and only out of
+    the file of the settings. After switching to another blocking mode or
+    file - or uninstalling - the web server went on refusing the addresses
+    in it for good, also once their blocks had run out or been lifted.
+    Saving the settings now takes every address the plugin blocked out of
+    the file which no longer blocks (the blocks themselves stay in the
+    database), the daily maintenance does the same for the file of the
+    settings whatever the mode, before it purges old blocks, and
+    uninstalling the plugin removes its block section. Entries added by
+    hand stay, except on uninstallation
   - Backend: a block added in the block list started at midnight, as the
     form only takes the day - one of an hour added in the afternoon had run
     out already - and editing a block moved its start back to that
