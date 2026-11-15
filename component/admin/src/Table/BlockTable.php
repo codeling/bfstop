@@ -94,12 +94,13 @@ class BlockTable extends Table
 		{
 			return null;
 		}
-		$query = $this->_db->getQuery(true)
-			->select($this->_db->quoteName('crdate'))
-			->from($this->_db->quoteName($this->_tbl))
-			->where($this->_db->quoteName('id').' = '.(int) $this->id);
-		$this->_db->setQuery($query);
-		$stored = $this->_db->loadResult();
+		$db = $this->getDatabase();
+		$query = $db->getQuery(true)
+			->select($db->quoteName('crdate'))
+			->from($db->quoteName($this->_tbl))
+			->where($db->quoteName('id').' = '.(int) $this->id);
+		$db->setQuery($query);
+		$stored = $db->loadResult();
 		return ($stored === null || $stored === false) ? null : (string) $stored;
 	}
 }
