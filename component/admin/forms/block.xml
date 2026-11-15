@@ -20,7 +20,6 @@
 			label="COM_BFSTOP_HEADING_DATE"
 			description="COM_BFSTOP_DESC_BLOCK_CRDATE"
 			format="%Y-%m-%d"
-			default="now"
 		/>
 		<field
 			name="duration"

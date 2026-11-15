@@ -39,6 +39,67 @@ class BlockTable extends Table
 		{
 			$this->ipaddress = $canonical;
 		}
+		$this->crdate = self::startTime((string) $this->crdate, $this->storedStartTime(), date('Y-m-d H:i:s'));
 		return parent::check();
+	}
+
+	/**
+	 * When the block is to start, from what the form gives for it. The form
+	 * only takes the day, which used to be stored as its midnight: a block
+	 * of an hour added in the afternoon had run out already, and editing a
+	 * block moved its start back to the midnight before. So a day without
+	 * a time means
+	 *
+	 * - the day the block already starts on (it is edited): the time it
+	 *   starts at, unchanged;
+	 * - today: now;
+	 * - any other day: the beginning of that day.
+	 *
+	 * Nothing means now; a time given with the day is kept. Times are those
+	 * of PHP's date(), like the plugin's.
+	 *
+	 * @param string      $given  the value of the form
+	 * @param string|null $stored the start of the block as it is stored, null for a new block
+	 * @param string      $now    date('Y-m-d H:i:s')
+	 */
+	public static function startTime($given, $stored, $now)
+	{
+		$given = trim((string) $given);
+		if ($given === '')
+		{
+			return $now;
+		}
+		$day = \DateTime::createFromFormat('!Y-m-d', $given);
+		if ($day === false || $day->format('Y-m-d') !== $given)
+		{
+			return $given;
+		}
+		if ($stored !== null && strncmp((string) $stored, $given, 10) === 0)
+		{
+			return (string) $stored;
+		}
+		if (strncmp($now, $given, 10) === 0)
+		{
+			return $now;
+		}
+		return $given.' 00:00:00';
+	}
+
+	/**
+	 * The start of this block as it is stored, null for a new one.
+	 */
+	private function storedStartTime()
+	{
+		if (empty($this->id))
+		{
+			return null;
+		}
+		$query = $this->_db->getQuery(true)
+			->select($this->_db->quoteName('crdate'))
+			->from($this->_db->quoteName($this->_tbl))
+			->where($this->_db->quoteName('id').' = '.(int) $this->id);
+		$this->_db->setQuery($query);
+		$stored = $this->_db->loadResult();
+		return ($stored === null || $stored === false) ? null : (string) $stored;
 	}
 }

@@ -69,6 +69,12 @@ class BlockModel extends AdminModel
 		if (empty($data))
 		{
 			$data = $this->getItem();
+			// a new block starts today, by the clock the plugin uses: the
+			// field's "now" would be the day in UTC, see BlockTable::startTime()
+			if (is_object($data) && empty($data->id) && empty($data->crdate))
+			{
+				$data->crdate = date('Y-m-d');
+			}
 		}
 		return $data;
 	}
