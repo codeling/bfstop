@@ -16,7 +16,7 @@ use Joomla\CMS\Log\Log;
 
 class UnblockHelper
 {
-	private static function getHtaccessPath()
+	public static function getHtaccessPath()
 	{
 		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
 		return $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
