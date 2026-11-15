@@ -1,4 +1,9 @@
 2.0.0 (unreleased)
+  - Backend: a block added in the block list started at midnight, as the
+    form only takes the day - one of an hour added in the afternoon had run
+    out already - and editing a block moved its start back to that
+    midnight. A block added for today now starts when it is added, editing
+    keeps the time a block starts at, and another day means its beginning
   - Backend: editing a block whose duration isn't one of those the form
     lists (a week or 30 days from the settings, or what the progressive
     block duration made of a duration) showed - and saved - "unlimited":

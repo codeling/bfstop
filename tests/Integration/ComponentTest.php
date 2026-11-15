@@ -702,6 +702,40 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	public function testBlocksOfTheBackendStartWhenTheyAreAddedNotAtMidnight()
+	{
+		// the form only takes the day, which was stored as its midnight: a
+		// block of an hour added in the afternoon had run out already, and
+		// editing a block moved its start back to that midnight
+		$today = date('Y-m-d');
+		$this->assertSame($today, (string) $this->blockForm(0)->getValue('crdate'), 'a new block starts today');
+
+		$before = time();
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.91', 'crdate' => $today, 'duration' => '60'));
+		$start = strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id));
+		$this->assertGreaterThanOrEqual($before, $start);
+		$this->assertLessThanOrEqual(time(), $start);
+		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.91'));
+
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.92', 'crdate' => '', 'duration' => '60'));
+		$this->assertGreaterThanOrEqual($before, strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id)),
+			'no day means now');
+
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.93', 'crdate' => '2026-01-02', 'duration' => '0'));
+		$this->assertSame('2026-01-02 00:00:00', $this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id),
+			'another day starts at its beginning');
+
+		// editing: the form shows the day the block starts on, and gives it back
+		$started = self::minutesAgo(30);
+		$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.94', 'crdate' => $started, 'duration' => 60), 'id');
+		$model = $this->model(BlockModel::class);
+		$model->getState();
+		$this->assertTrue($model->save(array('id' => $id, 'ipaddress' => '203.0.113.94',
+			'crdate' => substr($started, 0, 10), 'duration' => '120')), implode(', ', $model->getErrors()));
+		$this->assertSame($started, $this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id));
+		$this->assertSame('120', (string) $this->queryValue('SELECT duration FROM #__bfstop_bannedip WHERE id='.$id));
+	}
+
 	public function testFailedLoginListNamesTheOrigins()
 	{
 		$view = (new \ReflectionClass(\Codeling\Component\Bfstop\Administrator\View\Failedloginlist\HtmlView::class))
