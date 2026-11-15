@@ -823,6 +823,59 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame('120', (string) $this->queryValue('SELECT duration FROM #__bfstop_bannedip WHERE id='.$id));
 	}
 
+	/**
+	 * With blocking through .htaccess, the blocks of the list go into the
+	 * file too, like those of the plugin - except where the web server
+	 * mustn't turn the addresses away.
+	 */
+	public function testBlocksOfTheBlocklistGoIntoTheHtaccessFile()
+	{
+		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		$dir = sys_get_temp_dir().'/bfstop-blocklist-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$htaccess = new HtaccessHelper($dir, $this->logger);
+		$today = date('Y-m-d');
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			Factory::getApplication()->getMessageQueue(true);
+			$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.95', 'crdate' => $today, 'duration' => '60'));
+			$network = $this->saveNew(BlockModel::class, array('ipaddress' => '192.0.2.0/24', 'crdate' => $today, 'duration' => '0'));
+			$this->assertSame(array('203.0.113.95', '192.0.2.0/24'), $htaccess->getDeniedIPs());
+
+			// the web server knows nothing of the allow list
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.7', 'notes' => ''));
+			$this->saveNew(BlockModel::class, array('ipaddress' => '198.51.100.0/24', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('203.0.113.95', '192.0.2.0/24'), $htaccess->getDeniedIPs());
+			$messages = array_map(function ($message) { return $message['message']; }, Factory::getApplication()->getMessageQueue(true));
+			$this->assertContains(\Joomla\CMS\Language\Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'), $messages);
+			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('198.51.100.9'), 'blocked in the database');
+
+			// edited: another address, a duration which is over
+			$save = function ($id, array $data)
+			{
+				$model = $this->model(BlockModel::class);
+				$model->getState();
+				$this->assertTrue($model->save(array('id' => $id) + $data), implode(', ', $model->getErrors()));
+			};
+			$save($id, array('ipaddress' => '203.0.113.96', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('192.0.2.0/24', '203.0.113.96'), $htaccess->getDeniedIPs());
+			$save($network, array('ipaddress' => '192.0.2.0/24', 'crdate' => '2026-01-02', 'duration' => '60'));
+			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs());
+
+			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
+			$this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.97', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs(), 'only with blocking through .htaccess');
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
 	public function testFailedLoginListNamesTheOrigins()
 	{
 		$view = (new \ReflectionClass(\Codeling\Component\Bfstop\Administrator\View\Failedloginlist\HtmlView::class))

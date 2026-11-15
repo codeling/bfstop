@@ -36,6 +36,16 @@ class HtaccessHelperTest extends IntegrationTestCase
 		return new HtaccessHelper($this->dir, $logger ?? $this->logger);
 	}
 
+	/**
+	 * The <If> line the section has for $conditions ("-R '...' || ..."): the
+	 * tests run as a site at the root of the server.
+	 */
+	private static function ifLine($conditions)
+	{
+		return '<If "('.$conditions.') && !(%{REQUEST_URI} == \'/index.php\' && %{QUERY_STRING} =~ /'.
+			HtaccessHelper::UnblockQueryPattern.'/)">';
+	}
+
 	private function content()
 	{
 		return file_get_contents($this->dir.'/.htaccess');
@@ -73,7 +83,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertNotFalse($h->denyIP('203.0.113.5'));
 		$this->assertSame(array('203.0.113.5'), array_values($h->getDeniedIPs()));
 		$this->assertSame(
-			"# BEGIN BFStop Blocks\n<If \"-R '203.0.113.5'\">\nRequire all denied\n</If>\n# END BFStop Blocks\n\n",
+			"# BEGIN BFStop Blocks\n".self::ifLine("-R '203.0.113.5'")."\nRequire all denied\n</If>\n# END BFStop Blocks\n\n",
 			$this->content());
 	}
 
@@ -297,7 +307,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$content = $this->content();
 		$this->assertStringNotContainsString('Require all granted', $content);
 		$this->assertStringNotContainsString('RequireAll', $content);
-		$this->assertStringContainsString("<If \"-R '203.0.113.5' || -R '2001:db8:1::/56'\">\nRequire all denied\n</If>\n", $content);
+		$this->assertStringContainsString(self::ifLine("-R '203.0.113.5' || -R '2001:db8:1::/56'")."\nRequire all denied\n</If>\n", $content);
 		$this->assertStringEndsWith($auth, $content);
 	}
 
@@ -310,7 +320,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertTrue($h->hasLegacySection());
 		$this->assertSame(array('192.0.2.1', '2001:db8::/32'), $h->getDeniedIPs());
 		$this->assertTrue($h->upgradeFormat());
-		$this->assertSame("# top\n# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1' || -R '2001:db8::/32'\">\nRequire all denied\n</If>\n".
+		$this->assertSame("# top\n# BEGIN BFStop Blocks\n".self::ifLine("-R '192.0.2.1' || -R '2001:db8::/32'")."\nRequire all denied\n</If>\n".
 			"ErrorDocument 403 \"Go away\"\nHeader set X-Hand 1\n# END BFStop Blocks\n# bottom\n", $this->content());
 		$this->assertFalse($h->hasLegacySection());
 		$this->assertTrue($h->upgradeFormat(), 'nothing left to do');
@@ -332,6 +342,49 @@ class HtaccessHelperTest extends IntegrationTestCase
 			$this->assertStringNotContainsString('Require all granted', $this->content(), $what);
 			$this->assertFalse($this->helper()->hasLegacySection(), $what);
 		}
+	}
+
+	/**
+	 * The web server refuses every request of a blocked address: the link of
+	 * an unblock email has to get through to Joomla, which decides whether
+	 * it unblocks anything.
+	 */
+	public function testTheLinkOfAnUnblockEmailGetsThrough()
+	{
+		$this->assertSame('/index.php', HtaccessHelper::unblockPagePath());
+		$link = \Codeling\Plugin\System\Bfstop\Extension\Bfstop::unblockLink(sha1('token'));
+		$this->assertSame(1, preg_match('#'.str_replace('#', '\\#', HtaccessHelper::UnblockQueryPattern).'#',
+			(string) parse_url($link, PHP_URL_QUERY)), $link);
+		$this->assertSame(HtaccessHelper::unblockPagePath(), parse_url($link, PHP_URL_PATH));
+		foreach (array('', '&task=user.login', '&option=com_users') as $more)
+		{
+			$query = 'option=com_bfstop&view=tokenunblock&token='.sha1('token').$more;
+			$this->assertSame($more === '' ? 1 : 0, preg_match('#'.HtaccessHelper::UnblockQueryPattern.'#', $query), $query);
+		}
+		$this->assertSame(0, preg_match('#'.HtaccessHelper::UnblockQueryPattern.'#',
+			'option=com_bfstop&view=tokenunblock&token=xyz'));
+	}
+
+	/**
+	 * A section written before the unblock page was let through: the daily
+	 * maintenance writes it in the current form.
+	 */
+	public function testASectionWithoutTheUnblockPageIsWrittenInTheCurrentForm()
+	{
+		file_put_contents($this->dir.'/.htaccess', "# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1'\">\nRequire all denied\n</If>\n".
+			"ErrorDocument 403 \"Go away\"\n# END BFStop Blocks\nAuthType Basic\n");
+		$h = $this->helper();
+		$this->assertTrue($h->upgradeFormat());
+		$current = "# BEGIN BFStop Blocks\n".self::ifLine("-R '192.0.2.1'")."\nRequire all denied\n</If>\n".
+			"ErrorDocument 403 \"Go away\"\n# END BFStop Blocks\nAuthType Basic\n";
+		$this->assertSame($current, $this->content());
+		$mtime = filemtime($this->dir.'/.htaccess');
+		clearstatcache();
+		touch($this->dir.'/.htaccess', $mtime - 100);
+		$this->assertTrue($h->upgradeFormat());
+		clearstatcache();
+		$this->assertSame($mtime - 100, filemtime($this->dir.'/.htaccess'), 'a section in the current form is left alone');
+		$this->assertSame($current, $this->content());
 	}
 
 	public function testRemovingSeveralAddressesAtOnce()

@@ -1279,8 +1279,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * is now:
 	 *
 	 * - a block section of an earlier version grants access (see
-	 *   HtaccessHelper::LegacyLines). The update replaces it; this is for one
-	 *   it couldn't write;
+	 *   HtaccessHelper::LegacyLines), and one which doesn't let the unblock
+	 *   page through makes the links of unblock emails lead nowhere: it is
+	 *   written in the current form (the update can't, see updatescript.php);
 	 * - the web server knows nothing of durations and unblocks: with blocking
 	 *   through the file, the addresses whose blocks are over come out of it;
 	 *   with another blocking mode, every address the plugin has blocked -
@@ -1296,9 +1297,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		if (!$htaccess->upgradeFormat())
 		{
-			$this->logger->log('Could not replace the block section of an earlier version in '.
-				$htaccess->getFileName().': it lets everybody who isn\'t blocked past the other access '.
-				'controls of the directory - make the file writable or remove the section by hand', Log::ERROR);
+			$this->logger->log('Could not write the block section of '.$htaccess->getFileName().' in its current form '.
+				'- make the file writable: one of an earlier version lets everybody who isn\'t blocked past the other '.
+				'access controls of the directory, and without the current form, the links of unblock emails can\'t be '.
+				'followed', Log::ERROR);
 		}
 		$throughFile = $this->getStringParam('blockMode', 'full') === 'htaccess';
 		if ($htaccess->removeStaleBlocks($this->mydb, $throughFile) === false)

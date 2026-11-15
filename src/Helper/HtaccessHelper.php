@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
+use Joomla\CMS\Uri\Uri;
 
 /**
  .htaccess management class, based on the work by Jan-Paul Kleemans from
@@ -51,6 +52,14 @@ class HtaccessHelper
 	private const DenyLine = 'Require all denied';
 	private const EndIfLine = '</If>';
 	private const ErrorDocumentPrefix = 'ErrorDocument 403 ';
+
+	/**
+	 * The query of the link of an unblock email (see Bfstop::unblockLink()):
+	 * the token is the 40 hex digits of TokenHelper::getToken(), and nothing
+	 * else may follow - the plugin lets a blocked address reach the unblock
+	 * page only without a task, see Bfstop::isUnblockRequest().
+	 */
+	public const UnblockQueryPattern = '^option=com_bfstop&view=tokenunblock&token=[0-9a-f]{40}$';
 
 	/**
 	 * Addresses per <If>: Apache reads configuration lines of up to 8 KB, an
@@ -158,6 +167,7 @@ class HtaccessHelper
 	private static function renderSection(array $section)
 	{
 		$addresses = array_values(array_filter($section['addresses'], array(IpHelper::class, 'isValidIpOrSubnet')));
+		$unblockPage = self::unblockPageCondition();
 		$lines = array();
 		foreach (array_chunk($addresses, self::AddressesPerCondition) as $chunk)
 		{
@@ -166,7 +176,8 @@ class HtaccessHelper
 			{
 				$conditions[] = "-R '".$address."'";
 			}
-			$lines[] = '<If "'.implode(' || ', $conditions).'">';
+			$condition = implode(' || ', $conditions);
+			$lines[] = '<If "'.($unblockPage === null ? $condition : '('.$condition.') && !'.$unblockPage).'">';
 			$lines[] = self::DenyLine;
 			$lines[] = self::EndIfLine;
 		}
@@ -175,6 +186,46 @@ class HtaccessHelper
 			$lines[] = $section['errorDocument'];
 		}
 		return array_merge($lines, $section['other']);
+	}
+
+	/**
+	 * The path of the unblock page's requests: index.php of the site - or
+	 * null if it holds characters which can't go into the condition as they
+	 * are. Without Joomla (a script using this class on its own), the site
+	 * is taken to be at the root.
+	 */
+	public static function unblockPagePath()
+	{
+		try
+		{
+			$root = (string) Uri::root(true);
+		}
+		catch (\Throwable $e)
+		{
+			$root = '';
+		}
+		$path = rtrim($root, '/').'/index.php';
+		return preg_match('#^/[A-Za-z0-9._~/-]*\z#', $path) === 1 ? $path : null;
+	}
+
+	/**
+	 * The requests of an unblock email's link to the unblock page, which the
+	 * block section lets through. The web server refuses every request of a
+	 * blocked address, so the link - which the plugin sends to who blocked
+	 * themselves - would otherwise lead nowhere. They only get as far as
+	 * Joomla: a blocked address is in the block list of the database as
+	 * well, and the plugin lets it reach nothing but the unblock page, and
+	 * only with a token for one of its own blocks (Bfstop::enforceBlock()).
+	 * The stylesheets and pictures of the page stay out of reach, the
+	 * confirmation is posted to the page itself.
+	 *
+	 * @return string|null null if the page's path can't be put into the condition
+	 */
+	private static function unblockPageCondition()
+	{
+		$path = self::unblockPagePath();
+		return $path === null ? null
+			: "(%{REQUEST_URI} == '".$path."' && %{QUERY_STRING} =~ /".self::UnblockQueryPattern."/)";
 	}
 
 	/**
@@ -266,26 +317,37 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Replaces a block section of an earlier version (see LegacyLines) by the
-	 * current form, keeping the blocked addresses and the 403 message.
+	 * Writes the block section in the form the plugin writes it now, keeping
+	 * the blocked addresses, the 403 message and the lines added by hand: a
+	 * section of an earlier version (see LegacyLines) grants access, and one
+	 * written before the unblock page was let through (or for another path
+	 * of the site) keeps those who blocked themselves out of it.
 	 *
-	 * @return bool whether the file has no such section (any more)
+	 * @return bool whether the section is in the current form (now)
 	 */
 	public function upgradeFormat()
 	{
 		return $this->locked(function ()
 		{
 			$section = $this->parseSection();
-			if (!$section['legacy'])
+			$rendered = self::renderSection($section);
+			$current = array_values(array_filter($this->extract(), function ($line)
+			{
+				return trim($line) !== '';
+			}));
+			if (!$section['legacy'] && $current === $rendered)
 			{
 				return true;
 			}
 			if (!is_null($this->logger))
 			{
-				$this->logger->log('Replacing the block section of an earlier version in '.$this->path.
-					' - it let everybody who isn\'t blocked past the other access controls of the directory', Log::WARNING);
+				$this->logger->log($section['legacy']
+					? 'Replacing the block section of an earlier version in '.$this->path.
+						' - it let everybody who isn\'t blocked past the other access controls of the directory'
+					: 'Writing the block section of '.$this->path.' in its current form',
+					$section['legacy'] ? Log::WARNING : Log::INFO);
 			}
-			return $this->insert(self::renderSection($section));
+			return $this->insert($rendered);
 		});
 	}
 

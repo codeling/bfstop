@@ -295,7 +295,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	 * "Require all denied").
 	 *
 	 * Done here, without the plugin's classes: those of the version being
-	 * replaced may be the ones loaded in this request.
+	 * replaced may be the ones loaded in this request. What lets the links of
+	 * unblock emails through needs the site's path, which an update from the
+	 * command line doesn't know: the plugin's daily maintenance adds it (see
+	 * HtaccessHelper::upgradeFormat()).
 	 *
 	 * @return bool false if the section is there and the file couldn't be written
 	 */
