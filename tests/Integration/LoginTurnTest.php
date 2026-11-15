@@ -172,9 +172,19 @@ class LoginTurnTest extends IntegrationTestCase
 
 	public function testLoginsOfOtherAddressesDoNotWait()
 	{
-		// (unless they share the lock file: 1 in Bfstop::LoginTurnSlots do)
-		$other = '198.51.100.7';
-		$this->assertNotSame(Bfstop::loginTurnFile(self::Ip), Bfstop::loginTurnFile($other));
+		// unless they share the lock file, which 1 in Bfstop::LoginTurnSlots
+		// does - which ones depends on the site's secret, a new one on every
+		// test site: so the other address is one with a lock file of its own
+		$file = Bfstop::loginTurnFile(self::Ip);
+		$other = null;
+		for ($i = 1; $i < 256 && $other === null; ++$i)
+		{
+			if (Bfstop::loginTurnFile('198.51.100.'.$i) !== $file)
+			{
+				$other = '198.51.100.'.$i;
+			}
+		}
+		$this->assertNotNull($other, 'an address with another lock file');
 		$this->holdTurn($other);
 		$this->assertDoesNotWait(self::Login);
 	}
