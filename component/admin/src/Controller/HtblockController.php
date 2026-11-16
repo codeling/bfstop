@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
@@ -58,8 +59,7 @@ class HtblockController extends FormController
 			return false;
 		}
 		$logger = LogHelper::getLogger();
-		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
-		$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
+		$htaccessPath = UnblockHelper::getHtaccessPath();
 		$htaccess = new HtaccessHelper($htaccessPath, null);
 		$model = $this->getModel('block');
 		$form = $model->getForm(null, false);

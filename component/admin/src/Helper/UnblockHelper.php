@@ -18,8 +18,7 @@ class UnblockHelper
 {
 	public static function getHtaccessPath()
 	{
-		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
-		return $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
+		return HtaccessHelper::resolvePath(ParamHelper::get('htaccessPath', 'params', ''));
 	}
 
 	/**

@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
@@ -69,8 +70,7 @@ class DisplayController extends BaseController
 
 	function warnIfHtAccessNotWorking()
 	{
-		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
-		$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
+		$htaccessPath = UnblockHelper::getHtaccessPath();
 		$htaccess = new HtaccessHelper($htaccessPath, null);
 		$req = $htaccess->checkRequirements();
 		if (!$req['apacheserver'] ||
