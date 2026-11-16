@@ -155,6 +155,26 @@ class IpHelper
 	}
 
 	/**
+	 * The coarsest IPv6 network which counts as one client for *trust* (an
+	 * address a user has logged in from before). Failed logins are counted
+	 * per network of the configured size (a /56 by default: a client
+	 * controls all of it, so coarse is right there), but a /56 may be shared
+	 * by several customers of a provider, while a /64 is one network of one
+	 * customer: somebody else's earlier login from the /56 says nothing
+	 * about this client.
+	 */
+	public const TrustPrefixLength = 64;
+
+	/**
+	 * The prefix length to remember and recognise logins under, for the
+	 * configured prefix length of the tracking: at least TrustPrefixLength.
+	 */
+	public static function trustPrefixLength($trackedPrefixLength)
+	{
+		return max(self::TrustPrefixLength, (int) $trackedPrefixLength);
+	}
+
+	/**
 	 * The key under which failed logins and blocks of a client are tracked.
 	 *
 	 * For IPv4 that is the address itself. An IPv6 client usually controls a
@@ -202,15 +222,43 @@ class IpHelper
 	 */
 	public static function trustedProxies()
 	{
+		return self::proxySettings()['trustedProxies'];
+	}
+
+	private static $proxySettings = null;
+	private static $proxySettingsSource = null;
+
+	/**
+	 * The proxy settings of the plugin, parsed once per distinct parameter
+	 * string (getAddress() and trustedProxies() are called several times in
+	 * a request).
+	 *
+	 * @return array{useProxy: bool, proxyIpAddress: string, header: string, trustedProxies: string[]}
+	 */
+	private static function proxySettings()
+	{
 		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		if (!$plugin)
+		$source = $plugin ? (string) (is_string($plugin->params) ? $plugin->params : json_encode($plugin->params)) : null;
+		if (self::$proxySettings !== null && self::$proxySettingsSource === $source)
 		{
-			return array();
+			return self::$proxySettings;
 		}
-		$params = new Registry($plugin->params);
-		return (bool) $params->get('useProxy', false)
-			? self::parseTrustedProxies((string) $params->get('proxyIpAddress', ''))
-			: array();
+		$settings = array('useProxy' => false, 'proxyIpAddress' => '',
+			'header' => 'HTTP_X_FORWARDED_FOR', 'trustedProxies' => array());
+		if ($plugin)
+		{
+			$params = new Registry($plugin->params);
+			$settings['useProxy'] = (bool) $params->get('useProxy', false);
+			$settings['proxyIpAddress'] = (string) $params->get('proxyIpAddress', '');
+			$settings['header'] = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
+			if ($settings['useProxy'])
+			{
+				$settings['trustedProxies'] = self::parseTrustedProxies($settings['proxyIpAddress']);
+			}
+		}
+		self::$proxySettings = $settings;
+		self::$proxySettingsSource = $source;
+		return $settings;
 	}
 
 	/**
@@ -401,19 +449,14 @@ class IpHelper
 	{
 		$remoteAddr = array_key_exists('REMOTE_ADDR', $_SERVER) ? $_SERVER['REMOTE_ADDR'] : '';
 
-		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		if (!$plugin)
-		{
-			return $remoteAddr;
-		}
-		$params = new Registry($plugin->params);
-		if (!(bool) $params->get('useProxy', false))
+		$settings = self::proxySettings();
+		if (!$settings['useProxy'])
 		{
 			return $remoteAddr;
 		}
 
-		$proxyIpAddress = (string) $params->get('proxyIpAddress', '');
-		$trustedProxies = self::parseTrustedProxies($proxyIpAddress);
+		$proxyIpAddress = $settings['proxyIpAddress'];
+		$trustedProxies = $settings['trustedProxies'];
 		if (count($trustedProxies) === 0 || !self::isTrustedProxy($remoteAddr, $trustedProxies))
 		{
 			$logger->log('Proxy/load balancer usage is enabled, but the request did not originate from the '.
@@ -422,7 +465,7 @@ class IpHelper
 			return $remoteAddr;
 		}
 
-		$proxyHeaderSource = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
+		$proxyHeaderSource = $settings['header'];
 		if (array_key_exists($proxyHeaderSource, $_SERVER))
 		{
 			$ip = self::clientAddressFromHeader($proxyHeaderSource, $_SERVER[$proxyHeaderSource], $trustedProxies);

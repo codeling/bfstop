@@ -148,7 +148,8 @@ class PluginEventsTest extends IntegrationTestCase
 		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2:abcd::1'; // the next day's privacy address
 		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
-		$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_knownip'));
+		// a /64, not the /56 failed logins are counted by: others may share the /56
+		$this->assertSame('2001:db8:1:2::/64', $this->queryValue('SELECT ipaddress FROM #__bfstop_knownip'));
 	}
 
 	public function testSuccessfulLoginHandlesTheFailedLoginsOfItsNetwork()

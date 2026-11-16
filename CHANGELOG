@@ -1,4 +1,19 @@
 2.0.0 (unreleased)
+  - IPv6: a login is remembered, and trusted (the unblock link of mode
+    "addresses the user has logged in from", the known-address bonus of the
+    risk score), per /64, no longer per /56. Failed logins and blocks keep
+    the network size of the setting (a /56 by default), as a client controls
+    all of it - but a /56 may be shared by several customers of a provider,
+    and one's login says nothing about another's. Logins remembered for a
+    larger network by earlier versions no longer count; the users get the
+    bonus and the link again after their next login
+  - Fewer queries on a request which sends no mail: the notification
+    addresses (a lookup of the user and, for a group, of its members) are
+    only worked out when a mail is sent, and the proxy settings are parsed
+    once per request
+  - One place each for what the plugin and component both need: the number
+    of days an unblock link is valid, the default of the .htaccess directory
+    and the name a site's lock files carry
   - .htaccess: the block section lets the link of an unblock email through
     to the unblock page. The web server refused every request of a blocked
     address, so in "Full Site + .htaccess" mode the links led nowhere - yet

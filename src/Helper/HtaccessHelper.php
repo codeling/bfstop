@@ -533,6 +533,16 @@ class HtaccessHelper
 		}
 	}
 
+	/**
+	 * The directory of the .htaccess file: the configured one, the Joomla
+	 * root if none is configured (the one place which knows this default).
+	 */
+	public static function resolvePath($configured): string
+	{
+		$configured = (string) $configured;
+		return $configured === '' ? JPATH_ROOT : $configured;
+	}
+
 	// changing the file takes milliseconds: who holds its lock for this long
 	// is not going to let go of it
 	public const LockWaitSeconds = 10;

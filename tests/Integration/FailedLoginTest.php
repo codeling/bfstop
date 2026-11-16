@@ -592,9 +592,25 @@ class FailedLoginTest extends IntegrationTestCase
 	public function testKnownAddressModeRecognisesTheNetworkOfAnIpv6Client()
 	{
 		// IPv6 clients switch to other addresses in their network all the time
-		$this->knownIp('2001:db8:1:f0:aaaa:bbbb:cccc:9', 'Admin');
+		$this->knownIp('2001:db8:1:2:aaaa:bbbb:cccc:9', 'Admin');
 		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
 		$this->assertSame(1, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeDoesntTrustTheRestOfTheFailedLoginNetwork()
+	{
+		// failed logins are counted per /56, but the next /64 may be another customer's
+		$this->knownIp('2001:db8:1:f0:aaaa:bbbb:cccc:9', 'Admin');
+		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
+		$this->assertSame(0, $this->tokenCount());
+	}
+
+	public function testKnownAddressModeIgnoresLoginsRememberedForALargeNetwork()
+	{
+		// what versions before this one remembered an IPv6 login as
+		$this->knownIp('2001:db8:1::/56', 'Admin');
+		$this->blockWith(1, 'Admin', '2001:db8:1:2::1');
+		$this->assertSame(0, $this->tokenCount());
 	}
 
 	public function testKnownAddressModeDoesntRecogniseAnotherIpv6Network()
