@@ -13,7 +13,7 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Factory;
@@ -80,11 +80,11 @@ class HtblockController extends FormController
 			return false;
 		}
 		$ipaddress = $validData['ipaddress'];
-		$db = new DatabaseHelper($logger);
+		$repositories = new Repositories($logger);
 		// the web server knows nothing of the allow list: a network in the
 		// file would also turn away the allowed addresses in it (and an
 		// address in an allowed network); null: the list couldn't be read
-		$allowed = $db->allowListEntriesOverlapping($ipaddress);
+		$allowed = $repositories->allowList()->entriesOverlapping($ipaddress);
 		if ($allowed === null || count($allowed) > 0)
 		{
 			$logger->log("'$ipaddress' overlaps the allow list (".($allowed === null ? 'which could not be read' :

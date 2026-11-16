@@ -12,8 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -117,8 +117,7 @@ class SettingsController extends FormController
 		$userGroup = (int) ParamHelper::get('userGroup', -1);
 		$groupNotifEnabled = (bool) ParamHelper::get('groupNotificationEnabled', false);
 		$logger = LogHelper::getLogger();
-		$db = new DatabaseHelper($logger);
-		$notifier = new NotifierHelper($logger, $db,
+		$notifier = new NotifierHelper($logger, new Repositories($logger),
 			$emailAddress,
 			$userID,
 			$userGroup,

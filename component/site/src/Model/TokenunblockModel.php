@@ -11,8 +11,8 @@ namespace Codeling\Component\Bfstop\Site\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -62,7 +62,7 @@ class TokenunblockModel extends BaseDatabaseModel
 			$db = $this->getDatabase();
 			$db->setQuery('SELECT b.ipaddress FROM #__bfstop_unblock_token t '.
 				'INNER JOIN #__bfstop_bannedip b ON b.id = t.block_id '.
-				'WHERE t.token='.$db->quote(DatabaseHelper::hashToken($token)));
+				'WHERE t.token='.$db->quote(UnblockTokenRepository::hash($token)));
 			$ip = $db->loadResult();
 			return ($ip === null || $ip === false) ? null : (string) $ip;
 		}
@@ -142,11 +142,11 @@ class TokenunblockModel extends BaseDatabaseModel
 			// cutoff computed in PHP, as DATE_ADD is MySQL-only (issue bfstop#206)
 			$db->setQuery('DELETE FROM #__bfstop_unblock_token '.
 				'WHERE crdate < '.
-				$db->quote(date('Y-m-d H:i:s', time() - DatabaseHelper::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
+				$db->quote(date('Y-m-d H:i:s', time() - UnblockTokenRepository::ValidDays * 86400)));
 			$db->execute();
 			// get token:
-			// only the hash of a token is stored, see DatabaseHelper::hashToken()
-			$stored = DatabaseHelper::hashToken($token);
+			// only the hash of a token is stored, see UnblockTokenRepository::hash()
+			$stored = UnblockTokenRepository::hash($token);
 			$db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
 				$db->quote($stored));
 			$unblockTokenEntry = $db->loadObject();

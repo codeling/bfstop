@@ -12,8 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
@@ -174,7 +174,7 @@ class SettingsModel extends AdminModel
 		}
 		$logger = LogHelper::getLogger();
 		$htaccess = new HtaccessHelper($directory, $logger);
-		if ($htaccess->removeStaleBlocks(new DatabaseHelper($logger), false) === false)
+		if ($htaccess->removeStaleBlocks((new Repositories($logger))->blocks(), false) === false)
 		{
 			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NOT_TIDIED',
 				htmlspecialchars($htaccess->getFileName(), ENT_QUOTES, 'UTF-8')), 'warning');

@@ -14,9 +14,9 @@ use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
@@ -77,22 +77,22 @@ class BlockModel extends AdminModel
 		}
 		$address = (string) $table->ipaddress;
 		$logger = LogHelper::getLogger();
-		$db = new DatabaseHelper($logger);
+		$repositories = new Repositories($logger);
 		$htaccess = new HtaccessHelper(UnblockHelper::getHtaccessPath(), $logger);
-		$htaccess->removeLiftedBlocks($db);
-		if ($former !== null && $former !== $address && !in_array($former, $db->getBlockedAddresses() ?? array($former), true))
+		$htaccess->removeLiftedBlocks($repositories->blocks());
+		if ($former !== null && $former !== $address && !in_array($former, $repositories->blocks()->allAddresses() ?? array($former), true))
 		{
 			// no block of the former address left at all: removeLiftedBlocks()
 			// only knows addresses which have one
 			$htaccess->removeAddresses(array($former), 'its block was changed');
 		}
 		// the block list holds a network by its network address
-		if (!in_array($id, $db->getActiveBlockIds(explode('/', $address)[0]), true))
+		if (!in_array($id, ($repositories->blocks()->activeIdsFor(explode('/', $address)[0]) ?? array()), true))
 		{
 			return;
 		}
 		$app = Factory::getApplication();
-		$allowed = $db->allowListEntriesOverlapping($address);
+		$allowed = $repositories->allowList()->entriesOverlapping($address);
 		if ($allowed === null || count($allowed) > 0)
 		{
 			$app->enqueueMessage(Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'), 'warning');
