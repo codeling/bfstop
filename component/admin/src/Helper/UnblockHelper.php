@@ -16,7 +16,7 @@ use Joomla\CMS\Log\Log;
 
 class UnblockHelper
 {
-	private static function getHtaccessPath()
+	public static function getHtaccessPath()
 	{
 		$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
 		return $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
@@ -27,16 +27,15 @@ class UnblockHelper
 	 * address until its line is taken out of the file - the plugin only does
 	 * that when it blocks the next address or once a day. So whatever was
 	 * unblocked here is taken out right away (if no other block of the
-	 * address is still active).
+	 * address is still active). With another blocking mode, the file may
+	 * still hold the entries of the time it blocked: they all come out (see
+	 * HtaccessHelper::removeStaleBlocks()).
 	 */
 	public static function removeLiftedHtaccessBlocks($logger)
 	{
-		if (ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess')
-		{
-			return;
-		}
 		$htaccess = new HtaccessHelper(self::getHtaccessPath(), $logger);
-		$htaccess->removeLiftedBlocks(new DatabaseHelper($logger));
+		$htaccess->removeStaleBlocks(new DatabaseHelper($logger),
+			ParamHelper::get('blockMode', 'params', 'full') === 'htaccess');
 	}
 
 	public static function unblockHtaccess($ips, $logger)

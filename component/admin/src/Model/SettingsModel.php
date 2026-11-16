@@ -10,7 +10,10 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
@@ -114,9 +117,68 @@ class SettingsModel extends AdminModel
 	{
 		$id = $this->resolvePluginExtensionId();
 		$data[$this->getTable()->getKeyName()] = $id;
-		$data['params'] = self::keepInternalSettings(self::paramsForStorage($data['params'] ?? array()),
-			$this->loadStoredParams($id));
-		return parent::save($data);
+		$stored = $this->loadStoredParams($id);
+		$data['params'] = self::keepInternalSettings(self::paramsForStorage($data['params'] ?? array()), $stored);
+		if (!parent::save($data))
+		{
+			return false;
+		}
+		$this->tidyFormerHtaccessFile($stored, $data['params']);
+		return true;
+	}
+
+	/**
+	 * The directory of the .htaccess file of the settings $params.
+	 */
+	public static function htaccessDirectory(array $params)
+	{
+		$path = rtrim((string) ($params['htaccessPath'] ?? ''), '/\\');
+		return $path === '' ? JPATH_ROOT : $path;
+	}
+
+	/**
+	 * The directory of the .htaccess file which blocked with the settings
+	 * $stored, if it doesn't with $params: blocking through .htaccess was
+	 * switched off, or another file was chosen. Null if there is none.
+	 */
+	public static function formerHtaccessDirectory(array $stored, array $params)
+	{
+		if (($stored['blockMode'] ?? 'full') !== 'htaccess')
+		{
+			return null;
+		}
+		$former = self::htaccessDirectory($stored);
+		if (($params['blockMode'] ?? 'full') !== 'htaccess')
+		{
+			return $former;
+		}
+		$current = self::htaccessDirectory($params);
+		$same = (realpath($former) !== false && realpath($former) === realpath($current)) || $former === $current;
+		return $same ? null : $former;
+	}
+
+	/**
+	 * Takes the plugin's blocks out of the .htaccess file which doesn't block
+	 * any more (see formerHtaccessDirectory()). The plugin only ever takes
+	 * entries out of the file which blocks: the addresses would stay refused
+	 * by the web server for good, also once their blocks are over or lifted.
+	 * The blocks themselves stay in the database, which Joomla goes by; the
+	 * entries added by hand stay in the file.
+	 */
+	private function tidyFormerHtaccessFile(array $stored, array $params)
+	{
+		$directory = self::formerHtaccessDirectory($stored, $params);
+		if ($directory === null)
+		{
+			return;
+		}
+		$logger = LogHelper::getLogger();
+		$htaccess = new HtaccessHelper($directory, $logger);
+		if ($htaccess->removeStaleBlocks(new DatabaseHelper($logger), false) === false)
+		{
+			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NOT_TIDIED',
+				htmlspecialchars($htaccess->getFileName(), ENT_QUOTES, 'UTF-8')), 'warning');
+		}
 	}
 
 	/**
