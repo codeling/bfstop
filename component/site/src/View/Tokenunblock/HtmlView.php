@@ -73,7 +73,7 @@ class HtmlView extends BaseHtmlView
 		// The status is only set if the plugin's "Use HTTP Error" setting is
 		// on: a web server or CDN replacing error pages with its own would
 		// otherwise hide the message from the user.
-		if ((bool) ParamHelper::get('useHttpError', 'params', true))
+		if ((bool) ParamHelper::get('useHttpError', true))
 		{
 			$status = TokenunblockModel::httpStatus($result);
 			if ($status !== 200)

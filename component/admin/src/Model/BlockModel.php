@@ -66,7 +66,7 @@ class BlockModel extends AdminModel
 	 */
 	private function blockThroughHtaccess($id, $former = null)
 	{
-		if ($id < 1 || ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess')
+		if ($id < 1 || ParamHelper::get('blockMode', 'full') !== 'htaccess')
 		{
 			return;
 		}

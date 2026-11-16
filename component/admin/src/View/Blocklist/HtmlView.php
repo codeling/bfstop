@@ -30,8 +30,8 @@ class HtmlView extends BaseHtmlView
 		$this->sortDirection = $state->get('list.direction');
 		// with .htaccess blocking, blocked requests never reach Joomla,
 		// so attempts can't be counted
-		$this->attemptsTracked = ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess';
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', Bfstop::DefaultSettings['deleteOld']);
+		$this->attemptsTracked = ParamHelper::get('blockMode', 'full') !== 'htaccess';
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Bfstop::DefaultSettings['deleteOld']);
 		// selecting a range of rows with shift-click, see grid.checkall in the head
 		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();
