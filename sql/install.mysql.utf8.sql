@@ -50,12 +50,16 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock (
 -- stores randomized tokens for unblocking an IP via an email
 -- to the blocked user
 -- username: the user the unblock link was sent to, to limit the links per user
+-- username_lc: the same in lower case, for the lookups which must not tell
+-- "Bob" from "bob" - computed by the database, see KnownIpRepository
 CREATE TABLE IF NOT EXISTS #__bfstop_unblock_token (
 	token varchar(40) NOT NULL,
 	block_id int(10) NOT NULL,
 	crdate datetime NOT NULL,
 	username varchar(150) NULL DEFAULT NULL,
-	PRIMARY KEY (token)
+	username_lc varchar(150) GENERATED ALWAYS AS (LOWER(username)) STORED,
+	PRIMARY KEY (token),
+	KEY username_lc (username_lc)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
@@ -82,8 +86,10 @@ CREATE TABLE IF NOT EXISTS #__bfstop_knownip (
 	username varchar(150) NOT NULL,
 	first_success datetime NOT NULL,
 	last_success datetime NOT NULL,
+	username_lc varchar(150) GENERATED ALWAYS AS (LOWER(username)) STORED,
 	PRIMARY KEY (id),
-	UNIQUE KEY ip_username (ipaddress, username)
+	UNIQUE KEY ip_username (ipaddress, username),
+	KEY username_lc (username_lc)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 

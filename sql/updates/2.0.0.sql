@@ -28,6 +28,12 @@ ALTER TABLE `#__bfstop_unblock_token` CONVERT TO CHARACTER SET utf8mb4 COLLATE u
 -- the user an unblock link was sent to, to limit the links per user
 ALTER TABLE `#__bfstop_unblock_token` ADD COLUMN username varchar(150) NULL DEFAULT NULL /** CAN FAIL **/;
 
+-- the same in lower case, computed by the database, for lookups by user name
+-- which don't tell "Bob" from "bob" (see install.mysql.utf8.sql)
+ALTER TABLE `#__bfstop_unblock_token` ADD COLUMN username_lc varchar(150) GENERATED ALWAYS AS (LOWER(username)) STORED /** CAN FAIL **/;
+
+ALTER TABLE `#__bfstop_unblock_token` ADD KEY username_lc (username_lc) /** CAN FAIL **/;
+
 ALTER TABLE `#__bfstop_allowlist` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- tables introduced in 2.0.0, see install.mysql.utf8.sql for details
@@ -37,8 +43,10 @@ CREATE TABLE IF NOT EXISTS `#__bfstop_knownip` (
 	username varchar(150) NOT NULL,
 	first_success datetime NOT NULL,
 	last_success datetime NOT NULL,
+	username_lc varchar(150) GENERATED ALWAYS AS (LOWER(username)) STORED,
 	PRIMARY KEY (id),
-	UNIQUE KEY ip_username (ipaddress, username)
+	UNIQUE KEY ip_username (ipaddress, username),
+	KEY username_lc (username_lc)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 

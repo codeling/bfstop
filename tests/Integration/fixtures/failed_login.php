@@ -11,7 +11,8 @@
 // the database as it does in a real request (and may delay or block). With
 // --api it is a failed login to the Web Services API (whose response holds
 // no username), --server=NAME=VALUE sets $_SERVER[NAME] (e.g. a header),
-// --live-site=URL the site's $live_site.
+// --live-site=URL the site's $live_site. --count-queries prints the queries
+// the plugin sends (see QueryCounter, used by QueryCountTest).
 // Used by FailedLoginTest; needs the same environment as the tests.
 
 use Joomla\CMS\Application\ApiApplication;
@@ -46,6 +47,8 @@ foreach (array_slice($argv, 3) as $option)
 	}
 }
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
+require __DIR__.'/QueryCounter.php';
+QueryCounter::startIfAsked($argv);
 $app->getDispatcher()->dispatch('onUserLoginFailure',
 	new LoginFailureEvent('onUserLoginFailure', array(
 		'subject' => array('username' => $argv[2], 'status' => 4), 'options' => array())));

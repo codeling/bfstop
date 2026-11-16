@@ -164,10 +164,22 @@ function hasBfstop(string $name): bool
 
 /**
  * Empties the bfstop tables and fills them with $size failed logins, a tenth
- * of that many blocks (most of them expired), and the block of BLOCKED_IP.
+ * of that many blocks (most of them expired), $size known addresses and the
+ * block of BLOCKED_IP; every site (also the one without bfstop) gets $size
+ * accounts.
  */
 function prepareSite(mysqli $db, string $name, int $size): void
 {
+	// a site with $size more accounts, in every site (bfstop looks accounts up
+	// by user name or email address on each failed login): the baseline site
+	// pays what Joomla does, bfstop's overhead is what it adds
+	$db->query("DELETE FROM " . PREFIX . "users WHERE username <> 'perfadmin'");
+	if ($size > 0)
+	{
+		$db->query("INSERT INTO " . PREFIX . "users (name, username, email, password, registerDate, params) " .
+			"SELECT CONCAT('Account ', seq), CONCAT('Account', seq), CONCAT('account', seq, '@example.org'), 'x', NOW(), '' " .
+			"FROM seq_1_to_$size");
+	}
 	if (!hasBfstop($name))
 	{
 		return;
@@ -183,6 +195,11 @@ function prepareSite(mysqli $db, string $name, int $size): void
 			"SELECT CONCAT('user', seq % 5000), " .
 			"CONCAT('10.', (seq % 20000) DIV 256, '.', seq % 256, '.1'), " .
 			"NOW() - INTERVAL (seq % 604800) SECOND, 0, 0 FROM seq_1_to_$size");
+		// the addresses users have logged in from, IPv4 and IPv6 networks
+		$db->query("INSERT INTO " . PREFIX . "bfstop_knownip (ipaddress, username, first_success, last_success) " .
+			"SELECT IF(seq % 2 = 0, CONCAT('198.51.', (seq DIV 256) % 256, '.', seq % 256), " .
+			"CONCAT('2001:db8:', HEX(seq DIV 65536), ':', HEX(seq % 65536), '::/64')), " .
+			"CONCAT('Account', seq), NOW(), NOW() FROM seq_1_to_$size");
 		$blocks = max(1, intdiv($size, 10));
 		$db->query("INSERT INTO " . PREFIX . "bfstop_bannedip (ipaddress, crdate, duration) " .
 			"SELECT CONCAT('172.', (seq DIV 256) % 256, '.', seq % 256, '.1'), " .

@@ -107,6 +107,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// created on first use (see notifier()): its constructor queries the
 	// database, which most requests - none of them sends a mail - needn't pay for
 	private ?NotifierHelper $notifier = null;
+	// what isAccount() has found out in this event: login => bool
+	private array $accounts = array();
 	private Repositories $repositories;
 	private LoginService $logins;
 	private BlockService $blocker;
@@ -588,6 +590,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->blocker = new BlockService($this->repositories);
 		$this->maintenance = new Maintenance($this->repositories);
 		$this->notifier = null;
+		$this->accounts = array();
+	}
+
+	/**
+	 * Whether $login is the username or email address of an account. Asked
+	 * twice for the same login while a failed login is handled (to decide how
+	 * to store it, and whether to notify of it): looked up once per event.
+	 */
+	private function isAccount($login): bool
+	{
+		return $this->accounts[$login] ??= $this->repositories->users()->accountExists($login);
 	}
 
 	private function notifier(): NotifierHelper
@@ -771,7 +784,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
 		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
-			($this->repositories->users()->accountExists($username) ||
+			($this->isAccount($username) ||
 				RiskHelper::isCommonUsername($this->params, $username));
 		return UsernameHelper::forStorage($username, $mode, $isReadable,
 			$this->getApplication()->get('secret', ''));
@@ -849,7 +862,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// $username is what was typed; the entry only holds a hash of it if
 		// it isn't an account (see usernameForStorage())
 		if ($this->getBoolParam('notifyFailedOnlyExisting', false) &&
-			!$this->repositories->users()->accountExists($username))
+			!$this->isAccount($username))
 		{
 			$this->logger->log('Not notifying of failed login: the username does not belong to an account', Log::DEBUG);
 		}

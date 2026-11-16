@@ -41,6 +41,11 @@ the site only needs to be set up again when the database schema changes.
   against a real Apache 2.4 (CI job ".htaccess blocks on Apache"): it turns
   away the blocked addresses and doesn't open up what the directory's other
   access controls keep out.
+- `Integration/QueryCountTest.php` keeps the number of queries a page view, the
+  request of a blocked address and a failed login send within limits (the
+  scripts of `Integration/fixtures` print the queries when called with
+  `--count-queries`). A change which needs another query raises the limit of
+  its kind, and the message lists the queries.
 - `performance/`: not a test, a comparison of what two versions of the plugin
   (by default 1.5.2 and the checkout) cost a Joomla site, see its README. Not
   run by phpunit or CI.

@@ -43,7 +43,7 @@ class KnownIpRepository extends Repository
 				->select($this->db->quoteName('id'))
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('ipaddress').' = :ip')
-				->where($this->equalsIgnoringCase('username', 'username'));
+				->where($this->usernameMatches('username'));
 			$values = array('ip' => (string) $key, 'username' => (string) $username);
 			$id = $this->scalar($query, $values);
 			if ($id)
@@ -89,7 +89,7 @@ class KnownIpRepository extends Repository
 				->select('COUNT(*)')
 				->from($this->db->quoteName(self::Table))
 				->whereIn($this->db->quoteName('ipaddress'), array($key, (string) $ipaddress), ParameterType::STRING)
-				->where($this->equalsIgnoringCase('username', 'username'));
+				->where($this->usernameMatches('username'));
 			$values = array('username' => (string) $username);
 			if ($this->count($query, $values) > 0)
 			{
@@ -104,7 +104,7 @@ class KnownIpRepository extends Repository
 			$query = $this->db->createQuery()
 				->select($this->db->quoteName('ipaddress'))
 				->from($this->db->quoteName(self::Table))
-				->where($this->equalsIgnoringCase('username', 'username'));
+				->where($this->usernameMatches('username'));
 			$values = array('username' => (string) $username);
 			$knownAddresses = $this->column($query, $values);
 			$ipBin = @inet_pton($ipaddress);

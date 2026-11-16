@@ -146,10 +146,16 @@ abstract class Repository
 			->where($this->db->quoteName($column).' BETWEEN :from AND :to');
 	}
 
-	/** SQL for "$column equals :$parameter, whatever the case" (names, never values). */
-	protected function equalsIgnoringCase($column, $parameter): string
+	/**
+	 * SQL for "the user name is :$parameter, whatever the case", for the
+	 * tables with a column username_lc (the user name in lower case, which the
+	 * database computes): by index, where LOWER(username) = LOWER(:x) reads
+	 * every row. The value is lowered by the database too, as it lowers the
+	 * column.
+	 */
+	protected function usernameMatches($parameter): string
 	{
-		return 'LOWER('.$this->db->quoteName($column).') = LOWER(:'.$parameter.')';
+		return $this->db->quoteName('username_lc').' = LOWER(:'.$parameter.')';
 	}
 
 	protected static function daysAgo($days): string

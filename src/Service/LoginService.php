@@ -74,14 +74,10 @@ class LoginService
 		{
 			return true;
 		}
-		foreach ($attempted as $name)
+		$others = array_filter($attempted, function ($name) use ($username)
 		{
-			if (mb_strtolower($name) !== mb_strtolower($username) &&
-				$this->repositories->users()->accountExists($name))
-			{
-				return true;
-			}
-		}
-		return false;
+			return mb_strtolower($name) !== mb_strtolower($username);
+		});
+		return count($others) > 0 && $this->repositories->users()->anyAccountExists($others);
 	}
 }
