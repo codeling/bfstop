@@ -20,6 +20,8 @@ use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
+use Joomla\CMS\Event\User\LoginEvent;
+use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -30,7 +32,12 @@ use Joomla\Event\SubscriberInterface;
 
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {
-	protected $autoloadLanguage = true;
+	// the language is loaded by init(), when the plugin handles an event (as
+	// Joomla 6 does it): by the constructor, before the plugin has its
+	// application, Joomla 5 would take it from Factory::getLanguage(), which
+	// is deprecated
+	protected $autoloadLanguage = false;
+	private bool $languageLoaded = false;
 
 	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
 	// users who logged in from the blocked address before, 2 for any address
@@ -551,6 +558,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function init()
 	{
+		if (!$this->languageLoaded)
+		{
+			$this->languageLoaded = $this->loadLanguage();
+		}
 		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
 			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->mydb = new DatabaseHelper($this->logger);
@@ -735,9 +746,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->getApplication()->get('secret', ''));
 	}
 
-	public function onUserLoginFailure($event)
+	public function onUserLoginFailure(LoginFailureEvent $event)
 	{
-		$user = $event->getArgument(0);
+		$user = $event->getAuthenticationResponse();
 		$this->init();
 		if (!$this->isEnabledForCurrentOrigin())
 		{
@@ -935,9 +946,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return false;
 	}
 
-	public function onUserLogin($event)
+	public function onUserLogin(LoginEvent $event)
 	{
-		$user = $event->getArgument(0);
+		$user = $event->getAuthenticationResponse();
 		// nothing to count: the next login of this address may be handled
 		$this->endLoginTurn();
 		$this->init();

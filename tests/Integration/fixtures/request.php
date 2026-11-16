@@ -23,6 +23,8 @@ use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Application\AdministratorApplication;
 use Joomla\CMS\Application\ApiApplication;
+use Joomla\CMS\Event\User\LoginEvent;
+use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\CMS\User\UserFactoryInterface;
@@ -99,7 +101,8 @@ foreach (array_slice($argv, 3) as $option)
 	echo $loginTurn();
 	list($outcome, $username) = explode(':', substr($option, 7), 2);
 	$name = $outcome === 'login' ? 'onUserLogin' : 'onUserLoginFailure';
-	$app->getDispatcher()->dispatch($name, new Event($name,
-		array(array('username' => $username, 'status' => $outcome === 'login' ? 1 : 4), array())));
+	$class = $outcome === 'login' ? LoginEvent::class : LoginFailureEvent::class;
+	$app->getDispatcher()->dispatch($name, new $class($name, array(
+		'subject' => array('username' => $username, 'status' => $outcome === 'login' ? 1 : 4), 'options' => array())));
 	echo $loginTurn();
 }

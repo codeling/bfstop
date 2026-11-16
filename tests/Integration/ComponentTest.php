@@ -236,12 +236,9 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, '2001:db8:1:2:abcd::77', $this->logger));
 	}
 
-	private function formRuleResult($ruleFile, $class, $value, $blockMode = 'full')
+	private function formRuleResult($rule, $value, $blockMode = 'full')
 	{
-		if (!class_exists($class, false))
-		{
-			require_once getenv('COM_BFSTOP_ROOT').'/admin/rules/'.$ruleFile;
-		}
+		$class = 'Codeling\\Component\\Bfstop\\Administrator\\Rule\\'.$rule.'Rule';
 		$rule = new $class();
 		return $rule->test(new \SimpleXMLElement('<field name="x" />'), $value, null,
 			new \Joomla\Registry\Registry(array('params' => array('blockMode' => $blockMode))));
@@ -249,7 +246,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testHtaccessPathRule()
 	{
-		$test = fn ($value, $mode = 'full') => $this->formRuleResult('htaccesspath.php', 'JFormRuleHtaccesspath', $value, $mode);
+		$test = fn ($value, $mode = 'full') => $this->formRuleResult('Htaccesspath', $value, $mode);
 		$this->assertTrue($test(''));
 		$this->assertTrue($test(sys_get_temp_dir(), 'htaccess'));
 		$this->assertTrue($test('/does/not/exist', 'full'), 'only has to exist if .htaccess is used for blocking');
@@ -263,7 +260,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testGeoDbPathRule()
 	{
-		$test = fn ($value) => $this->formRuleResult('geodbpath.php', 'JFormRuleGeodbpath', $value);
+		$test = fn ($value) => $this->formRuleResult('Geodbpath', $value);
 		$this->assertTrue($test(''));
 		$this->assertTrue($test('/var/lib/GeoLite2-City.mmdb'));
 		$this->assertTrue($test('relative/path/GeoLite2-Country.MMDB'));
@@ -306,7 +303,6 @@ class ComponentTest extends IntegrationTestCase
 	private function settingsForm()
 	{
 		$form = new \Joomla\CMS\Form\Form('com_bfstop.settings');
-		$form->addRulePath(getenv('COM_BFSTOP_ROOT').'/admin/rules');
 		$form->loadFile(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
 		return $form;
 	}
@@ -393,7 +389,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testNotificationAddressesAreChecked()
 	{
-		$test = fn ($value) => $this->formRuleResult('emaillist.php', 'JFormRuleEmaillist', $value);
+		$test = fn ($value) => $this->formRuleResult('Emaillist', $value);
 		$this->assertTrue($test(''));
 		$this->assertTrue($test('a@example.org'));
 		$this->assertTrue($test(' a@example.org ; b@example.org '));
@@ -1247,7 +1243,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testProxyListRule()
 	{
-		$test = fn ($value) => $this->formRuleResult('proxylist.php', 'JFormRuleProxylist', $value);
+		$test = fn ($value) => $this->formRuleResult('Proxylist', $value);
 		foreach (array('', '10.0.0.1', '10.0.0.1, 10.0.0.2', "192.0.2.0/24;2001:db8::1\n2001:db8:1::/48",
 			'10.0.0.0/8', '2400:cb00::/32', '2a06:98c0::/29', '2001:DB8::1') as $list)
 		{

@@ -86,9 +86,17 @@
     removed again (they used to stay in the file for ever)
   - Migrate to Joomla 5/6: PSR-4 namespaced classes (Codeling\Plugin\System\Bfstop),
     service provider, SubscriberInterface event handling
-  - Drop Joomla 3/4 compatibility (requires Joomla 5 or 6 and PHP 8.1); the
+  - Drop Joomla 3/4 compatibility (requires Joomla 5.4 or 6 and PHP 8.1); the
     installer refuses older Joomla and PHP versions, and replacing a newer
     version of BFStop with an older one
+  - Requires Joomla 5.4 (the oldest Joomla version still supported), not
+    5.0: sites on Joomla 5.0-5.3 have to update Joomla first. No deprecated
+    Joomla APIs which stop working with Joomla 7 (#274): the plugin is built
+    without the dispatcher and reads the typed login events, the installer
+    scripts return their InstallerScriptInterface, the component's form
+    rules are namespaced classes, queries are built with createQuery(). The
+    "select all" checkbox of the block, .htaccess block and allow lists
+    works again (it called a function Joomla no longer has)
   - Component: PSR-4 namespaced classes (Codeling\Component\Bfstop); the
     frontend router.php was removed (all of its build/parse logic was
     commented out), Joomla's default component router is used instead, with

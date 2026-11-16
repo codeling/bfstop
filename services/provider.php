@@ -14,7 +14,6 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\DI\Container;
 use Joomla\DI\ServiceProviderInterface;
-use Joomla\Event\DispatcherInterface;
 
 return new class () implements ServiceProviderInterface {
 	public function register(Container $container)
@@ -22,11 +21,10 @@ return new class () implements ServiceProviderInterface {
 		$container->set(
 			PluginInterface::class,
 			function (Container $container) {
-				$dispatcher = $container->get(DispatcherInterface::class);
-				$plugin     = new Bfstop(
-					$dispatcher,
-					(array) PluginHelper::getPlugin('system', 'bfstop')
-				);
+				// Joomla gives the plugin its dispatcher when it imports it
+				// (PluginHelper::import()); passing it to the constructor is
+				// deprecated since Joomla 5.4 and ends with 7.0
+				$plugin = new Bfstop((array) PluginHelper::getPlugin('system', 'bfstop'));
 				$plugin->setApplication(Factory::getApplication());
 
 				return $plugin;

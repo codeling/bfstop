@@ -10,15 +10,21 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Installer\InstallerScript;
+use Joomla\CMS\Installer\InstallerScriptInterface;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Joomla\Database\DatabaseInterface;
 
-class PlgsystembfstopInstallerScript extends InstallerScript
+/**
+ * Joomla takes the instance this file returns (see the end); the class keeps
+ * the name of the legacy form, which Joomla looks for if the file has been
+ * loaded before. InstallerScript gives preflight() its checks.
+ */
+class PlgsystembfstopInstallerScript extends InstallerScript implements InstallerScriptInterface
 {
 	// InstallerScript::preflight() refuses to install on anything older (and
 	// to replace a newer version of the plugin with an older one)
-	protected $minimumJoomla = '5.0.0';
+	protected $minimumJoomla = '5.4.0';
 	protected $minimumPhp = '8.1.0';
 
 	// the version this update replaces, null for an installation
@@ -44,15 +50,13 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			version_compare($this->previousVersion, '2.0.0-dev', '<');
 	}
 
-	public function __construct(InstallerAdapter $adapter) {}
-
-	public function install(InstallerAdapter $adapter)
+	public function install(InstallerAdapter $adapter): bool
 	{
 		// plugins install disabled by default, but bfstop only does anything
 		// useful while running, and all its settings now live in the
 		// component - so there's nothing left to configure before enabling it.
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
-		$query = $db->getQuery(true)
+		$query = $db->createQuery()
 			->update($db->quoteName('#__extensions'))
 			->set($db->quoteName('enabled') . ' = 1')
 			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
@@ -60,9 +64,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
 		$db->setQuery($query);
 		$db->execute();
+		return true;
 	}
 
-	public function uninstall(InstallerAdapter $adapter)
+	public function uninstall(InstallerAdapter $adapter): bool
 	{
 		// the log file holds IP addresses and usernames; don't leave it behind
 		try
@@ -99,6 +104,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 		{
 			// neither may this
 		}
+		return true;
 	}
 
 	/**
@@ -107,7 +113,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	private static function storedParams()
 	{
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
-		$query = $db->getQuery(true)
+		$query = $db->createQuery()
 			->select($db->quoteName('params'))
 			->from($db->quoteName('#__extensions'))
 			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
@@ -127,7 +133,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			? (string) $params['htaccessPath'] : JPATH_ROOT;
 		return rtrim($htaccessPath, '/\\').'/.htaccess';
 	}
-	public function preflight($type, $adapter)
+	public function preflight($type, $adapter): bool
 	{
 		if (!parent::preflight($type, $adapter))
 		{
@@ -167,7 +173,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 		}
 	}
 
-	public function postflight($type, $adapter)
+	public function postflight(string $type, InstallerAdapter $adapter): bool
 	{
 		if ($this->htaccessNotRewritten !== null)
 		{
@@ -194,9 +200,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 				'warning'
 			);
 		}
+		return true;
 	}
 
-	public function update(InstallerAdapter $adapter)
+	public function update(InstallerAdapter $adapter): bool
 	{
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
 
@@ -207,7 +214,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 		// unified value
 		try
 		{
-			$query = $db->getQuery(true)
+			$query = $db->createQuery()
 				->select($db->quoteName('params'))
 				->from($db->quoteName('#__extensions'))
 				->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
@@ -251,7 +258,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			}
 			if ($changed)
 			{
-				$query = $db->getQuery(true)
+				$query = $db->createQuery()
 					->update($db->quoteName('#__extensions'))
 					->set($db->quoteName('params') . ' = ' . $db->quote(json_encode($params)))
 					->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
@@ -266,6 +273,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			// if the extension row can't be found/updated, there's nothing we can do
 //			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
 		}
+		return true;
 	}
 
 	/**
@@ -477,3 +485,5 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 		return self::writeFile($file, implode("\n", $lines));
 	}
 }
+
+return new PlgsystembfstopInstallerScript();

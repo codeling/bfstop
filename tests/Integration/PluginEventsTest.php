@@ -7,8 +7,13 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Joomla\CMS\Event\User\LoginEvent;
+use Joomla\CMS\Event\User\LoginFailureEvent;
+use Joomla\CMS\Extension\PluginInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\DI\Container;
+use Joomla\Event\Dispatcher;
 use Joomla\Event\Event;
 
 /**
@@ -60,7 +65,12 @@ class PluginEventsTest extends IntegrationTestCase
 
 	private function dispatch($eventName, array $arguments)
 	{
-		Factory::getApplication()->getDispatcher()->dispatch($eventName, new Event($eventName, $arguments));
+		// the login events as Joomla's CMSApplication::login() dispatches them
+		$classes = array('onUserLogin' => LoginEvent::class, 'onUserLoginFailure' => LoginFailureEvent::class);
+		$event = isset($classes[$eventName])
+			? new $classes[$eventName]($eventName, array('subject' => $arguments[0], 'options' => $arguments[1]))
+			: new Event($eventName, $arguments);
+		Factory::getApplication()->getDispatcher()->dispatch($eventName, $event);
 	}
 
 	private function failedLogin($ip, $username)
@@ -149,5 +159,59 @@ class PluginEventsTest extends IntegrationTestCase
 		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2::3';
 		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+	}
+
+	/**
+	 * The plugin built the way Joomla builds it (services/provider.php) and
+	 * the login events as Joomla dispatches them, without a deprecation
+	 * notice. Joomla raises most of them silenced (@trigger_error), which
+	 * phpunit doesn't report, so they are collected here - those of what
+	 * BFStop calls: Joomla 5.4 also uses deprecated APIs itself (e.g.
+	 * DatabaseDriver::setQuery() calls getQuery(true)).
+	 */
+	public function testIsBuiltAndHandlesLoginsWithoutDeprecations()
+	{
+		$deprecations = array();
+		$libraries = realpath(JPATH_LIBRARIES).'/';
+		set_error_handler(function ($errno, $message) use (&$deprecations, $libraries)
+		{
+			$trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+			foreach ($trace as $i => $frame)
+			{
+				if (in_array($frame['function'], array('trigger_error', 'trigger_deprecation'), true))
+				{
+					// where the deprecated function was called from
+					$caller = (string) ($trace[$i + 1]['file'] ?? '');
+					if (!str_starts_with((string) realpath($caller), $libraries))
+					{
+						$deprecations[] = $message.' ('.$caller.':'.($trace[$i + 1]['line'] ?? '?').')';
+					}
+					break;
+				}
+			}
+			return true;
+		}, E_DEPRECATED | E_USER_DEPRECATED);
+		try
+		{
+			$container = new Container();
+			(require dirname(__DIR__, 2).'/services/provider.php')->register($container);
+			$plugin = $container->get(PluginInterface::class);
+			// as PluginHelper::import() does it from Joomla 6.0 on
+			$dispatcher = new Dispatcher();
+			$dispatcher->addSubscriber($plugin);
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.40';
+			$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0';
+			$dispatcher->dispatch('onUserLoginFailure', new LoginFailureEvent('onUserLoginFailure',
+				array('subject' => array('username' => 'Admin', 'status' => 4), 'options' => array())));
+			$dispatcher->dispatch('onUserLogin', new LoginEvent('onUserLogin',
+				array('subject' => array('username' => 'Admin', 'status' => 1), 'options' => array())));
+		}
+		finally
+		{
+			restore_error_handler();
+		}
+		$this->assertSame(array(), $deprecations, implode("\n", $deprecations));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE ipaddress='203.0.113.40' AND handled=1"));
+		$this->assertSame('Admin', $this->queryValue("SELECT username FROM #__bfstop_knownip WHERE ipaddress='203.0.113.40'"));
 	}
 }
