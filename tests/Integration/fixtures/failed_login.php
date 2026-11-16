@@ -15,9 +15,9 @@
 // Used by FailedLoginTest; needs the same environment as the tests.
 
 use Joomla\CMS\Application\ApiApplication;
+use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\Event\Event;
 
 require dirname(__DIR__, 2).'/bootstrap.php';
 
@@ -47,5 +47,6 @@ foreach (array_slice($argv, 3) as $option)
 }
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
 $app->getDispatcher()->dispatch('onUserLoginFailure',
-	new Event('onUserLoginFailure', array(array('username' => $argv[2], 'status' => 4), array())));
+	new LoginFailureEvent('onUserLoginFailure', array(
+		'subject' => array('username' => $argv[2], 'status' => 4), 'options' => array())));
 echo "DONE\n";

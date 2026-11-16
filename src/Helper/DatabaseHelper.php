@@ -276,7 +276,7 @@ class DatabaseHelper
 				$lastId = 0;
 				do
 				{
-					$query = $this->db->getQuery(true)
+					$query = $this->db->createQuery()
 						->select($this->db->quoteName(array('id', 'ipaddress')))
 						->from($this->db->quoteName($table))
 						->where($this->db->quoteName('id').' > '.(int) $lastId)
@@ -289,7 +289,7 @@ class DatabaseHelper
 						$canonical = IpHelper::canonicalEntry($row->ipaddress);
 						if ($canonical !== null && $canonical !== $row->ipaddress)
 						{
-							$update = $this->db->getQuery(true)
+							$update = $this->db->createQuery()
 								->update($this->db->quoteName($table))
 								->set($this->db->quoteName('ipaddress').' = '.$this->db->quote($canonical))
 								->where($this->db->quoteName('id').' = '.(int) $row->id);
@@ -404,7 +404,7 @@ class DatabaseHelper
 		}
 		try
 		{
-			$query = $this->db->getQuery(true)
+			$query = $this->db->createQuery()
 				->update($this->db->quoteName('#__bfstop_bannedip'))
 				->set($this->db->quoteName('attempts').' = '.$this->db->quoteName('attempts').' + 1')
 				->set($this->db->quoteName('last_attempt').' = '.$this->db->quote(date("Y-m-d H:i:s")))
@@ -438,7 +438,7 @@ class DatabaseHelper
 	{
 		try
 		{
-			$query = $this->db->getQuery(true)
+			$query = $this->db->createQuery()
 				->select($this->db->quoteName('ipaddress'))
 				->from($this->db->quoteName('#__bfstop_allowlist'));
 			$this->db->setQuery($query);
@@ -881,7 +881,7 @@ class DatabaseHelper
 			$hostnameSql = ($hostname === null) ? 'NULL' : $this->db->quote($hostname);
 			if ($exists)
 			{
-				$query = $this->db->getQuery(true);
+				$query = $this->db->createQuery();
 				$query->update('#__bfstop_dnscache')
 					->set('hostname = '.$hostnameSql)
 					->set('checked_at = '.$this->db->quote($now))
@@ -916,7 +916,7 @@ class DatabaseHelper
 			$id = $this->db->loadResult();
 			if ($id)
 			{
-				$query = $this->db->getQuery(true);
+				$query = $this->db->createQuery();
 				$query->update('#__bfstop_knownip')
 					->set('last_success = '.$this->db->quote($now))
 					->where('id = '.((int) $id));
@@ -996,7 +996,7 @@ class DatabaseHelper
 	{
 		try
 		{
-			$query = $this->db->getQuery(true)
+			$query = $this->db->createQuery()
 				->select($this->db->quoteName('params'))
 				->from($this->db->quoteName('#__extensions'))
 				->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
@@ -1024,7 +1024,7 @@ class DatabaseHelper
 					->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
 				return $query;
 			};
-			$query = $where($this->db->getQuery(true)
+			$query = $where($this->db->createQuery()
 				->select($this->db->quoteName('params'))
 				->from($this->db->quoteName('#__extensions')));
 			$this->db->setQuery($query);
@@ -1036,7 +1036,7 @@ class DatabaseHelper
 			$params[$name] = $value;
 			// no table alias here: PostgreSQL doesn't allow qualified column
 			// names in the SET clause (issue #206)
-			$query = $where($this->db->getQuery(true)
+			$query = $where($this->db->createQuery()
 				->update($this->db->quoteName('#__extensions'))
 				->set($this->db->quoteName('params').' = '.$this->db->quote(json_encode($params))));
 			$this->db->setQuery($query);
@@ -1096,7 +1096,7 @@ class DatabaseHelper
 				{
 					return;
 				}
-				$query = $this->db->getQuery(true)
+				$query = $this->db->createQuery()
 					->select($this->db->quoteName('ipaddress'))
 					->from($this->db->quoteName('#__bfstop_dnscache'))
 					->order($this->db->quoteName('checked_at').' ASC');
@@ -1138,7 +1138,7 @@ class DatabaseHelper
 				{
 					return;
 				}
-				$query = $this->db->getQuery(true)
+				$query = $this->db->createQuery()
 					->select($this->db->quoteName('id'))
 					->from($this->db->quoteName('#__bfstop_knownip'))
 					->order($this->db->quoteName('last_success').' ASC');
@@ -1175,7 +1175,7 @@ class DatabaseHelper
 				{
 					return;
 				}
-				$query = $this->db->getQuery(true)
+				$query = $this->db->createQuery()
 					->select($this->db->quoteName('id'))
 					->from($this->db->quoteName('#__bfstop_failedlogin'))
 					->order($this->db->quoteName('id').' ASC');
@@ -1213,7 +1213,7 @@ class DatabaseHelper
 				{
 					return;
 				}
-				$query = $this->db->getQuery(true)
+				$query = $this->db->createQuery()
 					->select($this->db->quoteName('username'))
 					->from($this->db->quoteName('#__bfstop_username_stats'))
 					->order($this->db->quoteName('attempts').' ASC, '.$this->db->quoteName('last_attempt').' ASC');

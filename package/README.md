@@ -7,7 +7,7 @@ to have a repository of its own, codeling/pkg_bfstop, with the extension zips
 committed into it by hand.
 
 - `pkg_bfstop.xml`: the package manifest.
-- `script.php`: the package's installer script; refuses Joomla! < 5.0 and
+- `script.php`: the package's installer script; refuses Joomla! < 5.4 and
   PHP < 8.1 before anything is installed (sites on Joomla! 4 stay with 1.5).
 - `update.xml`: the update server's collection file
   (`https://bfstop.bfroehler.info/update.xml`, which installed sites ask).
