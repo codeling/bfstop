@@ -34,9 +34,10 @@ class HtmlView extends BaseHtmlView
 
 	function display($tpl = null)
 	{
-		// clear the messages still enqueued from the invalid login attempt:
+		// clear the messages still enqueued from the invalid login attempt
+		// (also those Joomla kept in the session for this request):
 		$app = Factory::getApplication();
-		$app->getSession()->set('application.queue', null);
+		$app->getMessageQueue(true);
 		$input = $app->getInput();
 		$this->token = $input->getString('token', '');
 		$this->showConfirmation = false;

@@ -5,6 +5,9 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
+
+namespace Codeling\Component\Bfstop\Administrator\Rule;
+
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Form\Form;
@@ -12,9 +15,9 @@ use Joomla\CMS\Form\FormRule;
 use Joomla\CMS\Language\Text;
 use Joomla\Registry\Registry;
 
-class JFormRuleHtaccesspath extends FormRule
+class HtaccesspathRule extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
+	public function test(\SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
 		$value = (string) $value;
 		if ($value === '')
@@ -32,7 +35,7 @@ class JFormRuleHtaccesspath extends FormRule
 		}
 		if (!$valid)
 		{
-			return new UnexpectedValueException(Text::_('COM_BFSTOP_SETTINGS_HTACCESS_PATH_INVALID'));
+			return new \UnexpectedValueException(Text::_('COM_BFSTOP_SETTINGS_HTACCESS_PATH_INVALID'));
 		}
 		return true;
 	}

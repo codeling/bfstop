@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <form>
-	<fieldset name="form_block" addrulepath="administrator/components/com_bfstop/rules">
+	<fieldset name="form_block" addruleprefix="Codeling\Component\Bfstop\Administrator\Rule">
 		<field
 			name="id"
 			type="hidden"

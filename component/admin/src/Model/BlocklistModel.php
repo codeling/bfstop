@@ -34,7 +34,7 @@ class BlocklistModel extends ListModel
 	protected function getListQuery()
 	{
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->select('b.id, b.ipaddress, b.crdate, b.duration, b.attempts, b.last_attempt, u.crdate as unblocked');
 		$query->from('#__bfstop_bannedip b left join #__bfstop_unblock u on b.id=u.block_id');
 		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),

@@ -6,6 +6,8 @@
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
 
+namespace Codeling\Component\Bfstop\Administrator\Rule;
+
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
@@ -27,9 +29,9 @@ use Joomla\Registry\Registry;
  *   (IpValidateHelper) is refused here too: with 0.0.0.0/0, every visitor
  *   could choose the address their failed logins are counted against.
  */
-class JFormRuleProxylist extends FormRule
+class ProxylistRule extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
+	public function test(\SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
 		foreach (IpHelper::parseTrustedProxies((string) $value) as $entry)
 		{
@@ -37,7 +39,7 @@ class JFormRuleProxylist extends FormRule
 			$minBits = str_contains($parts[0], ':') ? IpValidateHelper::MinPrefixIPv6 : IpValidateHelper::MinPrefixIPv4;
 			if (!IpHelper::isValidIpOrSubnet($entry) || (count($parts) === 2 && (int) $parts[1] < $minBits))
 			{
-				return new UnexpectedValueException(Text::sprintf('COM_BFSTOP_SETTINGS_PROXY_IP_INVALID',
+				return new \UnexpectedValueException(Text::sprintf('COM_BFSTOP_SETTINGS_PROXY_IP_INVALID',
 					htmlspecialchars($entry, ENT_QUOTES, 'UTF-8'),
 					IpValidateHelper::MinPrefixIPv4, IpValidateHelper::MinPrefixIPv6));
 			}

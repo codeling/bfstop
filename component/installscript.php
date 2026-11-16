@@ -10,24 +10,41 @@ defined('_JEXEC') or die;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Installer\InstallerScript;
+use Joomla\CMS\Installer\InstallerScriptInterface;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 use Joomla\Filesystem\Folder;
 
-class com_bfstopInstallerScript extends InstallerScript
+/**
+ * Joomla takes the instance this file returns (see the end); the class keeps
+ * the name of the legacy form, which Joomla looks for if the file has been
+ * loaded before. InstallerScript gives preflight() its checks.
+ */
+class com_bfstopInstallerScript extends InstallerScript implements InstallerScriptInterface
 {
 	// InstallerScript::preflight() refuses to install on anything older (and
 	// to replace a newer version of the component with an older one)
-	protected $minimumJoomla = '5.0.0';
+	protected $minimumJoomla = '5.4.0';
 	protected $minimumPhp = '8.1.0';
 
-	/**
-	 * @param   InstallerAdapter  $adapter  The object responsible for running this script
-	 */
-	public function __construct(InstallerAdapter $adapter)
+	// InstallerScript's checks, with the return type InstallerScriptInterface
+	// has (InstallerScript's own preflight() has none)
+	public function preflight($type, $adapter): bool
 	{
+		return (bool) parent::preflight($type, $adapter);
 	}
-	public function update(InstallerAdapter $adapter)
+
+	public function install(InstallerAdapter $adapter): bool
+	{
+		return true;
+	}
+
+	public function uninstall(InstallerAdapter $adapter): bool
+	{
+		return true;
+	}
+
+	public function update(InstallerAdapter $adapter): bool
 	{
 		$bfstopPath = JPATH_ADMINISTRATOR."/components/com_bfstop/";
 		$oldFolders = array( "views/whitelist", "views/whiteip" );
@@ -48,12 +65,13 @@ class com_bfstopInstallerScript extends InstallerScript
 		}
 		return true;
 	}
-	public function postflight($type, $adapter)
+
+	public function postflight(string $type, InstallerAdapter $adapter): bool
 	{
 		// on an update, the plugin says what there is to review (if anything)
 		if ($type !== 'install')
 		{
-			return;
+			return true;
 		}
 		$lang = Factory::getApplication()->getLanguage();
 		$lang->load('com_bfstop', JPATH_ADMINISTRATOR);
@@ -66,5 +84,8 @@ class com_bfstopInstallerScript extends InstallerScript
 			$message = html_entity_decode(strip_tags($message), ENT_QUOTES, 'UTF-8');
 		}
 		Factory::getApplication()->enqueueMessage($message, 'warning');
+		return true;
 	}
 }
+
+return new com_bfstopInstallerScript();

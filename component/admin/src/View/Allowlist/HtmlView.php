@@ -25,6 +25,8 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->getModel()->getState();
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
+		// selecting a range of rows with shift-click, see grid.checkall in the head
+		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();
 		parent::display($tpl);
 	}

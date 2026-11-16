@@ -13,12 +13,7 @@ use Joomla\CMS\Language\Text;
 ?>
 <tr class="sortable">
 	<th width="20">
-		<input
-			type="checkbox"
-			name="toggle"
-			value=""
-			onclick="checkAll(<?php echo count($this->items); ?>);"
-		/>
+		<?php echo HTMLHelper::_('grid.checkall'); ?>
 	</th>
 	<th>
 		<?php echo HTMLHelper::_('grid.sort',

@@ -5,6 +5,9 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
+
+namespace Codeling\Component\Bfstop\Administrator\Rule;
+
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
@@ -12,10 +15,10 @@ use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormRule;
 use Joomla\Registry\Registry;
 
-class JFormRuleIprange extends FormRule
+class IprangeblockRule extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
+	public function test(\SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
-		return IpValidateHelper::validIPRange($value);
+		return (IpValidateHelper::validIPRange($value) && !IpValidateHelper::matchesCurrentIP($value));
 	}
 }

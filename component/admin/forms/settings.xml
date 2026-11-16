@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<form addrulepath="administrator/components/com_bfstop/rules">
+<form addruleprefix="Codeling\Component\Bfstop\Administrator\Rule">
 	<fields name="params">
 		<fieldset name="basic">
 			<field name="blockMode" type="list" validate="options" default="full"

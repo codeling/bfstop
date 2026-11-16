@@ -26,6 +26,8 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->getModel()->getState();
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
+		// selecting a range of rows with shift-click, see grid.checkall in the head
+		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();
 		parent::display($tpl);
 	}
@@ -68,7 +70,7 @@ class HtmlView extends BaseHtmlView
 		{
 			// batch unblock would require rewrite of unblock method to check
 			// for selected lines
-			ToolbarHelper::custom('htblocklist.unblock', 'unpublish.png', 'unpublish_f2.png', 'COM_BFSTOP_UNBLOCK', true);
+			ToolbarHelper::custom('htblocklist.unblock', 'unpublish', '', 'COM_BFSTOP_UNBLOCK', true);
 		}
 		// an entry is part of the web server's configuration, see
 		// HtblockController::save()

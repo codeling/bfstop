@@ -34,7 +34,7 @@ class UsernamestatsModel extends ListModel
 	protected function getListQuery()
 	{
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->select('s.username, s.attempts, s.first_attempt, s.last_attempt, u.id AS user_id');
 		$query->from('#__bfstop_username_stats s');
 		$query->join('LEFT', '#__users u ON u.username = s.username');
@@ -55,7 +55,7 @@ class UsernamestatsModel extends ListModel
 	public function getMaxAttempts()
 	{
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->select('MAX(attempts)')
 			->from($db->quoteName('#__bfstop_username_stats'));
 		$db->setQuery($query);
@@ -74,7 +74,7 @@ class UsernamestatsModel extends ListModel
 		// the cutoff with the same clock instead of the database's NOW()
 		$cutoff = date('Y-m-d H:i:s', time() - $days * 86400);
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->delete($db->quoteName('#__bfstop_username_stats'))
 			->where($db->quoteName('last_attempt').' < :cutoff')
 			->bind(':cutoff', $cutoff);
