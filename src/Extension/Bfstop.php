@@ -100,7 +100,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	);
 
 	private LoggerHelper $logger;
-	private NotifierHelper $notifier;
+	// created on first use (see notifier()): its constructor queries the
+	// database, which most requests - none of them sends a mail - needn't pay for
+	private ?NotifierHelper $notifier = null;
 	private DatabaseHelper $mydb;
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
@@ -211,10 +213,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function withBlockLock($key, callable $decision)
 	{
-		$app = $this->getApplication();
 		$stripe = hexdec(substr(md5((string) $key), 0, 4)) % self::BlockLockStripes;
 		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-block-'.
-			md5((string) $app->get('db').(string) $app->get('dbprefix')).'-'.$stripe.'.lock';
+			LockHelper::siteHash().'-'.$stripe.'.lock';
 		// not for ever: see LockHelper
 		$handle = LockHelper::acquire($lockFile, HtaccessHelper::LockWaitSeconds);
 		if (!$handle)
@@ -342,7 +343,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
 	{
 		// send email notification to admin
-		$this->notifier->blockedNotifyAdmin($logEntry,
+		$this->notifier()->blockedNotifyAdmin($logEntry,
 			$this->getRealDurationFromDBDuration($duration),
 			$this->getIntParam('notifyBlockedNumber', 5));
 		if ($this->getBoolParam('notifyBlockedUser', false))
@@ -375,7 +376,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 					"' was blocked, sending unblock ".
 					"instructions",
 					Log::INFO);
-				$this->notifier->sendUnblockMail($userEmail,
+				$this->notifier()->sendUnblockMail($userEmail,
 					$this->getUnblockLink($id, $logEntry->username));
 			}
 			else
@@ -459,13 +460,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function getHtaccessPath()
 	{
-		$htaccessPath = $this->getStringParam('htaccessPath', JPATH_ROOT);
-		if ($htaccessPath === "")
-		{
-			$this->logger->log('htaccessPath empty, setting it to '.JPATH_ROOT, Log::INFO);
-			$htaccessPath = JPATH_ROOT;
-		}
-		return $htaccessPath;
+		return HtaccessHelper::resolvePath($this->getStringParam('htaccessPath', ''));
 	}
 
 	/**
@@ -565,11 +560,20 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
 			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->mydb = new DatabaseHelper($this->logger);
-		$this->notifier = new NotifierHelper($this->logger, $this->mydb,
-			$this->params->get('emailaddress', ''),
-			$this->getIntParam('userID', -1),
-			$this->getIntParam('userGroup', -1),
-			$this->getBoolParam('groupNotificationEnabled', false));
+		$this->notifier = null;
+	}
+
+	private function notifier(): NotifierHelper
+	{
+		if ($this->notifier === null)
+		{
+			$this->notifier = new NotifierHelper($this->logger, $this->mydb,
+				$this->params->get('emailaddress', ''),
+				$this->getIntParam('userID', -1),
+				$this->getIntParam('userGroup', -1),
+				$this->getBoolParam('groupNotificationEnabled', false));
+		}
+		return $this->notifier;
 	}
 
 	private function notifyOfRemainingAttempts($logEntry, $riskScore = 0)
@@ -825,7 +829,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		else
 		{
 			$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
-			$this->notifier->failedLogin($logEntry, $maxNumber);
+			$this->notifier()->failedLogin($logEntry, $maxNumber);
 		}
 
 		$delayDuration = $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
@@ -872,8 +876,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	public static function delaySlotFiles($count)
 	{
-		$app = Factory::getApplication();
-		$site = md5((string) $app->get('db').(string) $app->get('dbprefix'));
+		$site = LockHelper::siteHash();
 		$files = array();
 		for ($i = 0; $i < max(1, (int) $count); ++$i)
 		{
@@ -961,7 +964,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info->username = (string) ($user['username'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
-		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress));
+		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress),
+			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
+				$this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))));
 	}
 
 	/**
@@ -1183,7 +1188,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	public static function loginTurnFile($trackedAddress)
 	{
 		$app = Factory::getApplication();
-		$site = md5((string) $app->get('db').(string) $app->get('dbprefix'));
+		$site = LockHelper::siteHash();
 		$slot = hexdec(substr(hash_hmac('sha256', (string) $trackedAddress, (string) $app->get('secret', '')), 0, 7))
 			% self::LoginTurnSlots;
 		return HtaccessHelper::lockDirectory().'/bfstop-login-'.$site.'-'.$slot.'.lock';
@@ -1338,7 +1343,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function canonicalizeStoredAddressesOnce()
 	{
 		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
-			md5((string) $this->getApplication()->get('db').(string) $this->getApplication()->get('dbprefix')).'.lock';
+			LockHelper::siteHash().'.lock';
 		$handle = @fopen($lockFile, 'c');
 		if ($handle !== false && !flock($handle, LOCK_EX | LOCK_NB))
 		{

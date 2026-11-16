@@ -25,6 +25,16 @@ class LockHelper
 	private const PollInterval = 10000;
 
 	/**
+	 * Identifies the site (its database) in the names of lock files: the
+	 * temporary directory may be shared with other sites.
+	 */
+	public static function siteHash(): string
+	{
+		$app = \Joomla\CMS\Factory::getApplication();
+		return md5((string) $app->get('db').(string) $app->get('dbprefix'));
+	}
+
+	/**
 	 * Takes the exclusive lock on $file, creating the file if need be.
 	 *
 	 * @param string $file

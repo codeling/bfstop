@@ -29,7 +29,8 @@ class NotifierHelper
 		$this->db = $db;
 
 		$addresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
-		$userEmail = $this->db->getUserEmailByID($userID);
+		// -1: no user chosen, nothing to look up
+		$userEmail = (int) $userID > 0 ? $this->db->getUserEmailByID($userID) : null;
 		if (!empty($userEmail))
 		{
 			$addresses[] = $userEmail;

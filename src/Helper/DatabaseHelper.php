@@ -767,17 +767,21 @@ class DatabaseHelper
 	 * @param string|null $trackedAddress the key this client is tracked by (see
 	 *                                    IpHelper::trackedAddress(): for IPv6 its
 	 *                                    network), if not its address. Failed
-	 *                                    logins are recorded, and logins
-	 *                                    remembered, under this key
+	 *                                    logins are recorded under this key
+	 * @param string|null $trustedAddress the key under which the login is
+	 *                                    remembered as one the user has made
+	 *                                    from here (IpHelper::trustPrefixLength():
+	 *                                    never coarser than a /64), if not
+	 *                                    $trackedAddress
 	 */
-	public function successfulLogin($info, $trackedAddress = null)
+	public function successfulLogin($info, $trackedAddress = null, $trustedAddress = null)
 	{
 		$key = $trackedAddress ?? $info->ipaddress;
 		$handled = new \stdClass();
 		$handled->ipaddress = $key;
 		$handled->username = $info->username;
 		$this->setFailedLoginHandled($handled, true);
-		$this->recordKnownIpUsername($key, $info->username);
+		$this->recordKnownIpUsername($trustedAddress ?? $key, $info->username);
 	}
 
 	/**
@@ -787,11 +791,15 @@ class DatabaseHelper
 	 * IpHelper::trackedAddress()): an IPv4 address itself, an IPv6 address by
 	 * its network, as IPv6 clients commonly switch addresses within it. So
 	 * is a login from any address of the network a login from this one.
+	 * That network is never coarser than a /64 (see
+	 * IpHelper::TrustPrefixLength): entries remembered for a larger one, as
+	 * earlier versions did, no longer count.
 	 */
 	public function hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength)
 	{
 		try
 		{
+			$ipv6PrefixLength = IpHelper::trustPrefixLength($ipv6PrefixLength);
 			$key = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
 			$user = "LOWER(".$this->db->quote($username).")";
 			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
@@ -813,7 +821,8 @@ class DatabaseHelper
 			{
 				if (strpos($known, '/') !== false)
 				{
-					$match = IpHelper::isInSubnet($ipaddress, $known);
+					$match = (int) substr($known, strpos($known, '/') + 1) >= IpHelper::TrustPrefixLength &&
+						IpHelper::isInSubnet($ipaddress, $known);
 				}
 				else
 				{
