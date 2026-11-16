@@ -18,9 +18,6 @@ use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 class TokenunblockModel extends BaseDatabaseModel
 {
-	// must stay in sync with the plugin's DatabaseHelper::$UNBLOCK_TOKEN_VALID_DAYS
-	const TokenValidDays = 3;
-
 	// outcomes of process()
 	const ResultInvalid = 'invalid';
 	const ResultConfirm = 'confirm';
@@ -145,7 +142,7 @@ class TokenunblockModel extends BaseDatabaseModel
 			// cutoff computed in PHP, as DATE_ADD is MySQL-only (issue bfstop#206)
 			$db->setQuery('DELETE FROM #__bfstop_unblock_token '.
 				'WHERE crdate < '.
-				$db->quote(date('Y-m-d H:i:s', time() - self::TokenValidDays * 86400)));
+				$db->quote(date('Y-m-d H:i:s', time() - DatabaseHelper::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
 			$db->execute();
 			// get token:
 			// only the hash of a token is stored, see DatabaseHelper::hashToken()

@@ -34,8 +34,7 @@ class HtblocklistModel extends ListModel
 		if (is_null($this->cachedHtAccessLines))
 		{
 			$this->cachedHtAccessLines = array();
-			$htaccessPath = ParamHelper::get('htaccessPath', 'params', JPATH_ROOT);
-			$htaccessPath = $htaccessPath === "" ? JPATH_ROOT : $htaccessPath;
+			$htaccessPath = UnblockHelper::getHtaccessPath();
 			$htaccess = new HtaccessHelper($htaccessPath, null);
 			$deniedIPs = $htaccess->getDeniedIPs();
 			foreach ($deniedIPs as $ip)
