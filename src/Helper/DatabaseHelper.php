@@ -10,7 +10,15 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Cache\CacheControllerFactoryInterface;
+use Codeling\Plugin\System\Bfstop\Repository\AllowListRepository;
+use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
+use Codeling\Plugin\System\Bfstop\Repository\DnsCacheRepository;
+use Codeling\Plugin\System\Bfstop\Repository\FailedLoginRepository;
+use Codeling\Plugin\System\Bfstop\Repository\KnownIpRepository;
+use Codeling\Plugin\System\Bfstop\Repository\PluginSettingsRepository;
+use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Plugin\System\Bfstop\Repository\UserRepository;
+use Codeling\Plugin\System\Bfstop\Repository\UsernameStatsRepository;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -20,13 +28,13 @@ class DatabaseHelper
 {
 	private $db;
 	private $logger;
+	private $repositories = array();
 
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public static $UNLIMITED_DURATION = 5256000;
 
-	// how long an emailed unblock token can be used; com_bfstop's
-	// TokenunblockModel::TokenValidDays must stay in sync with this
-	public static $UNBLOCK_TOKEN_VALID_DAYS = 3;
+	// how long an emailed unblock token can be used
+	public static $UNBLOCK_TOKEN_VALID_DAYS = UnblockTokenRepository::ValidDays;
 
 
 	// upper bound for the rows of the failed logins, however the purge age is
@@ -70,243 +78,182 @@ class DatabaseHelper
 		}
 	}
 
-	// $time (as written by date("Y-m-d H:i:s")) moved back by $minutes;
-	// computed in PHP so that no database-specific date arithmetic (like
-	// MySQL's DATE_SUB) is needed, see issue #206
-	private static function minutesBefore($time, $minutes)
-	{
-		return date("Y-m-d H:i:s", strtotime($time) - ((int)$minutes) * 60);
-	}
-
-	// SQL expression for $dateExpr + $minutesExpr minutes, for the cases
-	// where the number of minutes comes from a column and can therefore not
-	// be computed in PHP. Neither DATE_ADD nor Joomla's
-	// DatabaseQuery::dateAdd() work on PostgreSQL for this (issue #206)
-	private function addMinutesSql($dateExpr, $minutesExpr)
-	{
-		if ($this->db->getServerType() === 'postgresql')
-		{
-			return '('.$dateExpr.' + '.$minutesExpr." * INTERVAL '1 minute')";
-		}
-		return 'DATE_ADD('.$dateExpr.', INTERVAL '.$minutesExpr.' MINUTE)';
-	}
-
 	public function __construct(LoggerHelper $logger)
 	{
 		$this->db = Factory::getContainer()->get(DatabaseInterface::class);
 		$this->logger = $logger;
 	}
 
-	public function eventsInInterval(
-		$interval,
-		$time,
-		$additionalWhere,
-		$table = '#__bfstop_failedlogin',
-		$timecol = 'logtime')
+	/**
+	 * The repository of the given class (one per class and helper). Each
+	 * reads and writes its table(s) and decides how it fails, see
+	 * FailurePolicy; this class puts what the plugin does together from them.
+	 */
+	private function repository($class)
 	{
-		try
+		if (!isset($this->repositories[$class]))
 		{
-			if ($interval <= 0)
-			{
-				$this->logger->log("Invalid interval $interval");
-			}
-			// check if in the last $interval hours, $number incidents have occured already:
-			$sql = "SELECT COUNT(*) FROM ".$table." t ".
-				"WHERE t.".$timecol.
-				" between ".
-				$this->db->quote(self::minutesBefore($time, $interval)).
-				" AND ".
-				$this->db->quote($time).
-				" ".$additionalWhere;
-			$this->db->setQuery($sql);
-			$numberOfEvents = ((int)$this->db->loadResult());
-			return $numberOfEvents;
+			$this->repositories[$class] = new $class($this->db, $this->logger);
 		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return 0;
-		}
+		return $this->repositories[$class];
 	}
+
+	public function blocks(): BlockRepository
+	{
+		return $this->repository(BlockRepository::class);
+	}
+
+	public function allowList(): AllowListRepository
+	{
+		return $this->repository(AllowListRepository::class);
+	}
+
+	public function failedLogins(): FailedLoginRepository
+	{
+		return $this->repository(FailedLoginRepository::class);
+	}
+
+	public function usernameStats(): UsernameStatsRepository
+	{
+		return $this->repository(UsernameStatsRepository::class);
+	}
+
+	public function unblockTokens(): UnblockTokenRepository
+	{
+		return $this->repository(UnblockTokenRepository::class);
+	}
+
+	public function knownIps(): KnownIpRepository
+	{
+		return $this->repository(KnownIpRepository::class);
+	}
+
+	public function dnsCache(): DnsCacheRepository
+	{
+		return $this->repository(DnsCacheRepository::class);
+	}
+
+	public function users(): UserRepository
+	{
+		return $this->repository(UserRepository::class);
+	}
+
+	public function pluginSettings(): PluginSettingsRepository
+	{
+		return $this->repository(PluginSettingsRepository::class);
+	}
+
+	// ----- failed logins
 
 	public function getNumberOfFailedLogins($interval, $ipaddress, $logtime)
 	{
-		return $this->eventsInInterval($interval, $logtime,
-			'AND ipaddress = '.$this->db->quote($ipaddress).
-			' AND handled = 0',
-			'#__bfstop_failedlogin',
-			'logtime');
+		if ($interval <= 0)
+		{
+			$this->logger->log("Invalid interval $interval");
+		}
+		return $this->failedLogins()->countUnhandledFromAddress($interval, $ipaddress, $logtime);
 	}
 
 	public function getNumberOfFailedLoginsForUsername($interval, $username, $logtime)
 	{
-		// deliberately not filtered by ipaddress - this aggregates failed
-		// attempts against this username across every source IP, so that a
-		// distributed attack spreading attempts across many IPs against one
-		// account is still caught (see issue #76 / OWASP guidance on
-		// account-scoped lockout counters)
-		return $this->eventsInInterval($interval, $logtime,
-			'AND username = '.$this->db->quote($username).
-			' AND handled = 0',
-			'#__bfstop_failedlogin',
-			'logtime');
+		if ($interval <= 0)
+		{
+			$this->logger->log("Invalid interval $interval");
+		}
+		return $this->failedLogins()->countUnhandledForUsername($interval, $username, $logtime);
+	}
+
+	/**
+	 * The number of failed logins (by anybody) in the $minutes up to $time.
+	 */
+	public function countFailedLoginsInWindow($time, $minutes)
+	{
+		return $this->failedLogins()->countInWindow($time, $minutes);
+	}
+
+	/**
+	 * The number of blocks made in the $minutes up to $time.
+	 */
+	public function countBlocksInWindow($time, $minutes)
+	{
+		return $this->blocks()->countCreatedInWindow($time, $minutes);
 	}
 
 	public function getFailedLoginsInLastHour()
 	{
-		try
-		{
-			$nowDateTime = date("Y-m-d H:i:s");
-			$sql = "SELECT COUNT(*) FROM #__bfstop_failedlogin ".
-				"WHERE logtime > ".
-					$this->db->quote(self::minutesBefore($nowDateTime, 60));
-			$this->db->setQuery($sql);
-			return $this->db->loadResult();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return 0;
-		}
+		return $this->failedLogins()->countInLastHour();
 	}
 
 	public function getNumberOfPreviousBlocks($ipaddress)
 	{
-		$interval = self::$UNLIMITED_DURATION;
-		$logtime = date("Y-m-d H:i:s");
-		return $this->eventsInInterval($interval, $logtime,
-			'AND ipaddress = '.$this->db->quote($ipaddress).
-			' AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u '.
-			' WHERE t.id=u.block_id AND source=0)',
-			'#__bfstop_bannedip', 'crdate');
+		return $this->blocks()->countPrevious($ipaddress);
 	}
 
 	public function getFormattedFailedList($ipAddress, $curTime, $interval)
 	{
-		try
+		$entries = $this->failedLogins()->listFromAddress($ipAddress, $curTime, $interval);
+		$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS'), 15)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME'), 20)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN'), 8)."\n".
+				str_repeat("-", 97)."\n";
+		foreach ($entries as $entry)
 		{
-			$sql = "SELECT * FROM #__bfstop_failedlogin t where ipaddress=".
-				$this->db->quote($ipAddress).
-				" AND t.logtime".
-				" between ".$this->db->quote(self::minutesBefore($curTime, $interval)).
-				" AND ".
-				$this->db->quote($curTime);
-			$this->db->setQuery($sql);
-			$entries = $this->db->loadObjectList();
-			$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS'), 15)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME'), 20)." ".
-					str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN'), 8)."\n".
-					str_repeat("-", 97)."\n";
-			foreach ($entries as $entry)
-			{
-				$result .= str_pad(LoggerHelper::singleLine($entry->username), 25)." ".
-					str_pad($entry->ipaddress, 15)." ".
-					str_pad($entry->logtime, 20)." ".
-					str_pad($this->getClientString($entry->origin), 8)."\n";
-			}
-			return $result;
+			$result .= str_pad(LoggerHelper::singleLine($entry->username), 25)." ".
+				str_pad($entry->ipaddress, 15)." ".
+				str_pad($entry->logtime, 20)." ".
+				str_pad($this->getClientString($entry->origin), 8)."\n";
 		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return '';
-		}
+		return $result;
+	}
+
+	public function insertFailedLogin($logEntry)
+	{
+		$this->failedLogins()->add($logEntry);
+		$this->usernameStats()->recordAttempt($logEntry->username, $logEntry->logtime);
+	}
+
+	public function setFailedLoginHandled($info, $restrictOnUsername)
+	{
+		$this->failedLogins()->markHandled($info->ipaddress, $restrictOnUsername ? $info->username : null);
 	}
 
 	/**
-	 * Loads the rows of $table (aliased t, needs id and ipaddress columns)
-	 * which contain the given IP address: the address itself or a network
-	 * (CIDR notation) it is part of. Addresses and networks are stored in
-	 * canonical form (IpHelper::canonicalEntry()), so the entries which can
-	 * match are known beforehand (IpHelper::lookupCandidates()), and the query
-	 * is a lookup by index. It used to read every network of the table and test
-	 * each in PHP, on every request of every visitor - slow once a few
-	 * thousand IPv6 clients were blocked, and a way for them to slow the site
-	 * down (the SQL was MySQL-only at first, see issue #206, and the source
-	 * of #117, #134 and #142).
-	 *
-	 * @return object[]|null null if the table could not be read
+	 * Whether the failed logins which count towards blocking $ipaddress (those
+	 * within $interval minutes before $logtime that haven't been handled yet)
+	 * include attempts against an existing account other than $username.
+	 * Attempts against usernames which don't exist don't count: they can't
+	 * get an attacker anywhere. If that can't be determined, it is assumed
+	 * that there are (fail-closed: no unblock link goes out then).
 	 */
-	private function loadMatchingEntries($ipaddress, $table, $additionalWhere, $action)
+	public function hasFailedLoginsForOtherAccounts($interval, $ipaddress, $username, $logtime)
 	{
-		$candidates = IpHelper::lookupCandidates($ipaddress);
-		if (count($candidates) === 0)
+		$attempted = $this->failedLogins()->unhandledUsernamesFromAddress($interval, $ipaddress, $logtime);
+		if ($attempted === null)
 		{
-			return array();
+			return true;
 		}
-		try
+		foreach ($attempted as $name)
 		{
-			$sql = "SELECT t.id, t.ipaddress FROM ".$table." t WHERE t.ipaddress IN (".
-				implode(', ', array_map(array($this->db, 'quote'), $candidates)).")".
-				$additionalWhere;
-			$this->db->setQuery($sql);
-			$entries = $this->db->loadObjectList();
-			foreach ($entries as $entry)
+			if (mb_strtolower($name) !== mb_strtolower($username) && $this->accountExists($name))
 			{
-				$this->logger->log($action." because of entry: ".
-					"id=".$entry->id.", ".
-					"ipaddress=".$entry->ipaddress,
-					Log::DEBUG);
+				return true;
 			}
-			return $entries;
 		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return null;
-		}
+		return false;
 	}
+
+	// ----- blocks and the allow list
 
 	/**
 	 * Brings the addresses in the block and allow list into canonical form
-	 * (IpHelper::canonicalEntry()), which lookups depend on: entries written by
-	 * earlier versions, or by hand, may be spelled differently ("2001:DB8::1",
-	 * "203.0.113.5/24"). Entries which are no address or network are left alone.
+	 * (IpHelper::canonicalEntry()), which lookups depend on.
 	 *
 	 * @return int the number of entries changed
 	 */
 	public function canonicalizeStoredAddresses()
 	{
-		$changed = 0;
-		try
-		{
-			foreach (array('#__bfstop_bannedip', '#__bfstop_allowlist') as $table)
-			{
-				$lastId = 0;
-				do
-				{
-					$query = $this->db->createQuery()
-						->select($this->db->quoteName(array('id', 'ipaddress')))
-						->from($this->db->quoteName($table))
-						->where($this->db->quoteName('id').' > '.(int) $lastId)
-						->order($this->db->quoteName('id').' ASC');
-					$this->db->setQuery($query, 0, 5000);
-					$rows = $this->db->loadObjectList();
-					foreach ($rows as $row)
-					{
-						$lastId = (int) $row->id;
-						$canonical = IpHelper::canonicalEntry($row->ipaddress);
-						if ($canonical !== null && $canonical !== $row->ipaddress)
-						{
-							$update = $this->db->createQuery()
-								->update($this->db->quoteName($table))
-								->set($this->db->quoteName('ipaddress').' = '.$this->db->quote($canonical))
-								->where($this->db->quoteName('id').' = '.(int) $row->id);
-							$this->db->setQuery($update);
-							$this->db->execute();
-							++$changed;
-						}
-					}
-				}
-				while (count($rows) === 5000);
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
-		return $changed;
+		return $this->blocks()->canonicalize() + $this->allowList()->canonicalize();
 	}
 
 	/**
@@ -326,21 +273,7 @@ class DatabaseHelper
 	 */
 	public function getActiveBlockIdsOrNull($ipaddress)
 	{
-		$activeWhere = " AND (t.duration=0 OR ".
-			$this->addMinutesSql('t.crdate', 't.duration')." >= ".
-			$this->db->quote(date("Y-m-d H:i:s")).")".
-			" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE t.id = u.block_id)";
-		$entries = $this->loadMatchingEntries($ipaddress, '#__bfstop_bannedip', $activeWhere, "Blocked");
-		if ($entries === null)
-		{
-			return null;
-		}
-		$ids = array();
-		foreach ($entries as $entry)
-		{
-			$ids[] = (int)$entry->id;
-		}
-		return $ids;
+		return $this->blocks()->activeIdsFor($ipaddress);
 	}
 
 	/**
@@ -351,20 +284,7 @@ class DatabaseHelper
 	 */
 	public function getAddressesWithoutActiveBlock()
 	{
-		try
-		{
-			$now = $this->db->quote(date("Y-m-d H:i:s"));
-			$active = "(c.duration=0 OR ".$this->addMinutesSql('c.crdate', 'c.duration')." >= $now)".
-				" AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock cu WHERE cu.block_id = c.id)";
-			$this->db->setQuery("SELECT DISTINCT b.ipaddress FROM #__bfstop_bannedip b WHERE NOT EXISTS ".
-				"(SELECT 1 FROM #__bfstop_bannedip c WHERE c.ipaddress = b.ipaddress AND $active)");
-			return $this->db->loadColumn();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return array();
-		}
+		return $this->blocks()->addressesWithoutActiveBlock();
 	}
 
 	/**
@@ -375,16 +295,7 @@ class DatabaseHelper
 	 */
 	public function getBlockedAddresses()
 	{
-		try
-		{
-			$this->db->setQuery('SELECT DISTINCT ipaddress FROM #__bfstop_bannedip');
-			return $this->db->loadColumn();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return null;
-		}
+		return $this->blocks()->allAddresses();
 	}
 
 	public function isIPBlocked($ipaddress)
@@ -398,80 +309,44 @@ class DatabaseHelper
 	 */
 	public function recordBlockedAttempt($blockIds)
 	{
-		if (count($blockIds) === 0)
-		{
-			return;
-		}
-		try
-		{
-			$query = $this->db->createQuery()
-				->update($this->db->quoteName('#__bfstop_bannedip'))
-				->set($this->db->quoteName('attempts').' = '.$this->db->quoteName('attempts').' + 1')
-				->set($this->db->quoteName('last_attempt').' = '.$this->db->quote(date("Y-m-d H:i:s")))
-				->where($this->db->quoteName('id').' IN ('.implode(',', array_map('intval', $blockIds)).')');
-			$this->db->setQuery($query);
-			$this->db->execute();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->blocks()->recordAttempt($blockIds);
 	}
 
 	public function isIPOnAllowList($ipaddress)
 	{
-		// an allow list which can't be read allows nothing
-		return count($this->loadMatchingEntries($ipaddress, '#__bfstop_allowlist', '', "Allowed") ?? array()) > 0;
+		return $this->allowList()->contains($ipaddress);
 	}
 
 	/**
 	 * The entries of the allow list which overlap the address or network
 	 * $entry (see IpHelper::overlapping()): what a block of $entry in the
-	 * .htaccess file would turn away as well - the web server knows nothing
-	 * of the allow list. isIPOnAllowList() only answers for an address. The
-	 * allow list is kept by the administrators (core.admin), so it is short;
-	 * if it can't be read, every entry is assumed to overlap.
+	 * .htaccess file would turn away as well. If the allow list can't be
+	 * read, every entry is assumed to overlap.
 	 *
 	 * @return string[]|null null if the allow list could not be read
 	 */
 	public function allowListEntriesOverlapping($entry)
 	{
-		try
-		{
-			$query = $this->db->createQuery()
-				->select($this->db->quoteName('ipaddress'))
-				->from($this->db->quoteName('#__bfstop_allowlist'));
-			$this->db->setQuery($query);
-			return IpHelper::overlapping($entry, $this->db->loadColumn());
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return null;
-		}
+		return $this->allowList()->entriesOverlapping($entry);
 	}
 
 	public function blockIP($logEntry, $duration, $usehtaccess, $htaccessPath)
 	{
+		$id = $this->blocks()->add($logEntry->ipaddress, $duration);
+		if ($id < 0)
+		{
+			return -1;
+		}
 		try
 		{
-			$blockEntry = new \stdClass();
-			$blockEntry->ipaddress = IpHelper::canonicalEntry($logEntry->ipaddress) ?? $logEntry->ipaddress;
-			$blockEntry->crdate = date("Y-m-d H:i:s");
-			$blockEntry->duration = $duration;
-			if (!$this->db->insertObject('#__bfstop_bannedip', $blockEntry, 'id'))
-			{
-				$this->logger->log('Insert block entry failed!', Log::ERROR);
-				return -1;
-			}
-			$this->setFailedLoginHandled($logEntry, false);
+			$this->failedLogins()->markHandled($logEntry->ipaddress);
 			if ($usehtaccess)
 			{
 				$htaccess = new HtaccessHelper($htaccessPath, $this->logger);
 				$this->logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), Log::INFO);
 				$htaccess->denyIP($logEntry->ipaddress);
 			}
-			return $blockEntry->id;
+			return $id;
 		}
 		catch (\Exception $e)
 		{
@@ -480,16 +355,15 @@ class DatabaseHelper
 		}
 	}
 
+	// ----- unblock tokens
+
 	/**
-	 * What is stored of an unblock token. The token itself is a secret which
-	 * only the mail holds: whoever reads the table (a backup, an SQL injection
-	 * somewhere else on the site) must not get working links out of it. The
-	 * token has 160 random bits, so a plain hash is enough; it is cut to the
-	 * 40 characters of the column. com_bfstop's TokenunblockModel uses this too.
+	 * What is stored of an unblock token, see UnblockTokenRepository::hash().
+	 * com_bfstop's TokenunblockModel uses this too.
 	 */
 	public static function hashToken($token)
 	{
-		return substr(hash('sha256', (string) $token), 0, 40);
+		return UnblockTokenRepository::hash($token);
 	}
 
 	/**
@@ -499,113 +373,33 @@ class DatabaseHelper
 	 */
 	public function getNewUnblockToken($id, $token, $username = null)
 	{
-		try
-		{
-			$tokenEntry = new \stdClass();
-			$tokenEntry->token = self::hashToken($token);
-			$tokenEntry->block_id = $id;
-			$tokenEntry->crdate = date("Y-m-d H:i:s");
-			$tokenEntry->username = $username;
-			if (!$this->db->insertObject('#__bfstop_unblock_token', $tokenEntry))
-			{
-				// maybe check if duplicate token (=PRIMARY KEY violation) and retry?
-				$this->logger->log('Insert unblock token failed!', Log::ERROR);
-				return null;
-			}
-			return $token;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return null;
-		}
+		return $this->unblockTokens()->add($id, $token, $username);
 	}
 
 	/**
 	 * Whether $token is an unexpired unblock token issued for one of the
 	 * given blocks. Used to decide if a blocked client may reach the unblock
-	 * page: a token that belongs to a different IP address's block, or one
-	 * that has outlived its validity, must not work as a pass for this one.
+	 * page.
 	 */
 	public function unblockTokenValidForBlocks($token, array $blockIds)
 	{
-		if ($token === '' || count($blockIds) === 0)
-		{
-			return false;
-		}
-		try
-		{
-			$sql = "SELECT block_id, crdate FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote(self::hashToken($token));
-			$this->db->setQuery($sql);
-			$row = $this->db->loadAssoc();
-			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
-			{
-				return false;
-			}
-			$created = strtotime($row['crdate']);
-			return $created !== false &&
-				(time() - $created) <= (self::$UNBLOCK_TOKEN_VALID_DAYS * 86400);
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
+		return $this->unblockTokens()->validForBlocks($token, $blockIds);
 	}
 
 	/**
-	 * Whether an unblock link which can still be used was sent to $username:
-	 * one that hasn't expired and wasn't used (a used token is deleted).
+	 * Whether an unblock link which can still be used was sent to $username.
 	 */
 	public function hasCurrentUnblockToken($username)
 	{
-		try
-		{
-			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_unblock_token".
-				" WHERE LOWER(username) = LOWER(".$this->db->quote($username).")".
-				" AND crdate >= ".$this->db->quote(date("Y-m-d H:i:s",
-					time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
-			return ((int) $this->db->loadResult()) > 0;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return true;
-		}
+		return $this->unblockTokens()->hasCurrentFor($username);
 	}
 
 	public function unblockTokenExists($token)
 	{
-		try
-		{
-			$sql = "SELECT token FROM #__bfstop_unblock_token WHERE token=".
-				$this->db->quote(self::hashToken($token));
-			$this->db->setQuery($sql);
-			$result = $this->db->loadResult();
-			return $result != null;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
+		return $this->unblockTokens()->exists($token);
 	}
 
-	private function getUserEmailWhere($where)
-	{
-		try
-		{
-			$sql = "select email from #__users where $where LIMIT 1";
-			$this->db->setQuery($sql);
-			return $this->db->loadResult();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return '';
-		}
-	}
+	// ----- accounts
 
 	/**
 	 * Whether $login is the username or the email address of an existing
@@ -613,154 +407,25 @@ class DatabaseHelper
 	 */
 	public function accountExists($login)
 	{
-		try
-		{
-			// LOWER: Joomla treats usernames case-insensitively on login
-			// (MySQL's default collations do, PostgreSQL's don't)
-			$quoted = "LOWER(".$this->db->quote($login).")";
-			$this->db->setQuery("SELECT COUNT(*) FROM #__users WHERE LOWER(username) = ".$quoted.
-				" OR LOWER(email) = ".$quoted);
-			return ((int) $this->db->loadResult()) > 0;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
-	}
-
-	/**
-	 * Whether the failed logins which count towards blocking $ipaddress (those
-	 * within $interval minutes before $logtime that haven't been handled yet)
-	 * include attempts against an existing account other than $username.
-	 * Attempts against usernames which don't exist don't count: they can't
-	 * get an attacker anywhere. If that can't be determined, it is assumed
-	 * that there are.
-	 */
-	public function hasFailedLoginsForOtherAccounts($interval, $ipaddress, $username, $logtime)
-	{
-		try
-		{
-			$this->db->setQuery("SELECT DISTINCT username FROM #__bfstop_failedlogin".
-				" WHERE ipaddress = ".$this->db->quote($ipaddress).
-				" AND handled = 0 AND logtime BETWEEN ".
-				$this->db->quote(self::minutesBefore($logtime, $interval)).
-				" AND ".$this->db->quote($logtime));
-			foreach ($this->db->loadColumn() as $attempted)
-			{
-				if (mb_strtolower($attempted) !== mb_strtolower($username) &&
-					$this->accountExists($attempted))
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return true;
-		}
+		return $this->users()->accountExists($login);
 	}
 
 	public function getUserEmailByID($uid)
 	{
-		return $this->getUserEmailWhere("id=".((int)$uid));
+		return $this->users()->emailById($uid);
 	}
 
 	public function getUserEmailByName($username)
 	{
-		return $this->getUserEmailWhere("username=".$this->db->quote($username));
+		return $this->users()->emailByUsername($username);
 	}
 
 	public function getUserGroupEmail($gid)
 	{
-		try
-		{
-			$sql = "SELECT email from #__users u ".
-				"LEFT JOIN #__user_usergroup_map g ".
-				"ON u.id = g.user_id ".
-				"WHERE g.group_id = ".((int)($gid));
-			$this->db->setQuery($sql);
-			$dbrows = $this->db->loadAssocList();
-			$emailAddresses = array();
-			foreach ($dbrows as $row)
-			{
-				$emailAddresses[] = $row['email'];
-			}
-			return $emailAddresses;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return array();
-		}
+		return $this->users()->emailsOfGroup($gid);
 	}
 
-	public function insertFailedLogin($logEntry)
-	{
-		try
-		{
-			$this->db->insertObject('#__bfstop_failedlogin', $logEntry, 'id');
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
-		$this->recordUsernameAttempt($logEntry->username, $logEntry->logtime);
-	}
-
-	/**
-	 * Count a failed login for the given username in the per-username
-	 * statistics (issue #136). Unlike the failed login entries themselves,
-	 * these statistics are not removed by the automatic purge.
-	 */
-	private function recordUsernameAttempt($username, $logtime)
-	{
-		try
-		{
-			$time = $this->db->quote($logtime);
-			$sql = 'INSERT INTO #__bfstop_username_stats'.
-				' (username, attempts, first_attempt, last_attempt) VALUES ('.
-				$this->db->quote($username).', 1, '.$time.', '.$time.')';
-			// upsert: ON DUPLICATE KEY UPDATE is MySQL-only (issue #206)
-			if ($this->db->getServerType() === 'postgresql')
-			{
-				$sql .= ' ON CONFLICT (username) DO UPDATE SET'.
-					' attempts=#__bfstop_username_stats.attempts+1, last_attempt='.$time;
-			}
-			else
-			{
-				$sql .= ' ON DUPLICATE KEY UPDATE attempts=attempts+1, last_attempt='.$time;
-			}
-			$this->db->setQuery($sql);
-			$this->db->execute();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
-	}
-
-	public function setFailedLoginHandled($info, $restrictOnUsername)
-	{
-		try
-		{
-			$sql = 'UPDATE #__bfstop_failedlogin SET handled=1'.
-				' WHERE ipaddress='.$this->db->quote($info->ipaddress).
-				' AND handled=0';
-			if ($restrictOnUsername)
-			{
-				$sql .= ' AND username='.$this->db->quote($info->username);
-			}
-			$this->db->setQuery($sql);
-			$this->db->execute();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
-	}
+	// ----- logins
 
 	/**
 	 * @param object      $info           ipaddress (the client's address) and username
@@ -777,72 +442,20 @@ class DatabaseHelper
 	public function successfulLogin($info, $trackedAddress = null, $trustedAddress = null)
 	{
 		$key = $trackedAddress ?? $info->ipaddress;
-		$handled = new \stdClass();
-		$handled->ipaddress = $key;
-		$handled->username = $info->username;
-		$this->setFailedLoginHandled($handled, true);
-		$this->recordKnownIpUsername($trustedAddress ?? $key, $info->username);
+		$this->failedLogins()->markHandled($key, $info->username);
+		$this->knownIps()->remember($trustedAddress ?? $key, $info->username);
 	}
 
 	/**
-	 * Whether $username has logged in successfully from $ipaddress before.
-	 *
-	 * Logins are remembered under the key the client is tracked by (see
-	 * IpHelper::trackedAddress()): an IPv4 address itself, an IPv6 address by
-	 * its network, as IPv6 clients commonly switch addresses within it. So
-	 * is a login from any address of the network a login from this one.
-	 * That network is never coarser than a /64 (see
-	 * IpHelper::TrustPrefixLength): entries remembered for a larger one, as
-	 * earlier versions did, no longer count.
+	 * Whether $username has logged in successfully from $ipaddress before,
+	 * see KnownIpRepository::hasLoggedInFrom().
 	 */
 	public function hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength)
 	{
-		try
-		{
-			$ipv6PrefixLength = IpHelper::trustPrefixLength($ipv6PrefixLength);
-			$key = IpHelper::trackedAddress($ipaddress, $ipv6PrefixLength);
-			$user = "LOWER(".$this->db->quote($username).")";
-			$this->db->setQuery("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ".
-				"ipaddress IN (".$this->db->quote($key).", ".$this->db->quote($ipaddress).")".
-				" AND LOWER(username) = ".$user);
-			if (((int) $this->db->loadResult()) > 0)
-			{
-				return true;
-			}
-			if (strpos($ipaddress, ':') === false)
-			{
-				return false;
-			}
-			// IPv6: look for entries under another spelling of the address,
-			// or recorded at another granularity (the setting was changed)
-			$this->db->setQuery("SELECT ipaddress FROM #__bfstop_knownip WHERE LOWER(username) = ".$user);
-			$ipBin = @inet_pton($ipaddress);
-			foreach ($this->db->loadColumn() as $known)
-			{
-				if (strpos($known, '/') !== false)
-				{
-					$match = (int) substr($known, strpos($known, '/') + 1) >= IpHelper::TrustPrefixLength &&
-						IpHelper::isInSubnet($ipaddress, $known);
-				}
-				else
-				{
-					$knownBin = @inet_pton($known);
-					$match = $knownBin !== false &&
-						($knownBin === $ipBin || IpHelper::trackedAddress($known, $ipv6PrefixLength) === $key);
-				}
-				if ($match)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
+		return $this->knownIps()->hasLoggedInFrom($ipaddress, $username, $ipv6PrefixLength);
 	}
+
+	// ----- reverse DNS cache
 
 	/**
 	 * Returns false if there is no (unexpired) cached entry for this IP - the
@@ -853,131 +466,27 @@ class DatabaseHelper
 	 */
 	public function getCachedHostname($ipaddress)
 	{
-		try
-		{
-			$sql = "SELECT hostname, checked_at FROM #__bfstop_dnscache WHERE ".
-				"ipaddress = ".$this->db->quote($ipaddress);
-			$this->db->setQuery($sql);
-			$row = $this->db->loadAssoc();
-			if ($row === null)
-			{
-				return false;
-			}
-			$checkedAt = strtotime($row['checked_at']);
-			if ($checkedAt === false ||
-				(time() - $checkedAt) > (self::$DNS_CACHE_TTL_DAYS * 86400))
-			{
-				return false;
-			}
-			return $row['hostname'];
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return false;
-		}
+		return $this->dnsCache()->get($ipaddress, self::$DNS_CACHE_TTL_DAYS);
 	}
 
 	public function cacheHostname($ipaddress, $hostname)
 	{
-		try
-		{
-			$now = date("Y-m-d H:i:s");
-			$sql = "SELECT ipaddress FROM #__bfstop_dnscache WHERE ".
-				"ipaddress = ".$this->db->quote($ipaddress);
-			$this->db->setQuery($sql);
-			$exists = $this->db->loadResult();
-			$hostnameSql = ($hostname === null) ? 'NULL' : $this->db->quote($hostname);
-			if ($exists)
-			{
-				$query = $this->db->createQuery();
-				$query->update('#__bfstop_dnscache')
-					->set('hostname = '.$hostnameSql)
-					->set('checked_at = '.$this->db->quote($now))
-					->where('ipaddress = '.$this->db->quote($ipaddress));
-				$this->db->setQuery($query);
-				$this->db->execute();
-			}
-			else
-			{
-				$entry = new \stdClass();
-				$entry->ipaddress = $ipaddress;
-				$entry->hostname = $hostname;
-				$entry->checked_at = $now;
-				$this->db->insertObject('#__bfstop_dnscache', $entry);
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->dnsCache()->put($ipaddress, $hostname);
 	}
 
-	private function recordKnownIpUsername($ipaddress, $username)
-	{
-		try
-		{
-			$now = date("Y-m-d H:i:s");
-			$sql = "SELECT id FROM #__bfstop_knownip WHERE ".
-				"ipaddress = ".$this->db->quote($ipaddress).
-				" AND LOWER(username) = LOWER(".$this->db->quote($username).")";
-			$this->db->setQuery($sql);
-			$id = $this->db->loadResult();
-			if ($id)
-			{
-				$query = $this->db->createQuery();
-				$query->update('#__bfstop_knownip')
-					->set('last_success = '.$this->db->quote($now))
-					->where('id = '.((int) $id));
-				$this->db->setQuery($query);
-				$this->db->execute();
-			}
-			else
-			{
-				$entry = new \stdClass();
-				$entry->ipaddress = $ipaddress;
-				$entry->username = $username;
-				$entry->first_success = $now;
-				$entry->last_success = $now;
-				$this->db->insertObject('#__bfstop_knownip', $entry, 'id');
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
-	}
+	// ----- maintenance
 
 	public function purgeOldEntries($purgeAgeWeeks)
 	{
-		try
-		{
-			$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", Log::INFO);
-			// all timestamps are written with PHP's date(), so compare against
-			// the same clock instead of the database's NOW(), which may use a
-			// different time zone
-			$now = date("Y-m-d H:i:s");
-			$deleteDate = $this->db->quote(self::minutesBefore($now,
-				((int) $purgeAgeWeeks) * 7 * 24 * 60));
-			$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE logtime < '.$deleteDate);
-			$this->db->execute();
-
-			$this->db->setQuery('DELETE FROM #__bfstop_bannedip WHERE duration != 0 AND '.
-				$this->addMinutesSql('crdate', 'duration').' < '.$deleteDate);
-			$this->db->execute();
-
-			$this->db->setQuery('DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
-				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)');
-			$this->db->execute();
-
-			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.$deleteDate);
-			$this->db->execute();
-			// the reverse-DNS cache has an age of its own, see pruneDnsCache()
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->logger->log("Purging entries older than $purgeAgeWeeks weeks", Log::INFO);
+		// all timestamps are written with PHP's date(), so compare against
+		// the same clock instead of the database's NOW(), which may use a
+		// different time zone
+		$deleteDate = date('Y-m-d H:i:s', time() - ((int) $purgeAgeWeeks) * 7 * 24 * 60 * 60);
+		$this->failedLogins()->purgeBefore($deleteDate);
+		$this->blocks()->purgeEndedBefore($deleteDate);
+		$this->unblockTokens()->purgeBefore($deleteDate);
+		// the reverse-DNS cache has an age of its own, see pruneDnsCache()
 	}
 
 	/**
@@ -989,141 +498,41 @@ class DatabaseHelper
 	}
 
 	/**
-	 * Stores one value in the plugin's settings (bookkeeping of the plugin,
-	 * not set on the settings page).
-	 *
-	 * Only this one value is changed in the plugin's stored settings, which
-	 * are read from the database right now: writing back the settings the
-	 * request was started with would undo whatever an administrator saved in
-	 * the meantime.
-	 */
-	/**
 	 * A setting as it is stored now - the plugin's $params are what was stored
 	 * when the request began.
 	 */
 	public function getPluginSetting($name, $default = null)
 	{
-		try
-		{
-			$query = $this->db->createQuery()
-				->select($this->db->quoteName('params'))
-				->from($this->db->quoteName('#__extensions'))
-				->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
-				->where($this->db->quoteName('folder').' = '.$this->db->quote('system'))
-				->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
-			$this->db->setQuery($query);
-			$params = json_decode((string) $this->db->loadResult(), true);
-			return (is_array($params) && array_key_exists($name, $params)) ? $params[$name] : $default;
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-			return $default;
-		}
-	}
-
-	public function savePluginSetting($name, $value)
-	{
-		try
-		{
-			$where = function ($query)
-			{
-				$query->where($this->db->quoteName('type').' = '.$this->db->quote('plugin'))
-					->where($this->db->quoteName('folder').' = '.$this->db->quote('system'))
-					->where($this->db->quoteName('element').' = '.$this->db->quote('bfstop'));
-				return $query;
-			};
-			$query = $where($this->db->createQuery()
-				->select($this->db->quoteName('params'))
-				->from($this->db->quoteName('#__extensions')));
-			$this->db->setQuery($query);
-			$params = json_decode((string) $this->db->loadResult(), true);
-			if (!is_array($params))
-			{
-				$params = array();
-			}
-			$params[$name] = $value;
-			// no table alias here: PostgreSQL doesn't allow qualified column
-			// names in the SET clause (issue #206)
-			$query = $where($this->db->createQuery()
-				->update($this->db->quoteName('#__extensions'))
-				->set($this->db->quoteName('params').' = '.$this->db->quote(json_encode($params))));
-			$this->db->setQuery($query);
-			$this->db->execute();
-			// the plugin list (with the settings) is cached
-			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
-				->createCacheController('callback', array('defaultgroup' => 'com_plugins'))
-				->clean();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		return $this->pluginSettings()->get($name, $default);
 	}
 
 	/**
-	 * Deletes the unblock tokens which can't be used any more. A used token is
-	 * deleted when it is used, and the unblock page deletes the expired ones
-	 * when somebody visits it - but nobody may, and the purge by age only runs
-	 * if a purge age is configured.
+	 * Stores one value in the plugin's settings (bookkeeping of the plugin,
+	 * not set on the settings page), see PluginSettingsRepository::set().
+	 */
+	public function savePluginSetting($name, $value)
+	{
+		$this->pluginSettings()->set($name, $value);
+	}
+
+	/**
+	 * Deletes the unblock tokens which can't be used any more.
 	 */
 	public function purgeExpiredUnblockTokens()
 	{
-		try
-		{
-			$this->db->setQuery('DELETE FROM #__bfstop_unblock_token WHERE crdate < '.
-				$this->db->quote(date("Y-m-d H:i:s", time() - self::$UNBLOCK_TOKEN_VALID_DAYS * 86400)));
-			$this->db->execute();
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->unblockTokens()->purgeExpired();
 	}
 
 	/**
-	 * Deletes the cached reverse-DNS results which have expired - nothing
-	 * reads them any more (see getCachedHostname()) - and, oldest first, as
-	 * many more as needed to keep at most $maxRows. Run by the daily
+	 * Deletes the cached reverse-DNS results which have expired and, oldest
+	 * first, as many more as needed to keep at most $maxRows. Run by the daily
 	 * maintenance whatever the purge age is set to: with the reverse-DNS risk
 	 * signal on, a visitor adds a row for every address they fail a login
 	 * from.
 	 */
 	public function pruneDnsCache($maxRows = null)
 	{
-		$maxRows = $maxRows ?? self::$DNS_CACHE_MAX_ROWS;
-		try
-		{
-			$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE checked_at < '.
-				$this->db->quote(self::minutesBefore(date("Y-m-d H:i:s"), self::$DNS_CACHE_TTL_DAYS * 24 * 60)));
-			$this->db->execute();
-			for ($round = 0; $round < 1000; ++$round)
-			{
-				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_dnscache');
-				$excess = ((int) $this->db->loadResult()) - $maxRows;
-				if ($excess <= 0)
-				{
-					return;
-				}
-				$query = $this->db->createQuery()
-					->select($this->db->quoteName('ipaddress'))
-					->from($this->db->quoteName('#__bfstop_dnscache'))
-					->order($this->db->quoteName('checked_at').' ASC');
-				$this->db->setQuery($query, 0, min($excess, 1000));
-				$addresses = $this->db->loadColumn();
-				if (count($addresses) === 0)
-				{
-					return;
-				}
-				$this->db->setQuery('DELETE FROM #__bfstop_dnscache WHERE ipaddress IN ('.
-					implode(',', array_map(array($this->db, 'quote'), $addresses)).')');
-				$this->db->execute();
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->dnsCache()->prune(self::$DNS_CACHE_TTL_DAYS, $maxRows ?? self::$DNS_CACHE_MAX_ROWS);
 	}
 
 	/**
@@ -1132,40 +541,7 @@ class DatabaseHelper
 	 */
 	public function pruneKnownIps($maxAgeDays = null, $maxRows = null)
 	{
-		$maxAgeDays = $maxAgeDays ?? self::$KNOWN_IP_MAX_AGE_DAYS;
-		$maxRows = $maxRows ?? self::$KNOWN_IP_MAX_ROWS;
-		try
-		{
-			$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE last_success < '.
-				$this->db->quote(date("Y-m-d H:i:s", time() - $maxAgeDays * 86400)));
-			$this->db->execute();
-			for ($round = 0; $round < 1000; ++$round)
-			{
-				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_knownip');
-				$excess = ((int) $this->db->loadResult()) - $maxRows;
-				if ($excess <= 0)
-				{
-					return;
-				}
-				$query = $this->db->createQuery()
-					->select($this->db->quoteName('id'))
-					->from($this->db->quoteName('#__bfstop_knownip'))
-					->order($this->db->quoteName('last_success').' ASC');
-				$this->db->setQuery($query, 0, min($excess, 1000));
-				$ids = $this->db->loadColumn();
-				if (count($ids) === 0)
-				{
-					return;
-				}
-				$this->db->setQuery('DELETE FROM #__bfstop_knownip WHERE id IN ('.
-					implode(',', array_map('intval', $ids)).')');
-				$this->db->execute();
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->knownIps()->prune($maxAgeDays ?? self::$KNOWN_IP_MAX_AGE_DAYS, $maxRows ?? self::$KNOWN_IP_MAX_ROWS);
 	}
 
 	/**
@@ -1173,36 +549,7 @@ class DatabaseHelper
 	 */
 	public function trimFailedLogins($maxRows = null)
 	{
-		$maxRows = $maxRows ?? self::$FAILED_LOGIN_MAX_ROWS;
-		try
-		{
-			for ($round = 0; $round < 1000; ++$round)
-			{
-				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_failedlogin');
-				$excess = ((int) $this->db->loadResult()) - $maxRows;
-				if ($excess <= 0)
-				{
-					return;
-				}
-				$query = $this->db->createQuery()
-					->select($this->db->quoteName('id'))
-					->from($this->db->quoteName('#__bfstop_failedlogin'))
-					->order($this->db->quoteName('id').' ASC');
-				$this->db->setQuery($query, 0, min($excess, 5000));
-				$ids = $this->db->loadColumn();
-				if (count($ids) === 0)
-				{
-					return;
-				}
-				$this->db->setQuery('DELETE FROM #__bfstop_failedlogin WHERE id IN ('.
-					implode(',', array_map('intval', $ids)).')');
-				$this->db->execute();
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->failedLogins()->trim($maxRows ?? self::$FAILED_LOGIN_MAX_ROWS);
 	}
 
 	/**
@@ -1211,35 +558,6 @@ class DatabaseHelper
 	 */
 	public function trimUsernameStats($maxRows = null)
 	{
-		$maxRows = $maxRows ?? self::$USERNAME_STATS_MAX_ROWS;
-		try
-		{
-			for ($round = 0; $round < 1000; ++$round)
-			{
-				$this->db->setQuery('SELECT COUNT(*) FROM #__bfstop_username_stats');
-				$excess = ((int) $this->db->loadResult()) - $maxRows;
-				if ($excess <= 0)
-				{
-					return;
-				}
-				$query = $this->db->createQuery()
-					->select($this->db->quoteName('username'))
-					->from($this->db->quoteName('#__bfstop_username_stats'))
-					->order($this->db->quoteName('attempts').' ASC, '.$this->db->quoteName('last_attempt').' ASC');
-				$this->db->setQuery($query, 0, min($excess, 1000));
-				$usernames = $this->db->loadColumn();
-				if (count($usernames) === 0)
-				{
-					return;
-				}
-				$this->db->setQuery('DELETE FROM #__bfstop_username_stats WHERE username IN ('.
-					implode(',', array_map(array($this->db, 'quote'), $usernames)).')');
-				$this->db->execute();
-			}
-		}
-		catch (\Exception $e)
-		{
-			$this->logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
-		}
+		$this->usernameStats()->trim($maxRows ?? self::$USERNAME_STATS_MAX_ROWS);
 	}
 }

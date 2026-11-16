@@ -103,9 +103,12 @@ class NotifierHelper
 			: Text::_('PLG_SYSTEM_BFSTOP_SITE_ADDRESS_NOT_SET');
 	}
 
-	public function isNotificationAllowed($logtime, $maxNumber,
-		$table = '#__bfstop_failedlogin',
-		$timecol = 'logtime')
+	/**
+	 * Whether another notification may be sent: at most $maxNumber of failed
+	 * logins (or, with $blocks, of blocks) in the last day, -1 for any number,
+	 * 0 for none.
+	 */
+	public function isNotificationAllowed($logtime, $maxNumber, $blocks = false)
 	{
 		// -1 stands for an unlimited number of notifications
 		if ($maxNumber == -1)
@@ -117,9 +120,10 @@ class NotifierHelper
 		{
 			return false;
 		}
-		return $this->db->eventsInInterval(
-			self::$ONE_DAY, $logtime, '', $table, $timecol)
-			<= $maxNumber;
+		$events = $blocks
+			? $this->db->countBlocksInWindow($logtime, self::$ONE_DAY)
+			: $this->db->countFailedLoginsInWindow($logtime, self::$ONE_DAY);
+		return $events <= $maxNumber;
 	}
 
 	public function getBlockedBody($logEntry, $interval)
@@ -198,9 +202,7 @@ class NotifierHelper
 
 	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed(
-			$logEntry->logtime, $maxNumber,
-			'#__bfstop_bannedip', 'crdate'))
+		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
 		{
 			return;
 		}
