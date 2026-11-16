@@ -46,6 +46,18 @@ class RepositoryRulesTest extends TestCase
 	}
 
 	#[DataProvider('repositoryFiles')]
+	public function testQueriesAreRunByTheBaseClassOnly($file)
+	{
+		if (basename($file) === 'Repository.php')
+		{
+			$this->assertStringContainsString('->db->setQuery(', file_get_contents($file), 'the base class runs them');
+			return;
+		}
+		$this->assertDoesNotMatchRegularExpression('/->db->(setQuery|execute|load[A-Za-z]+)\(/', file_get_contents($file),
+			'run the query with execute(), scalar(), count(), column(), row() or objects() of Repository');
+	}
+
+	#[DataProvider('repositoryFiles')]
 	public function testFailuresAreHandledByThePolicy($file)
 	{
 		$code = file_get_contents($file);

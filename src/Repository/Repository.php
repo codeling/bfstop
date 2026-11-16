@@ -21,8 +21,13 @@ use Joomla\Database\QueryInterface;
  * The rules, so that none of them has to be checked in the code using one:
  * - the callers pass values (an address, a username, a time and a number of
  *   minutes), never SQL, and no table or column names;
- * - every value goes into a query as a bound parameter (bind(), whereIn()),
- *   none is concatenated into it;
+ * - every value goes into a query as a bound parameter (the $values array
+ *   given to execute(), scalar() and the like, or whereIn()), none is
+ *   concatenated into it;
+ * - a query is run by this class only (prepare() and the methods which
+ *   fetch): no repository calls setQuery(), execute() or load*() of the
+ *   database itself, so there is one place to count, log or time the
+ *   queries of a request;
  * - what happens if the database fails is decided in the method, with
  *   failOpen(), failClosed() or unknown() - see FailurePolicy.
  */
@@ -66,6 +71,90 @@ abstract class Repository
 		}
 		unset($value);
 		return $query;
+	}
+
+	/**
+	 * Makes $query - with $values (name => value) bound as its parameters -
+	 * the database's query. Every query of a repository goes through here or
+	 * through one of the methods which run it (execute(), scalar(), ...):
+	 * what counts, logs or times the queries of a request hooks in here.
+	 */
+	protected function prepare(QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
+	{
+		self::bindValues($query, $values);
+		$this->db->setQuery($query, $offset, $limit);
+	}
+
+	protected function execute(QueryInterface $query, array $values = array())
+	{
+		$this->prepare($query, $values);
+		$this->db->execute();
+	}
+
+	protected function scalar(QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
+	{
+		$this->prepare($query, $values, $offset, $limit);
+		return $this->db->loadResult();
+	}
+
+	protected function count(QueryInterface $query, array $values = array()): int
+	{
+		return (int) $this->scalar($query, $values);
+	}
+
+	protected function column(QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
+	{
+		$this->prepare($query, $values, $offset, $limit);
+		return $this->db->loadColumn();
+	}
+
+	protected function row(QueryInterface $query, array $values = array())
+	{
+		$this->prepare($query, $values);
+		return $this->db->loadAssoc();
+	}
+
+	protected function objects(QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
+	{
+		$this->prepare($query, $values, $offset, $limit);
+		return $this->db->loadObjectList();
+	}
+
+	/** Deletes the rows of $table whose $column is before $date. */
+	protected function deleteBefore($table, $column, $date)
+	{
+		$this->execute($this->db->createQuery()
+			->delete($this->db->quoteName($table))
+			->where($this->db->quoteName($column).' < :date'), array('date' => (string) $date));
+	}
+
+	/**
+	 * The query counting the rows of $table whose $column is in the $minutes
+	 * up to $time; $values gets its parameters. Whoever wants other columns
+	 * clears the select.
+	 */
+	protected function windowQuery($table, $column, $time, $minutes, array &$values)
+	{
+		if ($minutes <= 0)
+		{
+			$this->logger->log("Invalid interval $minutes", \Joomla\CMS\Log\Log::WARNING);
+		}
+		$values = array('from' => self::minutesBefore($time, $minutes), 'to' => (string) $time);
+		return $this->db->createQuery()
+			->select('COUNT(*)')
+			->from($this->db->quoteName($table))
+			->where($this->db->quoteName($column).' BETWEEN :from AND :to');
+	}
+
+	/** SQL for "$column equals :$parameter, whatever the case" (names, never values). */
+	protected function equalsIgnoringCase($column, $parameter): string
+	{
+		return 'LOWER('.$this->db->quoteName($column).') = LOWER(:'.$parameter.')';
+	}
+
+	protected static function daysAgo($days): string
+	{
+		return date('Y-m-d H:i:s', time() - $days * 86400);
 	}
 
 	protected static function now(): string
@@ -114,27 +203,24 @@ abstract class Repository
 	{
 		for ($round = 0; $round < 1000; ++$round)
 		{
-			$this->db->setQuery($this->db->createQuery()
+			$excess = $this->count($this->db->createQuery()
 				->select('COUNT(*)')
-				->from($this->db->quoteName($table)));
-			$excess = ((int) $this->db->loadResult()) - (int) $maxRows;
+				->from($this->db->quoteName($table))) - (int) $maxRows;
 			if ($excess <= 0)
 			{
 				return;
 			}
-			$this->db->setQuery($this->db->createQuery()
+			$keys = $this->column($this->db->createQuery()
 				->select($this->db->quoteName($keyColumn))
 				->from($this->db->quoteName($table))
-				->order($orderBy), 0, min($excess, $batch));
-			$keys = $this->db->loadColumn();
+				->order($orderBy), array(), 0, min($excess, $batch));
 			if (count($keys) === 0)
 			{
 				return;
 			}
-			$this->db->setQuery($this->db->createQuery()
+			$this->execute($this->db->createQuery()
 				->delete($this->db->quoteName($table))
 				->whereIn($this->db->quoteName($keyColumn), $keys, $keyType));
-			$this->db->execute();
 		}
 	}
 }

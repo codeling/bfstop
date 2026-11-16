@@ -34,7 +34,7 @@ class UnblockTokenRepository extends Repository
 
 	private static function validSince(): string
 	{
-		return date('Y-m-d H:i:s', time() - self::ValidDays * 86400);
+		return self::daysAgo(self::ValidDays);
 	}
 
 	/**
@@ -85,9 +85,7 @@ class UnblockTokenRepository extends Repository
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('token').' = :token');
 			$values = array('token' => self::hash($token));
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$row = $this->db->loadAssoc();
+			$row = $this->row($query, $values);
 			if ($row === null || !in_array((int) $row['block_id'], $blockIds, true))
 			{
 				return false;
@@ -111,12 +109,10 @@ class UnblockTokenRepository extends Repository
 			$query = $this->db->createQuery()
 				->select('COUNT(*)')
 				->from($this->db->quoteName(self::Table))
-				->where('LOWER('.$this->db->quoteName('username').') = LOWER(:username)')
+				->where($this->equalsIgnoringCase('username', 'username'))
 				->where($this->db->quoteName('crdate').' >= :since');
 			$values = array('username' => (string) $username, 'since' => self::validSince());
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return ((int) $this->db->loadResult()) > 0;
+			return $this->count($query, $values) > 0;
 		}, true);
 	}
 
@@ -134,9 +130,7 @@ class UnblockTokenRepository extends Repository
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('token').' = :token');
 			$values = array('token' => self::hash($token));
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return $this->db->loadResult() != null;
+			return $this->scalar($query, $values) != null;
 		}, false);
 	}
 
@@ -158,13 +152,7 @@ class UnblockTokenRepository extends Repository
 	{
 		$this->failOpen('purgeBefore', function () use ($date)
 		{
-			$query = $this->db->createQuery()
-				->delete($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('crdate').' < :date');
-			$values = array('date' => (string) $date);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->deleteBefore(self::Table, 'crdate', $date);
 		}, null);
 	}
 }

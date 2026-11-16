@@ -49,10 +49,9 @@ class AllowListRepository extends AddressTableRepository
 	{
 		return $this->unknown('entriesOverlapping', function () use ($entry)
 		{
-			$this->db->setQuery($this->db->createQuery()
+			return IpHelper::overlapping($entry, $this->column($this->db->createQuery()
 				->select($this->db->quoteName('ipaddress'))
-				->from($this->db->quoteName(self::Table)));
-			return IpHelper::overlapping($entry, $this->db->loadColumn());
+				->from($this->db->quoteName(self::Table))));
 		});
 	}
 }

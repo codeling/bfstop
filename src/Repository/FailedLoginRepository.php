@@ -41,29 +41,6 @@ class FailedLoginRepository extends Repository
 	}
 
 	/**
-	 * The query counting the failed logins in the $minutes up to $time.
-	 */
-	private function countQuery($time, $minutes, array &$values)
-	{
-		if ($minutes <= 0)
-		{
-			$this->logger->log("Invalid interval $minutes", \Joomla\CMS\Log\Log::WARNING);
-		}
-		$values = array('from' => self::minutesBefore($time, $minutes), 'to' => (string) $time);
-		return $this->db->createQuery()
-			->select('COUNT(*)')
-			->from($this->db->quoteName(self::Table))
-			->where($this->db->quoteName('logtime').' BETWEEN :from AND :to');
-	}
-
-	private function count($query, array &$values)
-	{
-		self::bindValues($query, $values);
-		$this->db->setQuery($query);
-		return (int) $this->db->loadResult();
-	}
-
-	/**
 	 * The failed logins from $ipaddress in the $minutes up to $time which
 	 * haven't been handled. Fail-open: 0.
 	 */
@@ -72,7 +49,7 @@ class FailedLoginRepository extends Repository
 		return $this->failOpen('countUnhandledFromAddress', function () use ($minutes, $ipaddress, $time)
 		{
 			$values = array();
-			$query = $this->countQuery($time, $minutes, $values)
+			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values)
 				->where($this->db->quoteName('ipaddress').' = :ip')
 				->where($this->db->quoteName('handled').' = 0');
 			$values['ip'] = (string) $ipaddress;
@@ -92,7 +69,7 @@ class FailedLoginRepository extends Repository
 		return $this->failOpen('countUnhandledForUsername', function () use ($minutes, $username, $time)
 		{
 			$values = array();
-			$query = $this->countQuery($time, $minutes, $values)
+			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values)
 				->where($this->db->quoteName('username').' = :username')
 				->where($this->db->quoteName('handled').' = 0');
 			$values['username'] = (string) $username;
@@ -109,7 +86,7 @@ class FailedLoginRepository extends Repository
 		return $this->failOpen('countInWindow', function () use ($time, $minutes)
 		{
 			$values = array();
-			$query = $this->countQuery($time, $minutes, $values);
+			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values);
 			return $this->count($query, $values);
 		}, 0);
 	}
@@ -141,14 +118,12 @@ class FailedLoginRepository extends Repository
 		return $this->failOpen('listFromAddress', function () use ($ipaddress, $time, $minutes)
 		{
 			$values = array();
-			$query = $this->countQuery($time, $minutes, $values)
+			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values)
 				->clear('select')
 				->select('*')
 				->where($this->db->quoteName('ipaddress').' = :ip');
 			$values['ip'] = (string) $ipaddress;
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return $this->db->loadObjectList();
+			return $this->objects($query, $values);
 		}, array());
 	}
 
@@ -164,15 +139,13 @@ class FailedLoginRepository extends Repository
 		return $this->unknown('unhandledUsernamesFromAddress', function () use ($minutes, $ipaddress, $time)
 		{
 			$values = array();
-			$query = $this->countQuery($time, $minutes, $values)
+			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values)
 				->clear('select')
 				->select('DISTINCT '.$this->db->quoteName('username'))
 				->where($this->db->quoteName('ipaddress').' = :ip')
 				->where($this->db->quoteName('handled').' = 0');
 			$values['ip'] = (string) $ipaddress;
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return $this->db->loadColumn();
+			return $this->column($query, $values);
 		});
 	}
 
@@ -196,9 +169,7 @@ class FailedLoginRepository extends Repository
 				$query->where($this->db->quoteName('username').' = :username');
 				$values['username'] = (string) $username;
 			}
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->execute($query, $values);
 		}, null);
 	}
 
@@ -210,13 +181,7 @@ class FailedLoginRepository extends Repository
 	{
 		$this->failOpen('purgeBefore', function () use ($date)
 		{
-			$query = $this->db->createQuery()
-				->delete($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('logtime').' < :date');
-			$values = array('date' => (string) $date);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->deleteBefore(self::Table, 'logtime', $date);
 		}, null);
 	}
 

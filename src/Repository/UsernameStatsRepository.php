@@ -48,9 +48,7 @@ class UsernameStatsRepository extends Repository
 			$query->setQuery($sql);
 			$values = array('username' => (string) $username, 'first' => (string) $logtime,
 				'last' => (string) $logtime, 'last2' => (string) $logtime);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->execute($query, $values);
 		}, null);
 	}
 

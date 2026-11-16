@@ -43,11 +43,9 @@ class KnownIpRepository extends Repository
 				->select($this->db->quoteName('id'))
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('ipaddress').' = :ip')
-				->where('LOWER('.$this->db->quoteName('username').') = LOWER(:username)');
+				->where($this->equalsIgnoringCase('username', 'username'));
 			$values = array('ip' => (string) $key, 'username' => (string) $username);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$id = $this->db->loadResult();
+			$id = $this->scalar($query, $values);
 			if ($id)
 			{
 				$update = $this->db->createQuery()
@@ -55,9 +53,7 @@ class KnownIpRepository extends Repository
 					->set($this->db->quoteName('last_success').' = :now')
 					->where($this->db->quoteName('id').' = :id');
 				$updateValues = array('now' => $now, 'id' => (int) $id);
-				self::bindValues($update, $updateValues);
-				$this->db->setQuery($update);
-				$this->db->execute();
+				$this->execute($update, $updateValues);
 			}
 			else
 			{
@@ -93,11 +89,9 @@ class KnownIpRepository extends Repository
 				->select('COUNT(*)')
 				->from($this->db->quoteName(self::Table))
 				->whereIn($this->db->quoteName('ipaddress'), array($key, (string) $ipaddress), ParameterType::STRING)
-				->where('LOWER('.$this->db->quoteName('username').') = LOWER(:username)');
+				->where($this->equalsIgnoringCase('username', 'username'));
 			$values = array('username' => (string) $username);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			if (((int) $this->db->loadResult()) > 0)
+			if ($this->count($query, $values) > 0)
 			{
 				return true;
 			}
@@ -110,12 +104,11 @@ class KnownIpRepository extends Repository
 			$query = $this->db->createQuery()
 				->select($this->db->quoteName('ipaddress'))
 				->from($this->db->quoteName(self::Table))
-				->where('LOWER('.$this->db->quoteName('username').') = LOWER(:username)');
+				->where($this->equalsIgnoringCase('username', 'username'));
 			$values = array('username' => (string) $username);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
+			$knownAddresses = $this->column($query, $values);
 			$ipBin = @inet_pton($ipaddress);
-			foreach ($this->db->loadColumn() as $known)
+			foreach ($knownAddresses as $known)
 			{
 				if (strpos($known, '/') !== false)
 				{
@@ -148,13 +141,7 @@ class KnownIpRepository extends Repository
 		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('prune', function () use ($maxAgeDays, $maxRows)
 		{
-			$query = $this->db->createQuery()
-				->delete($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('last_success').' < :date');
-			$values = array('date' => date('Y-m-d H:i:s', time() - $maxAgeDays * 86400));
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->deleteBefore(self::Table, 'last_success', self::daysAgo($maxAgeDays));
 			$this->trimOldest(self::Table, 'id', 'last_success ASC', $maxRows, 1000, ParameterType::INTEGER);
 		}, null);
 	}
