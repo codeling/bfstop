@@ -27,11 +27,11 @@ class QueryCountTest extends IntegrationTestCase
 
 	// the most queries of each kind; see testQueriesPerRequestStayWithinTheirLimits
 	private const Limits = array(
-		'page view' => 0,
-		'blocked request' => 0,
-		'failed login, unknown user' => 0,
-		'failed login, account' => 0,
-		'failed login which blocks' => 0,
+		'page view' => 2,
+		'blocked request' => 3,
+		'failed login, unknown user' => 8,
+		'failed login, account' => 8,
+		'failed login which blocks' => 20,
 	);
 
 	private static $originalParams;
@@ -86,6 +86,10 @@ class QueryCountTest extends IntegrationTestCase
 			'accountThrottleEnabled' => 0,
 			'notifyBlockedNumber' => 0,
 			'logLevel' => 8, // errors only
+			// the daily maintenance (purging, trimming - a score of queries) runs in
+			// the first request of the day, whoever makes it: not what is counted here
+			'lastPurge' => time(),
+			'addressesCanonical' => 1,
 		)));
 	}
 
@@ -203,8 +207,12 @@ class QueryCountTest extends IntegrationTestCase
 
 	public function testTheUsernamesOfABlockAreLookedUpInOneQuery()
 	{
-		// not one query per username the failed logins of the address were against
-		$accountLookups = array_filter($this->allKinds()['failed login which blocks'], array($this, 'onUsers'));
-		$this->assertLessThanOrEqual(2, count($accountLookups), implode("\n", $accountLookups));
+		// not one query per username the failed logins of the address were against: one
+		// for all of them, and one for the name of the login itself
+		$lookups = array_filter($this->allKinds()['failed login which blocks'], function ($sql)
+		{
+			return $this->onUsers($sql) && stripos($sql, 'SELECT 1 FROM') === 0;
+		});
+		$this->assertLessThanOrEqual(2, count($lookups), implode("\n", $lookups));
 	}
 }

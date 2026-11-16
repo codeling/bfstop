@@ -161,7 +161,7 @@ class RepositoryTest extends IntegrationTestCase
 		$this->assertNull(FailurePolicy::lastFailure());
 		(new UserRepository($this->brokenDatabase(), $this->logger))->accountExists('bob');
 		$this->assertSame(1, FailurePolicy::failures());
-		$this->assertStringContainsString('UserRepository::accountExists: database is gone', FailurePolicy::lastFailure());
+		$this->assertStringContainsString('UserRepository::anyAccountExists: database is gone', FailurePolicy::lastFailure());
 		$this->assertTrue($this->logger->hasMessage(Log::ERROR, '(fail-open)'));
 		$this->logger->errors = array();
 	}
