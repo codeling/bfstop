@@ -10,15 +10,15 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Log\Log;
 
 class UnblockHelper
 {
 	public static function getHtaccessPath()
 	{
-		return HtaccessHelper::resolvePath(ParamHelper::get('htaccessPath', 'params', ''));
+		return HtaccessHelper::resolvePath(ParamHelper::get('htaccessPath', ''));
 	}
 
 	/**
@@ -33,8 +33,8 @@ class UnblockHelper
 	public static function removeLiftedHtaccessBlocks($logger)
 	{
 		$htaccess = new HtaccessHelper(self::getHtaccessPath(), $logger);
-		$htaccess->removeStaleBlocks(new DatabaseHelper($logger),
-			ParamHelper::get('blockMode', 'params', 'full') === 'htaccess');
+		$htaccess->removeStaleBlocks((new Repositories($logger))->blocks(),
+			ParamHelper::get('blockMode', 'full') === 'htaccess');
 	}
 
 	public static function unblockHtaccess($ips, $logger)

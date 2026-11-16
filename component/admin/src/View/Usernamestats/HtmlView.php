@@ -11,7 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Usernamestats;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\UsernameStatsRepository;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -28,7 +28,7 @@ class HtmlView extends BaseHtmlView
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
 		$this->maxAttempts = $this->getModel()->getMaxAttempts();
-		$this->maxUsernames = DatabaseHelper::$USERNAME_STATS_MAX_ROWS;
+		$this->maxUsernames = UsernameStatsRepository::MaxRows;
 		$this->canPurge   = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
 		{

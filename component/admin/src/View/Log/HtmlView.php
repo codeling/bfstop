@@ -34,8 +34,8 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->getModel()->getState();
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
-		$this->keepDays = (int) ParamHelper::get('logKeepDays', 'params', LoggerHelper::DefaultKeepDays);
-		$this->maxSizeMB = max(1, (int) ParamHelper::get('logMaxSize', 'params', LoggerHelper::DefaultMaxSizeMB));
+		$this->keepDays = (int) ParamHelper::get('logKeepDays', LoggerHelper::DefaultKeepDays);
+		$this->maxSizeMB = max(1, (int) ParamHelper::get('logMaxSize', LoggerHelper::DefaultMaxSizeMB));
 		$this->canDelete = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canDelete)
 		{

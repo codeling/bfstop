@@ -12,8 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -112,13 +112,12 @@ class SettingsController extends FormController
 				Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return;
 		}
-		$emailAddress = ParamHelper::get('emailaddress', 'params', '');
-		$userID = (int) ParamHelper::get('userID', 'params', -1);
-		$userGroup = (int) ParamHelper::get('userGroup', 'params', -1);
-		$groupNotifEnabled = (bool) ParamHelper::get('groupNotificationEnabled', 'params', false);
+		$emailAddress = ParamHelper::get('emailaddress', '');
+		$userID = (int) ParamHelper::get('userID', -1);
+		$userGroup = (int) ParamHelper::get('userGroup', -1);
+		$groupNotifEnabled = (bool) ParamHelper::get('groupNotificationEnabled', false);
 		$logger = LogHelper::getLogger();
-		$db = new DatabaseHelper($logger);
-		$notifier = new NotifierHelper($logger, $db,
+		$notifier = new NotifierHelper($logger, new Repositories($logger),
 			$emailAddress,
 			$userID,
 			$userGroup,
