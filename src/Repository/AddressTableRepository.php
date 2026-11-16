@@ -33,8 +33,9 @@ abstract class AddressTableRepository extends Repository
 	/**
 	 * The ids and addresses of the rows of the table which contain
 	 * $ipaddress, the address itself or a network it is part of, and which
-	 * satisfy $refine (a callable adding conditions to the query, with the
-	 * table aliased "t"). Whatever fails, the exception goes to the caller:
+	 * satisfy $refine (a callable which adds conditions to the query, with
+	 * the table aliased "t", and returns the values (name => value) of the
+	 * parameters it used). Whatever fails, the exception goes to the caller:
 	 * which policy applies is the public method's to decide.
 	 *
 	 * @return object[]
@@ -50,12 +51,7 @@ abstract class AddressTableRepository extends Repository
 			->select($this->db->quoteName(array('t.id', 't.ipaddress')))
 			->from($this->db->quoteName(static::Table, 't'))
 			->whereIn($this->db->quoteName('t.ipaddress'), $candidates, ParameterType::STRING);
-		if ($refine !== null)
-		{
-			$refine($query);
-		}
-		$this->db->setQuery($query);
-		$entries = $this->db->loadObjectList();
+		$entries = $this->objects($query, $refine !== null ? $refine($query) : array());
 		foreach ($entries as $entry)
 		{
 			$this->logger->log(static::MatchLabel." because of entry: ".
@@ -91,9 +87,7 @@ abstract class AddressTableRepository extends Repository
 					->where($this->db->quoteName('id').' > :last')
 					->order($this->db->quoteName('id').' ASC');
 				$values = array('last' => $lastId);
-				self::bindValues($query, $values);
-				$this->db->setQuery($query, 0, 5000);
-				$rows = $this->db->loadObjectList();
+				$rows = $this->objects($query, $values, 0, 5000);
 				foreach ($rows as $row)
 				{
 					$lastId = (int) $row->id;
@@ -105,9 +99,7 @@ abstract class AddressTableRepository extends Repository
 							->set($this->db->quoteName('ipaddress').' = :canonical')
 							->where($this->db->quoteName('id').' = :id');
 						$updateValues = array('canonical' => $canonical, 'id' => (int) $row->id);
-						self::bindValues($update, $updateValues);
-						$this->db->setQuery($update);
-						$this->db->execute();
+						$this->execute($update, $updateValues);
 						++$changed;
 					}
 				}

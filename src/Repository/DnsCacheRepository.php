@@ -50,9 +50,7 @@ class DnsCacheRepository extends Repository
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('ipaddress').' = :ip');
 			$values = array('ip' => (string) $ipaddress);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$row = $this->db->loadAssoc();
+			$row = $this->row($query, $values);
 			if ($row === null)
 			{
 				return false;
@@ -80,9 +78,7 @@ class DnsCacheRepository extends Repository
 				->from($this->db->quoteName(self::Table))
 				->where($this->db->quoteName('ipaddress').' = :ip');
 			$values = array('ip' => (string) $ipaddress);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			if ($this->db->loadResult())
+			if ($this->scalar($query, $values))
 			{
 				$update = $this->db->createQuery()
 					->update($this->db->quoteName(self::Table))
@@ -91,10 +87,8 @@ class DnsCacheRepository extends Repository
 					->where($this->db->quoteName('ipaddress').' = :ip');
 				$hostnameValue = $hostname === null ? null : (string) $hostname;
 				$updateValues = array('now' => $now, 'ip' => (string) $ipaddress);
-				self::bindValues($update, $updateValues);
 				$update->bind(':hostname', $hostnameValue, $hostnameValue === null ? ParameterType::NULL : ParameterType::STRING);
-				$this->db->setQuery($update);
-				$this->db->execute();
+				$this->execute($update, $updateValues);
 			}
 			else
 			{
@@ -118,13 +112,7 @@ class DnsCacheRepository extends Repository
 		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('prune', function () use ($ttlDays, $maxRows)
 		{
-			$query = $this->db->createQuery()
-				->delete($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('checked_at').' < :date');
-			$values = array('date' => self::minutesBefore(self::now(), $ttlDays * 24 * 60));
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->deleteBefore(self::Table, 'checked_at', self::daysAgo($ttlDays));
 			$this->trimOldest(self::Table, 'ipaddress', 'checked_at ASC', $maxRows, 1000, ParameterType::STRING);
 		}, null);
 	}

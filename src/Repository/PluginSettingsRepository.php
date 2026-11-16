@@ -20,14 +20,25 @@ use Joomla\CMS\Factory;
  */
 class PluginSettingsRepository extends Repository
 {
-	private function pluginRow($query)
+	/**
+	 * $query, limited to the plugin's row; $values gets the parameters.
+	 */
+	private function pluginRow($query, array &$values)
 	{
 		$values = array('type' => 'plugin', 'folder' => 'system', 'element' => 'bfstop');
-		$query->where($this->db->quoteName('type').' = :type')
+		return $query->where($this->db->quoteName('type').' = :type')
 			->where($this->db->quoteName('folder').' = :folder')
 			->where($this->db->quoteName('element').' = :element');
-		self::bindValues($query, $values);
-		return $query;
+	}
+
+	/** the stored settings (the JSON of the params column) */
+	private function storedParams()
+	{
+		$values = array();
+		$query = $this->pluginRow($this->db->createQuery()
+			->select($this->db->quoteName('params'))
+			->from($this->db->quoteName('#__extensions')), $values);
+		return json_decode((string) $this->scalar($query, $values), true);
 	}
 
 	/**
@@ -40,10 +51,7 @@ class PluginSettingsRepository extends Repository
 	{
 		return $this->failOpen('get', function () use ($name, $default)
 		{
-			$this->db->setQuery($this->pluginRow($this->db->createQuery()
-				->select($this->db->quoteName('params'))
-				->from($this->db->quoteName('#__extensions'))));
-			$params = json_decode((string) $this->db->loadResult(), true);
+			$params = $this->storedParams();
 			return (is_array($params) && array_key_exists($name, $params)) ? $params[$name] : $default;
 		}, $default);
 	}
@@ -62,10 +70,7 @@ class PluginSettingsRepository extends Repository
 	{
 		$this->failOpen('set', function () use ($name, $value)
 		{
-			$this->db->setQuery($this->pluginRow($this->db->createQuery()
-				->select($this->db->quoteName('params'))
-				->from($this->db->quoteName('#__extensions'))));
-			$params = json_decode((string) $this->db->loadResult(), true);
+			$params = $this->storedParams();
 			if (!is_array($params))
 			{
 				$params = array();
@@ -73,13 +78,12 @@ class PluginSettingsRepository extends Repository
 			$params[$name] = $value;
 			// no table alias here: PostgreSQL doesn't allow qualified column
 			// names in the SET clause (issue #206)
+			$values = array();
 			$query = $this->pluginRow($this->db->createQuery()
 				->update($this->db->quoteName('#__extensions'))
-				->set($this->db->quoteName('params').' = :params'));
-			$json = json_encode($params);
-			$query->bind(':params', $json);
-			$this->db->setQuery($query);
-			$this->db->execute();
+				->set($this->db->quoteName('params').' = :params'), $values);
+			$values['params'] = json_encode($params);
+			$this->execute($query, $values);
 			// the plugin list (with the settings) is cached
 			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
 				->createCacheController('callback', array('defaultgroup' => 'com_plugins'))

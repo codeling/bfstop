@@ -29,9 +29,7 @@ class UserRepository extends Repository
 				->from($this->db->quoteName('#__users'))
 				->where($this->db->quoteName('id').' = :id');
 			$values = array('id' => (int) $id);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query, 0, 1);
-			return $this->db->loadResult();
+			return $this->scalar($query, $values, 0, 1);
 		}, null);
 	}
 
@@ -48,9 +46,7 @@ class UserRepository extends Repository
 				->from($this->db->quoteName('#__users'))
 				->where($this->db->quoteName('username').' = :username');
 			$values = array('username' => (string) $username);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query, 0, 1);
-			return $this->db->loadResult();
+			return $this->scalar($query, $values, 0, 1);
 		}, null);
 	}
 
@@ -71,9 +67,7 @@ class UserRepository extends Repository
 					' ON '.$this->db->quoteName('u.id').' = '.$this->db->quoteName('g.user_id'))
 				->where($this->db->quoteName('g.group_id').' = :group');
 			$values = array('group' => (int) $groupId);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return $this->db->loadColumn();
+			return $this->column($query, $values);
 		}, array());
 	}
 
@@ -96,9 +90,7 @@ class UserRepository extends Repository
 				->where('(LOWER('.$this->db->quoteName('username').') = LOWER(:login1)'.
 					' OR LOWER('.$this->db->quoteName('email').') = LOWER(:login2))');
 			$values = array('login1' => (string) $login, 'login2' => (string) $login);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return ((int) $this->db->loadResult()) > 0;
+			return $this->count($query, $values) > 0;
 		}, false);
 	}
 }

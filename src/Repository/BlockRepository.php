@@ -50,11 +50,10 @@ class BlockRepository extends AddressTableRepository
 		return $this->unknown('activeIdsFor', function () use ($ipaddress)
 		{
 			$now = self::now();
-			$entries = $this->loadMatching($ipaddress, function ($query) use (&$now)
+			$entries = $this->loadMatching($ipaddress, function ($query) use ($now)
 			{
 				$query->where($this->activeCondition('t', 'u'));
-				$values = array('now' => $now);
-				self::bindValues($query, $values);
+				return array('now' => $now);
 			});
 			return array_map(function ($entry)
 			{
@@ -92,9 +91,7 @@ class BlockRepository extends AddressTableRepository
 				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_bannedip c WHERE c.ipaddress = b.ipaddress AND '.
 					$this->activeCondition('c', 'cu').')');
 			$values = array('now' => self::now());
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return $this->db->loadColumn();
+			return $this->column($query, $values);
 		}, array());
 	}
 
@@ -108,10 +105,9 @@ class BlockRepository extends AddressTableRepository
 	{
 		return $this->unknown('allAddresses', function ()
 		{
-			$this->db->setQuery($this->db->createQuery()
+			return $this->column($this->db->createQuery()
 				->select('DISTINCT '.$this->db->quoteName('ipaddress'))
 				->from($this->db->quoteName(self::Table)));
-			return $this->db->loadColumn();
 		});
 	}
 
@@ -137,9 +133,7 @@ class BlockRepository extends AddressTableRepository
 				->set($this->db->quoteName('last_attempt').' = :now')
 				->whereIn($this->db->quoteName('id'), array_map('intval', $blockIds));
 			$values = array('now' => self::now());
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->execute($query, $values);
 		}, null);
 	}
 
@@ -177,18 +171,12 @@ class BlockRepository extends AddressTableRepository
 	{
 		return $this->failOpen('countPrevious', function () use ($ipaddress)
 		{
-			$time = self::now();
-			$query = $this->db->createQuery()
-				->select('COUNT(*)')
-				->from($this->db->quoteName(self::Table, 't'))
-				->where($this->db->quoteName('t.crdate').' BETWEEN :from AND :to')
-				->where($this->db->quoteName('t.ipaddress').' = :ip')
-				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE t.id = u.block_id AND source = 0)');
-			$values = array('from' => self::minutesBefore($time, self::UnlimitedDuration),
-				'to' => $time, 'ip' => (string) $ipaddress);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return (int) $this->db->loadResult();
+			$values = array();
+			$query = $this->windowQuery(self::Table, 'crdate', self::now(), self::UnlimitedDuration, $values)
+				->where($this->db->quoteName('ipaddress').' = :ip')
+				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE '.self::Table.'.id = u.block_id AND source = 0)');
+			$values['ip'] = (string) $ipaddress;
+			return $this->count($query, $values);
 		}, 0);
 	}
 
@@ -202,14 +190,8 @@ class BlockRepository extends AddressTableRepository
 	{
 		return $this->failOpen('countCreatedInWindow', function () use ($time, $minutes)
 		{
-			$query = $this->db->createQuery()
-				->select('COUNT(*)')
-				->from($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('crdate').' BETWEEN :from AND :to');
-			$values = array('from' => self::minutesBefore($time, $minutes), 'to' => (string) $time);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			return (int) $this->db->loadResult();
+			$values = array();
+			return $this->count($this->windowQuery(self::Table, 'crdate', $time, $minutes, $values), $values);
 		}, 0);
 	}
 
@@ -226,13 +208,11 @@ class BlockRepository extends AddressTableRepository
 				->where($this->db->quoteName('duration').' != 0')
 				->where($this->addMinutesSql('crdate', 'duration').' < :date');
 			$values = array('date' => (string) $date);
-			self::bindValues($query, $values);
-			$this->db->setQuery($query);
-			$this->db->execute();
+			$this->execute($query, $values);
 
-			$this->db->setQuery('DELETE FROM #__bfstop_unblock WHERE NOT EXISTS '.
-				'(SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)');
-			$this->db->execute();
+			$this->execute($this->db->createQuery()
+				->delete('#__bfstop_unblock')
+				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)'));
 		}, null);
 	}
 }
