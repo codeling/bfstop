@@ -1253,6 +1253,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$now = time();
 		if ($now > ($lastPurge + $purgeInterval))
 		{
+			// before the purge, which deletes the blocks that ran out long
+			// ago: without them, their entries couldn't be told from those
+			// added by hand
+			$this->tidyHtaccess();
 			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
 			if ($purgeAge > 0)
 			{
@@ -1264,23 +1268,45 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->mydb->pruneKnownIps();
 			$this->mydb->pruneDnsCache();
 			$this->mydb->purgeExpiredUnblockTokens();
-			// whatever the mode is now: a block section of an earlier version
-			// grants access (see HtaccessHelper::LegacyLines). The update
-			// replaces it; this is for one it couldn't write
-			$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
-			if (is_file($htaccess->getFileName()) && !$htaccess->upgradeFormat())
-			{
-				$this->logger->log('Could not replace the block section of an earlier version in '.
-					$htaccess->getFileName().': it lets everybody who isn\'t blocked past the other access '.
-					'controls of the directory - make the file writable or remove the section by hand', Log::ERROR);
-			}
-			if ($this->getStringParam('blockMode', 'full') === 'htaccess')
-			{
-				$this->removeLiftedHtaccessBlocks();
-			}
 			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
 			$this->params->set('lastPurge', $now);
 			$this->mydb->saveLastPurge($now);
+		}
+	}
+
+	/**
+	 * The daily maintenance of the .htaccess file, whatever the blocking mode
+	 * is now:
+	 *
+	 * - a block section of an earlier version grants access (see
+	 *   HtaccessHelper::LegacyLines), and one which doesn't let the unblock
+	 *   page through makes the links of unblock emails lead nowhere: it is
+	 *   written in the current form (the update can't, see updatescript.php);
+	 * - the web server knows nothing of durations and unblocks: with blocking
+	 *   through the file, the addresses whose blocks are over come out of it;
+	 *   with another blocking mode, every address the plugin has blocked -
+	 *   the entries are left from the time the file blocked, and would turn
+	 *   the addresses away for good, see HtaccessHelper::removeStaleBlocks().
+	 */
+	private function tidyHtaccess()
+	{
+		$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
+		if (!is_file($htaccess->getFileName()))
+		{
+			return;
+		}
+		if (!$htaccess->upgradeFormat())
+		{
+			$this->logger->log('Could not write the block section of '.$htaccess->getFileName().' in its current form '.
+				'- make the file writable: one of an earlier version lets everybody who isn\'t blocked past the other '.
+				'access controls of the directory, and without the current form, the links of unblock emails can\'t be '.
+				'followed', Log::ERROR);
+		}
+		$throughFile = $this->getStringParam('blockMode', 'full') === 'htaccess';
+		if ($htaccess->removeStaleBlocks($this->mydb, $throughFile) === false)
+		{
+			$this->logger->log('Could not take the addresses the plugin blocked out of '.$htaccess->getFileName().
+				': the web server goes on refusing them - make the file writable', Log::ERROR);
 		}
 	}
 

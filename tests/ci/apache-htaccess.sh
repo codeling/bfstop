@@ -15,6 +15,9 @@
 #   denied/    - closed by the server configuration
 #   open/      - nothing else
 # and each is requested from 127.0.0.1, with that address blocked and not.
+# The section lets the link of an unblock email through to the site's
+# index.php - and nothing else: it is written into the document root too, as
+# for a site at the root of the server.
 #
 # Usage: tests/ci/apache-htaccess.sh
 set -euo pipefail
@@ -60,6 +63,9 @@ CONF
 # $1: the address to block besides a few others ("" for none)
 setup() {
 	rm -rf "$work/www"
+	mkdir -p "$work/www"
+	echo "site" > "$work/www/index.php"
+	echo "site" > "$work/www/template.css"
 	for dir in protected denied open; do
 		mkdir -p "$work/www/$dir"
 		echo "$dir" > "$work/www/$dir/index.html"
@@ -67,7 +73,7 @@ setup() {
 	printf 'AuthType Basic\nAuthName "Staff only"\nAuthUserFile "%s/htpasswd"\nRequire valid-user\n' "$work" \
 		> "$work/www/protected/.htaccess"
 	# more addresses than fit into one condition, and an IPv6 network
-	for dir in protected denied open; do
+	for dir in . protected denied open; do
 		for i in $(seq 1 60); do
 			php "$plugin_root/tests/Integration/fixtures/deny_ip.php" "$work/www/$dir" "198.51.100.$i"
 		done
@@ -96,18 +102,28 @@ expect() {
 }
 
 url="http://127.0.0.1:$port"
+token="0123456789abcdef0123456789abcdef01234567"
+unblock="option=com_bfstop&view=tokenunblock&token=$token"
 
 setup ""
 expect "not blocked, protected/ without credentials" 401 "$url/protected/"
 expect "not blocked, protected/ with credentials" 200 -u staff:secret "$url/protected/"
 expect "not blocked, denied/" 403 "$url/denied/"
 expect "not blocked, open/" 200 "$url/open/"
+expect "not blocked, the site" 200 "$url/index.php?option=com_users&view=login"
+expect "not blocked, the unblock page" 200 "$url/index.php?$unblock"
 
 setup "127.0.0.1"
 expect "blocked, protected/ without credentials" 403 "$url/protected/"
 expect "blocked, protected/ with credentials" 403 -u staff:secret "$url/protected/"
 expect "blocked, denied/" 403 "$url/denied/"
 expect "blocked, open/" 403 "$url/open/"
+expect "blocked, the site" 403 "$url/index.php?option=com_users&view=login"
+expect "blocked, the unblock page" 200 "$url/index.php?$unblock"
+expect "blocked, the unblock page with a task" 403 "$url/index.php?$unblock&task=x"
+expect "blocked, the unblock page with another token" 403 "$url/index.php?option=com_bfstop&view=tokenunblock&token=x"
+expect "blocked, the unblock query elsewhere" 403 "$url/template.css?$unblock"
+expect "blocked, the unblock query in open/" 403 "$url/open/?$unblock"
 
 if grep -q 'AH0[0-9]*: .*\(Syntax\|syntax error\|Invalid\)' "$work/error.log"; then
 	echo "FAIL the error log reports configuration errors:"

@@ -1,4 +1,36 @@
 2.0.0 (unreleased)
+  - .htaccess: the block section lets the link of an unblock email through
+    to the unblock page. The web server refused every request of a blocked
+    address, so in "Full Site + .htaccess" mode the links led nowhere - yet
+    they were sent. Only that exact address gets through, and only as far
+    as Joomla, where the plugin lets nothing but the unblock page with a
+    token for one of the address's own blocks pass; the password reset and
+    the rest of the site stay out of reach, as the setting now says. The
+    daily maintenance writes a section without it in the new form. Blocks
+    added or changed in the block list now go into the .htaccess file too
+    in that mode, as the setting said they did - except a network with
+    allowed addresses in it or a trusted proxy, like the plugin's own
+  - .htaccess: the plugin only took the addresses whose blocks were over out
+    of the file while blocking through .htaccess was chosen, and only out of
+    the file of the settings. After switching to another blocking mode or
+    file - or uninstalling - the web server went on refusing the addresses
+    in it for good, also once their blocks had run out or been lifted.
+    Saving the settings now takes every address the plugin blocked out of
+    the file which no longer blocks (the blocks themselves stay in the
+    database), the daily maintenance does the same for the file of the
+    settings whatever the mode, before it purges old blocks, and
+    uninstalling the plugin removes its block section. Entries added by
+    hand stay, except on uninstallation
+  - Backend: a block added in the block list started at midnight, as the
+    form only takes the day - one of an hour added in the afternoon had run
+    out already - and editing a block moved its start back to that
+    midnight. A block added for today now starts when it is added, editing
+    keeps the time a block starts at, and another day means its beginning
+  - Backend: editing a block whose duration isn't one of those the form
+    lists (a week or 30 days from the settings, or what the progressive
+    block duration made of a duration) showed - and saved - "unlimited":
+    saving such a block, even unchanged, made it permanent. The form now has
+    an option for the block's own duration
   - Notification addresses are trimmed and checked: an invalid one (e.g.
     of a user of the notified group) is left out and logged, instead of
     making the mailer throw - which turned the failed login into an error

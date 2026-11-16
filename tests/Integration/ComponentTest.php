@@ -544,6 +544,93 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	/**
+	 * The plugin only takes entries out of the .htaccess file which blocks:
+	 * the file which did until the settings were changed would keep refusing
+	 * the addresses for good, also once their blocks are over or lifted.
+	 */
+	public function testTheHtaccessFileWhichNoLongerBlocksIsTidiedWhenTheSettingsAreSaved()
+	{
+		$former = sys_get_temp_dir().'/bfstop-former-'.bin2hex(random_bytes(4));
+		$other = sys_get_temp_dir().'/bfstop-other-'.bin2hex(random_bytes(4));
+		mkdir($former);
+		mkdir($other);
+		$original = $this->getPluginParams();
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.80', 'crdate' => self::minutesAgo(10), 'duration' => 60));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81', 'crdate' => self::minutesAgo(120), 'duration' => 60));
+		$htaccess = new HtaccessHelper($former, $this->logger);
+		$fill = function () use ($htaccess)
+		{
+			foreach (array('203.0.113.80', '203.0.113.81', '203.0.113.82') as $ip)
+			{
+				$htaccess->denyIP($ip);              // .82: added by hand, no block in the database
+			}
+		};
+		$save = function (array $stored, array $params)
+		{
+			$this->setPluginParams(json_encode($stored));
+			$model = $this->model(SettingsModel::class);
+			$model->getState();
+			$this->assertTrue($model->save(array('params' => $params + array('logLevel' => 8))), implode(', ', $model->getErrors()));
+		};
+		$blocking = array('blockMode' => 'htaccess', 'htaccessPath' => $former);
+		try
+		{
+			$fill();
+			$save($blocking, $blocking + array('blockNumber' => 8));
+			$this->assertSame(array('203.0.113.80', '203.0.113.81', '203.0.113.82'), $htaccess->getDeniedIPs(), 'still the file which blocks');
+			$save($blocking, array('blockMode' => 'htaccess', 'htaccessPath' => $former.'/'));
+			$this->assertSame(array('203.0.113.80', '203.0.113.81', '203.0.113.82'), $htaccess->getDeniedIPs(), 'the same directory');
+
+			$save($blocking, array('blockMode' => 'htaccess', 'htaccessPath' => $other));
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs(), 'another file');
+
+			$fill();
+			$save($blocking, array('blockMode' => 'loginonly', 'htaccessPath' => $former));
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs(), 'another blocking mode');
+			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.80'), 'the block stays in the database');
+
+			// what the file holds of the time it blocked comes out with an
+			// unblock as well
+			$fill();
+			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $former)));
+			UnblockHelper::removeLiftedHtaccessBlocks($this->logger);
+			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs());
+
+			$this->assertNull(SettingsModel::formerHtaccessDirectory(array('blockMode' => 'full'), array('blockMode' => 'htaccess')));
+			$this->assertNull(SettingsModel::formerHtaccessDirectory(array('blockMode' => 'htaccess'),
+				array('blockMode' => 'htaccess', 'htaccessPath' => JPATH_ROOT)), 'no path is the site\'s root');
+			$this->assertSame(JPATH_ROOT, SettingsModel::formerHtaccessDirectory(array('blockMode' => 'htaccess', 'htaccessPath' => ''),
+				array('blockMode' => 'off')));
+
+			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
+			{
+				Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+				Factory::getApplication()->getMessageQueue(true);
+				$fill();
+				chmod($former.'/.htaccess', 0444);
+				chmod($former, 0555);
+				$save($blocking, array('blockMode' => 'full', 'htaccessPath' => $former));
+				$messages = array_map(function ($message) { return $message['message']; },
+					Factory::getApplication()->getMessageQueue(true));
+				$this->assertContains(\Joomla\CMS\Language\Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NOT_TIDIED',
+					htmlspecialchars($former.'/.htaccess', ENT_QUOTES, 'UTF-8')), $messages);
+				$this->assertCount(3, $htaccess->getDeniedIPs());
+			}
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			foreach (array($former, $other) as $dir)
+			{
+				@chmod($dir, 0755);
+				@chmod($dir.'/.htaccess', 0644);
+				@unlink($dir.'/.htaccess');
+				@rmdir($dir);
+			}
+		}
+	}
+
 	public function testInstallerScriptHintAndVersionCheck()
 	{
 		require_once getenv('COM_BFSTOP_ROOT').'/installscript.php';
@@ -653,6 +740,139 @@ class ComponentTest extends IntegrationTestCase
 				$text = DurationHelper::toReadable(((int) $option['value']) * $multiplier);
 				$this->assertStringNotContainsString('COM_BFSTOP_', $text);
 			}
+		}
+	}
+
+	/**
+	 * The block being edited, by the form of the backend: as an edit view
+	 * loads it.
+	 */
+	private function blockForm($id)
+	{
+		if (!defined('JPATH_COMPONENT'))
+		{
+			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		}
+		\Joomla\CMS\Form\Form::addFormPath(getenv('COM_BFSTOP_ROOT').'/admin/forms');
+		$model = $this->model(BlockModel::class);
+		$model->getState(); // populated now, so it doesn't overwrite the id
+		$model->setState('block.id', $id);
+		return $model->getForm();
+	}
+
+	public function testEditingABlockKeepsADurationTheListDoesNotName()
+	{
+		// the edit form's list only goes up to a day, but the settings offer a
+		// week and the progressive block duration doubles it: without an
+		// option for its value, the browser selected the first one -
+		// unlimited - and saving the block, even unchanged, made it permanent
+		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		$listed = count(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/block.xml')
+			->xpath('//field[@name="duration"]/option'));
+		foreach (array(10080 => '7 days', 2880 => '2 days', 1440 => null, 0 => null) as $duration => $added)
+		{
+			$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.90',
+				'crdate' => self::minutesAgo(0), 'duration' => $duration), 'id');
+			$form = $this->blockForm($id);
+			$this->assertSame((string) $duration, (string) $form->getValue('duration'));
+			$options = array();
+			foreach ($form->getXml()->xpath('//field[@name="duration"]/option') as $option)
+			{
+				$options[(string) $option['value']] = (string) $option;
+			}
+			$this->assertCount($listed + ($added === null ? 0 : 1), $options, (string) $duration);
+			if ($added !== null)
+			{
+				$this->assertSame($added, $options[(string) $duration]);
+			}
+			$this->assertMatchesRegularExpression('#<option value="'.$duration.'" selected#', $form->getInput('duration'));
+		}
+	}
+
+	public function testBlocksOfTheBackendStartWhenTheyAreAddedNotAtMidnight()
+	{
+		// the form only takes the day, which was stored as its midnight: a
+		// block of an hour added in the afternoon had run out already, and
+		// editing a block moved its start back to that midnight
+		$today = date('Y-m-d');
+		$this->assertSame($today, (string) $this->blockForm(0)->getValue('crdate'), 'a new block starts today');
+
+		$before = time();
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.91', 'crdate' => $today, 'duration' => '60'));
+		$start = strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id));
+		$this->assertGreaterThanOrEqual($before, $start);
+		$this->assertLessThanOrEqual(time(), $start);
+		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.91'));
+
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.92', 'crdate' => '', 'duration' => '60'));
+		$this->assertGreaterThanOrEqual($before, strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id)),
+			'no day means now');
+
+		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.93', 'crdate' => '2026-01-02', 'duration' => '0'));
+		$this->assertSame('2026-01-02 00:00:00', $this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id),
+			'another day starts at its beginning');
+
+		// editing: the form shows the day the block starts on, and gives it back
+		$started = self::minutesAgo(30);
+		$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.94', 'crdate' => $started, 'duration' => 60), 'id');
+		$model = $this->model(BlockModel::class);
+		$model->getState();
+		$this->assertTrue($model->save(array('id' => $id, 'ipaddress' => '203.0.113.94',
+			'crdate' => substr($started, 0, 10), 'duration' => '120')), implode(', ', $model->getErrors()));
+		$this->assertSame($started, $this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id));
+		$this->assertSame('120', (string) $this->queryValue('SELECT duration FROM #__bfstop_bannedip WHERE id='.$id));
+	}
+
+	/**
+	 * With blocking through .htaccess, the blocks of the list go into the
+	 * file too, like those of the plugin - except where the web server
+	 * mustn't turn the addresses away.
+	 */
+	public function testBlocksOfTheBlocklistGoIntoTheHtaccessFile()
+	{
+		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		$dir = sys_get_temp_dir().'/bfstop-blocklist-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$original = $this->getPluginParams();
+		$htaccess = new HtaccessHelper($dir, $this->logger);
+		$today = date('Y-m-d');
+		try
+		{
+			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			Factory::getApplication()->getMessageQueue(true);
+			$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.95', 'crdate' => $today, 'duration' => '60'));
+			$network = $this->saveNew(BlockModel::class, array('ipaddress' => '192.0.2.0/24', 'crdate' => $today, 'duration' => '0'));
+			$this->assertSame(array('203.0.113.95', '192.0.2.0/24'), $htaccess->getDeniedIPs());
+
+			// the web server knows nothing of the allow list
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.7', 'notes' => ''));
+			$this->saveNew(BlockModel::class, array('ipaddress' => '198.51.100.0/24', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('203.0.113.95', '192.0.2.0/24'), $htaccess->getDeniedIPs());
+			$messages = array_map(function ($message) { return $message['message']; }, Factory::getApplication()->getMessageQueue(true));
+			$this->assertContains(\Joomla\CMS\Language\Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'), $messages);
+			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('198.51.100.9'), 'blocked in the database');
+
+			// edited: another address, a duration which is over
+			$save = function ($id, array $data)
+			{
+				$model = $this->model(BlockModel::class);
+				$model->getState();
+				$this->assertTrue($model->save(array('id' => $id) + $data), implode(', ', $model->getErrors()));
+			};
+			$save($id, array('ipaddress' => '203.0.113.96', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('192.0.2.0/24', '203.0.113.96'), $htaccess->getDeniedIPs());
+			$save($network, array('ipaddress' => '192.0.2.0/24', 'crdate' => '2026-01-02', 'duration' => '60'));
+			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs());
+
+			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
+			$this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.97', 'crdate' => $today, 'duration' => '60'));
+			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs(), 'only with blocking through .htaccess');
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
 		}
 	}
 

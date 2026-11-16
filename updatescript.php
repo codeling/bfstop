@@ -80,6 +80,52 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 		{
 			// a leftover log must not make the uninstallation fail
 		}
+		// without the plugin, nothing would ever take an address out of the
+		// block section of the .htaccess file again: the web server would
+		// refuse them for good
+		try
+		{
+			$file = self::htaccessFile(self::storedParams());
+			if (!self::removeHtaccessSection($file))
+			{
+				Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+				Factory::getApplication()->enqueueMessage(
+					Text::sprintf('PLG_SYSTEM_BFSTOP_UNINSTALL_HTACCESS_NOT_REMOVED', htmlspecialchars($file, ENT_QUOTES, 'UTF-8')),
+					'error'
+				);
+			}
+		}
+		catch (\Throwable $e)
+		{
+			// neither may this
+		}
+	}
+
+	/**
+	 * The plugin's settings as they are stored, null if they can't be read.
+	 */
+	private static function storedParams()
+	{
+		$db = Factory::getContainer()->get(DatabaseInterface::class);
+		$query = $db->getQuery(true)
+			->select($db->quoteName('params'))
+			->from($db->quoteName('#__extensions'))
+			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
+		$db->setQuery($query);
+		$params = json_decode((string) $db->loadResult(), true);
+		return is_array($params) ? $params : null;
+	}
+
+	/**
+	 * The .htaccess file the plugin writes with the settings $params.
+	 */
+	private static function htaccessFile($params)
+	{
+		$htaccessPath = (is_array($params) && (string) ($params['htaccessPath'] ?? '') !== '')
+			? (string) $params['htaccessPath'] : JPATH_ROOT;
+		return rtrim($htaccessPath, '/\\').'/.htaccess';
 	}
 	public function preflight($type, $adapter)
 	{
@@ -198,11 +244,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			}
 			// whatever the blocking mode is now: the file may still hold the
 			// section of the time .htaccess blocking was used
-			$htaccessPath = (is_array($params) && (string) ($params['htaccessPath'] ?? '') !== '')
-				? (string) $params['htaccessPath'] : JPATH_ROOT;
-			if (!self::replaceLegacyHtaccessSection(rtrim($htaccessPath, '/\\').'/.htaccess'))
+			$htaccessFile = self::htaccessFile($params);
+			if (!self::replaceLegacyHtaccessSection($htaccessFile))
 			{
-				$this->htaccessNotRewritten = rtrim($htaccessPath, '/\\').'/.htaccess';
+				$this->htaccessNotRewritten = $htaccessFile;
 			}
 			if ($changed)
 			{
@@ -250,7 +295,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 	 * "Require all denied").
 	 *
 	 * Done here, without the plugin's classes: those of the version being
-	 * replaced may be the ones loaded in this request.
+	 * replaced may be the ones loaded in this request. What lets the links of
+	 * unblock emails through needs the site's path, which an update from the
+	 * command line doesn't know: the plugin's daily maintenance adds it (see
+	 * HtaccessHelper::upgradeFormat()).
 	 *
 	 * @return bool false if the section is there and the file couldn't be written
 	 */
@@ -266,21 +314,8 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			return false;
 		}
 		$lines = explode("\n", $content);
-		$begin = null;
-		$end = null;
-		foreach ($lines as $i => $line)
-		{
-			if ($begin === null && strpos($line, '# BEGIN BFStop Blocks') !== false)
-			{
-				$begin = $i;
-			}
-			elseif ($begin !== null && strpos($line, '# END BFStop Blocks') !== false)
-			{
-				$end = $i;
-				break;
-			}
-		}
-		if ($begin === null || $end === null)
+		list($begin, $end) = self::findSection($lines);
+		if ($begin === null)
 		{
 			return true;
 		}
@@ -339,12 +374,41 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			$section[] = $errorDocument;
 		}
 		array_splice($lines, $begin + 1, $end - $begin - 1, array_merge($section, $other));
-		$newContent = implode("\n", $lines);
+		return self::writeFile($file, implode("\n", $lines));
+	}
 
-		// replaced as a whole, like HtaccessHelper::write() does
+	/**
+	 * The first and the last line of the block section of the .htaccess file
+	 * with the lines $lines (its markers), or two nulls if it has none.
+	 *
+	 * @return array{0: int|null, 1: int|null}
+	 */
+	private static function findSection(array $lines)
+	{
+		$begin = null;
+		foreach ($lines as $i => $line)
+		{
+			if ($begin === null && strpos($line, '# BEGIN BFStop Blocks') !== false)
+			{
+				$begin = $i;
+			}
+			elseif ($begin !== null && strpos($line, '# END BFStop Blocks') !== false)
+			{
+				return array($begin, $i);
+			}
+		}
+		return array(null, null);
+	}
+
+	/**
+	 * Replaces the content of $file as a whole, like the plugin's
+	 * HtaccessHelper::write() does.
+	 */
+	private static function writeFile($file, $content)
+	{
 		$target = is_link($file) ? (realpath($file) ?: $file) : $file;
 		$temporary = $target.'.bfstop-'.bin2hex(random_bytes(6));
-		if (@file_put_contents($temporary, $newContent) === strlen($newContent))
+		if (@file_put_contents($temporary, $content) === strlen($content))
 		{
 			@chmod($temporary, fileperms($target) & 0777);
 			if (@rename($temporary, $target))
@@ -353,6 +417,63 @@ class PlgsystembfstopInstallerScript extends InstallerScript
 			}
 		}
 		@unlink($temporary);
-		return @file_put_contents($target, $newContent, LOCK_EX) !== false;
+		return @file_put_contents($target, $content, LOCK_EX) !== false;
+	}
+
+	/**
+	 * Takes what the plugin writes out of the block section of the .htaccess
+	 * file $file - the conditions with the blocked addresses, the 403
+	 * message, and the lines of the form of earlier versions - for the
+	 * uninstallation. Lines somebody else wrote into the section stay; a
+	 * section without any goes as a whole, with its markers. Done without
+	 * the plugin's classes, like replaceLegacyHtaccessSection().
+	 *
+	 * @return bool false if the section is there and the file couldn't be written
+	 */
+	public static function removeHtaccessSection($file)
+	{
+		if (!is_file($file))
+		{
+			return true;
+		}
+		$content = @file_get_contents($file);
+		if (!is_string($content))
+		{
+			return false;
+		}
+		$lines = explode("\n", $content);
+		list($begin, $end) = self::findSection($lines);
+		if ($begin === null)
+		{
+			return true;
+		}
+		$other = array();
+		for ($i = $begin + 1; $i < $end; ++$i)
+		{
+			$line = trim($lines[$i]);
+			if ($line === '' || strpos($line, '<If ') === 0 || strpos($line, 'Require not ip ') === 0 ||
+				strpos($line, 'ErrorDocument 403 ') === 0 ||
+				in_array($line, array('Require all denied', '</If>', '<RequireAll>', 'Require all granted', '</RequireAll>'), true))
+			{
+				continue;
+			}
+			$other[] = rtrim($lines[$i], "\r");
+		}
+		if (count($other) > 0)
+		{
+			array_splice($lines, $begin + 1, $end - $begin - 1, $other);
+		}
+		else
+		{
+			// the plugin writes an empty line after a section it puts at the
+			// beginning of the file
+			$length = $end - $begin + 1;
+			if (isset($lines[$end + 1]) && trim($lines[$end + 1]) === '' && isset($lines[$end + 2]))
+			{
+				++$length;
+			}
+			array_splice($lines, $begin, $length);
+		}
+		return self::writeFile($file, implode("\n", $lines));
 	}
 }
