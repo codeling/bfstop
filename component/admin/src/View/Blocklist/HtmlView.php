@@ -32,6 +32,8 @@ class HtmlView extends BaseHtmlView
 		// so attempts can't be counted
 		$this->attemptsTracked = ParamHelper::get('blockMode', 'params', 'full') !== 'htaccess';
 		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', 'params', Bfstop::DefaultSettings['deleteOld']);
+		// selecting a range of rows with shift-click, see grid.checkall in the head
+		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();
 		parent::display($tpl);
 	}
@@ -74,7 +76,7 @@ class HtmlView extends BaseHtmlView
 		{
 			// batch unblock would require rewrite of unblock method to check
 			// for selected lines
-			ToolbarHelper::custom('blocklist.unblock', 'unpublish.png', 'unpublish_f2.png', 'COM_BFSTOP_UNBLOCK', true);
+			ToolbarHelper::custom('blocklist.unblock', 'unpublish', '', 'COM_BFSTOP_UNBLOCK', true);
 		}
 		if ($user->authorise('core.edit', 'com_bfstop'))
 		{

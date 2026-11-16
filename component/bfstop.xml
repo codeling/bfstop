@@ -12,27 +12,6 @@
 	<version>2.0.0</version>
 	<namespace path="src">Codeling\Component\Bfstop</namespace>
 	<scriptfile>installscript.php</scriptfile>
-	<install> <!-- Runs on install -->
-<!--
-		<sql>
-			<file driver="mysql" charset="utf8">sql/install.mysql.utf8.sql</file>
-		</sql>
--->
-	</install>
-	<uninstall> <!-- Runs on uninstall -->
-<!--
-		<sql>
-			<file driver="mysql" charset="utf8">sql/uninstall.mysql.utf8.sql</file>
-		</sql>
--->
-	</uninstall>
-	<update> <!-- Runs on update; New in 1.6 -->
-<!--
-		<schemas>
-			<schemapath type="mysql">sql/updates/mysql</schemapath>
-		</schemas>
--->
-	</update>
 	<files folder="site">
 		<filename>index.html</filename>
 		<folder>services</folder>
@@ -56,7 +35,6 @@
 			<filename>config.xml</filename>
 			<filename>index.html</filename>
 			<folder>forms</folder>
-			<folder>rules</folder>
 			<folder>services</folder>
 			<folder>src</folder>
 			<folder>tmpl</folder>

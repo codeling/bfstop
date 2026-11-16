@@ -95,7 +95,7 @@ class BlockTable extends Table
 			return null;
 		}
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true)
+		$query = $db->createQuery()
 			->select($db->quoteName('crdate'))
 			->from($db->quoteName($this->_tbl))
 			->where($db->quoteName('id').' = '.(int) $this->id);

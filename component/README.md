@@ -20,7 +20,7 @@ component only work together.
   [releases](https://github.com/codeling/bfstop/releases). It contains the
   plugin and the component and installs both. Don't install them separately:
   they are released together, and need to have the same version.
-- Requirements: Joomla! 5 or 6, PHP 8.1 or newer, and MySQL, MariaDB or
+- Requirements: Joomla! 5.4 or 6, PHP 8.1 or newer, and MySQL, MariaDB or
   PostgreSQL. Sites still on Joomla! 4 stay with BFStop 1.5.
 - The plugin is enabled when it is installed. Configure BFStop under
   *Components → Brute Force Stop → Settings*.

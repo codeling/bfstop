@@ -5,15 +5,18 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
+
+namespace Codeling\Component\Bfstop\Administrator\Rule;
+
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormRule;
 use Joomla\Registry\Registry;
 
-class JFormRuleDate extends FormRule
+class DateRule extends FormRule
 {
-	public function test(SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
+	public function test(\SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
 		if ($value === '' || $value === null)
 		{
@@ -26,10 +29,10 @@ class JFormRuleDate extends FormRule
 		{
 			$format = 'Y-m-d';
 		}
-		$dt = DateTime::createFromFormat($format, $value);
+		$dt = \DateTime::createFromFormat($format, $value);
 		// DateTime::createFromFormat() silently rolls invalid values like
 		// "2024-02-30" over into a valid date, so make sure the parsed date
 		// actually reproduces the input value before accepting it.
-		return ($dt instanceof DateTime) && ($dt->format($format) === $value);
+		return ($dt instanceof \DateTime) && ($dt->format($format) === $value);
 	}
 }

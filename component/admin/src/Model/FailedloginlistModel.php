@@ -31,7 +31,7 @@ class FailedloginlistModel extends ListModel
 	protected function getListQuery()
 	{
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->select('l.id, l.username, l.ipaddress, l.logtime, l.origin');
 		$query->from('#__bfstop_failedlogin l');
 		$username = (string) $this->getState('filter.username', '');
@@ -67,7 +67,7 @@ class FailedloginlistModel extends ListModel
 		// cutoff with the same clock instead of the database's NOW()
 		$cutoff = date('Y-m-d H:i:s', time() - $days * 86400);
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->delete($db->quoteName('#__bfstop_failedlogin'))
 			->where($db->quoteName('logtime').' < :cutoff')
 			->bind(':cutoff', $cutoff);

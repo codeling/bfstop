@@ -30,7 +30,7 @@ class AllowlistModel extends ListModel
 	protected function getListQuery()
 	{
 		$db = $this->getDatabase();
-		$query = $db->getQuery(true);
+		$query = $db->createQuery();
 		$query->select('a.id, a.ipaddress, a.notes');
 		$query->from('#__bfstop_allowlist a');
 		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
@@ -53,7 +53,7 @@ class AllowlistModel extends ListModel
 		try
 		{
 			$db = $this->getDatabase();
-			$query = $db->getQuery(true);
+			$query = $db->createQuery();
 			$conditions = array(
 				$db->quoteName('id').' IN ('.implode(", ", $ids).')'
 			);
