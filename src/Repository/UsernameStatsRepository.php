@@ -21,6 +21,10 @@ class UsernameStatsRepository extends Repository
 {
 	private const Table = '#__bfstop_username_stats';
 
+	// upper bound for the rows, which (unlike the failed logins) are not
+	// purged by age: an attacker can make up as many usernames as they like
+	public const MaxRows = 10000;
+
 	/**
 	 * Counts a failed login against $username. Fail-open: not counted.
 	 */
@@ -55,8 +59,9 @@ class UsernameStatsRepository extends Repository
 	 * usernames with the fewest attempts, the longest ago first. Fail-open:
 	 * the next run does it.
 	 */
-	public function trim($maxRows)
+	public function trim($maxRows = null)
 	{
+		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('trim', function () use ($maxRows)
 		{
 			$this->trimOldest(self::Table, 'username', 'attempts ASC, last_attempt ASC', $maxRows, 1000, ParameterType::STRING);

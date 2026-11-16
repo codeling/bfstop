@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Uri\Uri;
@@ -362,9 +363,9 @@ class HtaccessHelper
 	 *
 	 * @return int the number of entries removed
 	 */
-	public function removeLiftedBlocks(DatabaseHelper $db)
+	public function removeLiftedBlocks(BlockRepository $blocks)
 	{
-		$removed = $this->removeAddresses($db->getAddressesWithoutActiveBlock(), 'the block is over');
+		$removed = $this->removeAddresses($blocks->addressesWithoutActiveBlock(), 'the block is over');
 		return $removed === false ? 0 : $removed;
 	}
 
@@ -381,9 +382,9 @@ class HtaccessHelper
 	 * @return int|false the number of entries removed; false if the block
 	 *                   list couldn't be read or the file couldn't be written
 	 */
-	public function removeDatabaseBlocks(DatabaseHelper $db)
+	public function removeDatabaseBlocks(BlockRepository $blocks)
 	{
-		$addresses = $db->getBlockedAddresses();
+		$addresses = $blocks->allAddresses();
 		if ($addresses === null)
 		{
 			return false;
@@ -399,13 +400,13 @@ class HtaccessHelper
 	 *
 	 * @return int|false the number of entries removed; false on an error
 	 */
-	public function removeStaleBlocks(DatabaseHelper $db, $blocksThroughFile)
+	public function removeStaleBlocks(BlockRepository $blocks, $blocksThroughFile)
 	{
 		if (!file_exists($this->path))
 		{
 			return 0;
 		}
-		return $blocksThroughFile ? $this->removeLiftedBlocks($db) : $this->removeDatabaseBlocks($db);
+		return $blocksThroughFile ? $this->removeLiftedBlocks($blocks) : $this->removeDatabaseBlocks($blocks);
 	}
 
 	/**

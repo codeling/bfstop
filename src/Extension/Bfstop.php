@@ -11,7 +11,6 @@ namespace Codeling\Plugin\System\Bfstop\Extension;
 defined('_JEXEC') or die;
 
 use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
@@ -20,6 +19,11 @@ use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
+use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Plugin\System\Bfstop\Service\BlockService;
+use Codeling\Plugin\System\Bfstop\Service\LoginService;
+use Codeling\Plugin\System\Bfstop\Service\Maintenance;
 use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Factory;
@@ -103,7 +107,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// created on first use (see notifier()): its constructor queries the
 	// database, which most requests - none of them sends a mail - needn't pay for
 	private ?NotifierHelper $notifier = null;
-	private DatabaseHelper $mydb;
+	private Repositories $repositories;
+	private LoginService $logins;
+	private BlockService $blocker;
+	private Maintenance $maintenance;
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
@@ -152,7 +159,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function getUnblockLink($id, $username)
 	{
-		$token = $this->mydb->getNewUnblockToken($id,
+		$token = $this->repositories->unblockTokens()->add($id,
 			TokenHelper::getToken($this->logger), $username);
 		return self::unblockLink($token);
 	}
@@ -246,7 +253,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		// a parallel request of the same client may have blocked it while
 		// this one waited for the lock
-		if ($this->mydb->isIPBlocked($this->clientAddress ?? $logEntry->ipaddress))
+		if ($this->repositories->blocks()->isBlocked($this->clientAddress ?? $logEntry->ipaddress))
 		{
 			$this->logger->log('IP '.$logEntry->ipaddress.
 				' is already blocked', Log::INFO);
@@ -256,8 +263,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
 		if ($maxBlocksBefore > 0 || $progressiveEnabled)
 		{
-			$numberOfPrevBlocks = $this->mydb->
-				getNumberOfPreviousBlocks($logEntry->ipaddress);
+			$numberOfPrevBlocks = $this->repositories->blocks()->
+				countPrevious($logEntry->ipaddress);
 			$this->logger->log('Number of previous blocks for IP='.
 				$logEntry->ipaddress.': '.$numberOfPrevBlocks,
 				Log::DEBUG);
@@ -304,7 +311,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// the web server knows nothing of the allow list: a network block
 			// (an IPv6 client is blocked by its /56, see trackedAddress())
 			// would turn away the allowed addresses in it before Joomla runs
-			$allowed = $this->mydb->allowListEntriesOverlapping($logEntry->ipaddress);
+			$allowed = $this->repositories->allowList()->entriesOverlapping($logEntry->ipaddress);
 			if ($allowed === null || count($allowed) > 0)
 			{
 				$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it contains '.
@@ -317,10 +324,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// has to be found out before blocking, which marks these failed logins
 		// as handled
 		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
-			$this->mydb->hasFailedLoginsForOtherAccounts(
+			$this->logins->hasFailedLoginsForOtherAccounts(
 				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', self::DefaultSettings['checkInterval'])),
 				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
-		$id = $this->mydb->blockIP($logEntry, $duration, $usehtaccess, $htaccessPath);
+		$id = $this->blocker->block($logEntry, $duration, $usehtaccess, $htaccessPath);
 		if ($id < 1)
 		{
 			// nothing is blocked: neither tell the administrators that
@@ -348,7 +355,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->getIntParam('notifyBlockedNumber', 5));
 		if ($this->getBoolParam('notifyBlockedUser', false))
 		{
-			$userEmail = $this->mydb->getUserEmailByName($logEntry->username);
+			$userEmail = $this->repositories->users()->emailByUsername($logEntry->username);
 			if ($userEmail != null && $targetedOtherAccounts)
 			{
 				// The link unblocks this IP address, and it goes to the owner
@@ -416,11 +423,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		if ($mode === self::NotifyBlockedAnyAddress)
 		{
-			return $this->mydb->hasCurrentUnblockToken($logEntry->username)
+			return $this->repositories->unblockTokens()->hasCurrentFor($logEntry->username)
 				? 'there already is an unblock link for this user which can be used'
 				: null;
 		}
-		return $this->mydb->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
+		return $this->repositories->knownIps()->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
 			$logEntry->username, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))
 			? null
 			: 'the user has never logged in from this IP address';
@@ -470,13 +477,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function removeLiftedHtaccessBlocks()
 	{
-		(new HtaccessHelper($this->getHtaccessPath(), $this->logger))->removeLiftedBlocks($this->mydb);
+		(new HtaccessHelper($this->getHtaccessPath(), $this->logger))->removeLiftedBlocks($this->repositories->blocks());
 	}
 
 	private function getRealDurationFromDBDuration($duration)
 	{
 		return ($duration <= 0)
-			? DatabaseHelper::$UNLIMITED_DURATION
+			? BlockRepository::UnlimitedDuration
 			: $duration;
 	}
 
@@ -503,7 +510,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$maxNumber = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
 			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
-		if ($this->mydb->getNumberOfFailedLogins(
+		if ($this->repositories->failedLogins()->countUnhandledFromAddress(
 			$checkInterval,
 			$logEntry->ipaddress,
 			$logEntry->logtime) < $maxNumber)
@@ -534,7 +541,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$checkInterval = $this->getIntParam('accountCheckInterval', 60);
 		$accountBlockNumber = $this->getIntParam('accountBlockNumber', 20);
-		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLoginsForUsername(
+		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledForUsername(
 			$checkInterval, $logEntry->username, $logEntry->logtime);
 		if ($numberOfFailedLogins < $accountBlockNumber)
 		{
@@ -551,6 +558,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $throttleDelay;
 	}
 
+	/**
+	 * The name of the application of a request, as the log and mails show it:
+	 * the client id site 0, administrator 1, api 3.
+	 */
+	public static function originName($clientId)
+	{
+		switch ((int) $clientId)
+		{
+			case 0:
+				return 'Frontend';
+			case 3:
+				return 'API';
+			default:
+				return 'Backend';
+		}
+	}
+
 	private function init()
 	{
 		if (!$this->languageLoaded)
@@ -559,7 +583,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
 			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
-		$this->mydb = new DatabaseHelper($this->logger);
+		$this->repositories = new Repositories($this->logger);
+		$this->logins = new LoginService($this->repositories);
+		$this->blocker = new BlockService($this->repositories);
+		$this->maintenance = new Maintenance($this->repositories);
 		$this->notifier = null;
 	}
 
@@ -567,7 +594,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		if ($this->notifier === null)
 		{
-			$this->notifier = new NotifierHelper($this->logger, $this->mydb,
+			$this->notifier = new NotifierHelper($this->logger, $this->repositories,
 				$this->params->get('emailaddress', ''),
 				$this->getIntParam('userID', -1),
 				$this->getIntParam('userGroup', -1),
@@ -594,7 +621,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$allowedAttempts = $this->determineEffectiveBlockNumber($riskScore);
 		$checkInterval = $this->getRealDurationFromDBDuration(
 			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
-		$numberOfFailedLogins = $this->mydb->getNumberOfFailedLogins(
+		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledFromAddress(
 			$checkInterval,
 			$logEntry->ipaddress, $logEntry->logtime);
 		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
@@ -719,7 +746,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				return $delayDuration;
 			}
 
-			$recentFailed = $this->mydb->getFailedLoginsInLastHour();
+			$recentFailed = $this->repositories->failedLogins()->countInLastHour();
 			$recentFailed = min($recentFailed, $highThreshold);
 			if ($recentFailed > $lowThreshold)
 			{
@@ -744,7 +771,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
 		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
-			($this->mydb->accountExists($username) ||
+			($this->repositories->users()->accountExists($username) ||
 				RiskHelper::isCommonUsername($this->params, $username));
 		return UsernameHelper::forStorage($username, $mode, $isReadable,
 			$this->getApplication()->get('secret', ''));
@@ -764,7 +791,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->logger->log('Empty IP address!', Log::ERROR);
 			return;
 		}
-		if ($this->mydb->isIPOnAllowList($ipAddress))
+		if ($this->repositories->allowList()->contains($ipAddress))
 		{
 			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, Log::INFO);
 			return;
@@ -803,12 +830,12 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// of parallel requests would all run before the first of them
 		// reached the block threshold, and each of them would tie up a
 		// worker for the whole delay.
-		$this->mydb->insertFailedLogin($logEntry);
+		$this->logins->recordFailedLogin($logEntry);
 
 		// after recording it: a signal of the score may take time (the
 		// reverse DNS lookup), and parallel requests waiting for it must
 		// already count
-		$riskScore = RiskHelper::computeScore($this->mydb, $this->logger, $this->params, $ipAddress, $username,
+		$riskScore = RiskHelper::computeScore($this->repositories, $this->logger, $this->params, $ipAddress, $username,
 			$logEntry->ipaddress);
 
 		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
@@ -822,7 +849,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// $username is what was typed; the entry only holds a hash of it if
 		// it isn't an account (see usernameForStorage())
 		if ($this->getBoolParam('notifyFailedOnlyExisting', false) &&
-			!$this->mydb->accountExists($username))
+			!$this->repositories->users()->accountExists($username))
 		{
 			$this->logger->log('Not notifying of failed login: the username does not belong to an account', Log::DEBUG);
 		}
@@ -838,7 +865,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// a blocked address gets nothing more out of a slow response;
 			// don't let it hold on to a worker (attackers could otherwise use
 			// the delay to exhaust the server's workers)
-			if ($this->mydb->isIPBlocked($ipAddress))
+			if ($this->repositories->blocks()->isBlocked($ipAddress))
 			{
 				$this->logger->log('Not delaying the response, IP address '.
 					$ipAddress.' is blocked', Log::DEBUG);
@@ -964,7 +991,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info->username = (string) ($user['username'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
-		$this->mydb->successfulLogin($info, $this->trackedAddress($info->ipaddress),
+		$this->logins->recordSuccessfulLogin($info, $this->trackedAddress($info->ipaddress),
 			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
 				$this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))));
 	}
@@ -991,7 +1018,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return false;
 		}
 		$token = $this->requestString('token', 'string');
-		$result = $this->mydb->unblockTokenValidForBlocks($token, $blockIds);
+		$result = $this->repositories->unblockTokens()->validForBlocks($token, $blockIds);
 		if ($result)
 		{
 			// deliberately not logging the token: it is a bearer secret and
@@ -1276,17 +1303,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
 			if ($purgeAge > 0)
 			{
-				$this->mydb->purgeOldEntries($purgeAge);
+				$this->maintenance->purgeOldEntries($purgeAge);
 			}
 			// regardless of the purge age setting: these are not deleted by age
-			$this->mydb->trimFailedLogins();
-			$this->mydb->trimUsernameStats();
-			$this->mydb->pruneKnownIps();
-			$this->mydb->pruneDnsCache();
-			$this->mydb->purgeExpiredUnblockTokens();
+			$this->maintenance->keepWithinBounds();
 			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
 			$this->params->set('lastPurge', $now);
-			$this->mydb->saveLastPurge($now);
+			$this->repositories->pluginSettings()->set('lastPurge', (int) $now);
 		}
 	}
 
@@ -1319,7 +1342,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				'followed', Log::ERROR);
 		}
 		$throughFile = $this->getStringParam('blockMode', 'full') === 'htaccess';
-		if ($htaccess->removeStaleBlocks($this->mydb, $throughFile) === false)
+		if ($htaccess->removeStaleBlocks($this->repositories->blocks(), $throughFile) === false)
 		{
 			$this->logger->log('Could not take the addresses the plugin blocked out of '.$htaccess->getFileName().
 				': the web server goes on refusing them - make the file writable', Log::ERROR);
@@ -1353,10 +1376,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		try
 		{
-			if (!$this->mydb->getPluginSetting('addressesCanonical', false))
+			if (!$this->repositories->pluginSettings()->get('addressesCanonical', false))
 			{
-				$changed = $this->mydb->canonicalizeStoredAddresses();
-				$this->mydb->savePluginSetting('addressesCanonical', 1);
+				$changed = $this->maintenance->canonicalizeStoredAddresses();
+				$this->repositories->pluginSettings()->set('addressesCanonical', 1);
 				$this->logger->log('Converted '.$changed.' stored address(es) to canonical form', Log::INFO);
 			}
 			$this->params->set('addressesCanonical', 1);
@@ -1425,7 +1448,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	private function enforceBlock()
 	{
-		if (!isset($this->mydb))
+		if (!isset($this->repositories))
 		{
 			// onAfterInitialise did not run (or bailed out early)
 			$this->init();
@@ -1435,16 +1458,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$ipaddress = IpHelper::getAddress($this->logger);
-		if ($this->mydb->isIPOnAllowList($ipaddress))
+		if ($this->repositories->allowList()->contains($ipaddress))
 		{
 			return;
 		}
-		$blockIds = $this->mydb->getActiveBlockIdsOrNull($ipaddress);
+		$blockIds = $this->repositories->blocks()->activeIdsFor($ipaddress);
 		if ($blockIds !== null && count($blockIds) === 0 && $this->getStringParam('blockMode', 'full') !== 'off' &&
 			$this->isPasswordLoginRequest() && $this->awaitLoginTurn($ipaddress))
 		{
 			// the logins before this one may have got the address blocked
-			$blockIds = $this->mydb->getActiveBlockIdsOrNull($ipaddress);
+			$blockIds = $this->repositories->blocks()->activeIdsFor($ipaddress);
 		}
 		if ($blockIds === null)
 		{
@@ -1464,7 +1487,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			$this->logger->log("Blocked IP Address $ipaddress ".
 				"trying to access ".
-				$this->mydb->getClientString(
+				self::originName(
 					$this->getApplication()->getClientId()),
 				Log::INFO);
 			// the unblock page and the password recovery are pages of the
@@ -1484,7 +1507,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				// actual login attempt gets rejected below
 				return;
 			}
-			$this->mydb->recordBlockedAttempt($blockIds);
+			$this->repositories->blocks()->recordAttempt($blockIds);
 			$status = self::blockedResponseCode($this->getBoolParam('useHttpError', true));
 			if ($status !== null)
 			{

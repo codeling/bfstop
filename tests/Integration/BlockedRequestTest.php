@@ -8,7 +8,8 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 
@@ -193,7 +194,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
 		$this->assertSame(array('203.0.113.78'), $this->db->setQuery('SELECT ipaddress FROM #__bfstop_dnscache')->loadColumn());
-		$this->assertSame(array(DatabaseHelper::hashToken(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
+		$this->assertSame(array(UnblockTokenRepository::hash(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$saved = json_decode($this->getPluginParams(), true);
 		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
@@ -243,7 +244,7 @@ class BlockedRequestTest extends IntegrationTestCase
 			}
 			$this->assertNotBlocked();
 			$this->assertSame(array('203.0.113.52'), (new HtaccessHelper($dir, $this->logger))->getDeniedIPs());
-			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.51'));
+			$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('203.0.113.51'));
 		}
 		finally
 		{
@@ -336,7 +337,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	public function testPermanentBlockNeverExpires()
 	{
 		$this->configure();
-		// duration 0 = "forever"; 5 years is still within DatabaseHelper::$UNLIMITED_DURATION
+		// duration 0 = "forever"; 5 years is still within BlockRepository::UnlimitedDuration
 		$this->block(self::Ip, 5 * 365 * 24 * 60, 0);
 		$this->assertBlocked();
 	}
@@ -476,7 +477,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		// in the backend, these requests of a guest would go to com_login
 		$this->configure();
 		$id = $this->block();
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($id, str_repeat('ef', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($id, str_repeat('ef', 20));
 		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$token, self::Ip, '');
 		$this->assertNotBlocked('option=com_users&view=reset');
@@ -535,7 +536,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		$this->configure();
 		$blockId = $this->block();
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($blockId, str_repeat('ab', 20));
 		$this->assertNotBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.str_repeat('0', 40));
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock');
@@ -547,7 +548,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		// any other request (here: a login) it must not get around the block
 		$this->configure();
 		$blockId = $this->block();
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($blockId, str_repeat('ab', 20));
 		$this->assertBlocked('option=com_users&task=user.login&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_content&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&task=display&view=tokenunblock&token='.$token);
@@ -559,7 +560,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->configure();
 		$this->block();
 		$otherBlockId = $this->block('203.0.113.99');
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($otherBlockId, str_repeat('cd', 20));
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$token);
 	}
 
@@ -584,7 +585,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		$this->configure();
 		$blockId = $this->block();
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($blockId, str_repeat('ab', 20));
 		$this->assertBlocked('option=com_users&task=user.LOGIN&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_login&task=login&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&task=user.login&view=tokenunblock&token='.$token);
@@ -604,7 +605,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->configure();
 		$this->block();
 		$otherBlockId = $this->block('203.0.113.99');
-		$otherToken = (new DatabaseHelper($this->logger))->getNewUnblockToken($otherBlockId, str_repeat('cd', 20));
+		$otherToken = (new Repositories($this->logger))->unblockTokens()->add($otherBlockId, str_repeat('cd', 20));
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&token='.$otherToken);
 	}
 
@@ -616,7 +617,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		$this->configure();
 		$blockId = $this->block();
-		$token = (new DatabaseHelper($this->logger))->getNewUnblockToken($blockId, str_repeat('ab', 20));
+		$token = (new Repositories($this->logger))->unblockTokens()->add($blockId, str_repeat('ab', 20));
 		$this->assertBlocked('option[]=com_bfstop&view=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&view[]=tokenunblock&token='.$token);
 		$this->assertBlocked('option=com_bfstop&view=tokenunblock&task[]=display&token='.$token);

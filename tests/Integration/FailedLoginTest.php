@@ -8,7 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 
 /**
@@ -159,7 +159,7 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->failedApiLogin();
 		$this->failedApiLogin();
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
-		$this->assertFalse((new DatabaseHelper($this->logger))->isIPBlocked(self::Ip));
+		$this->assertFalse((new Repositories($this->logger))->blocks()->isBlocked(self::Ip));
 	}
 
 	public function testApiLoginsWithCredentialsAreCountedAndBlocked()
@@ -172,7 +172,7 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->assertSame(array('bob', 'carol', ''), $this->storedUsernames());
 		$this->assertSame(array('3', '3', '3'), array_map('strval',
 			$this->db->setQuery('SELECT origin FROM #__bfstop_failedlogin ORDER BY id')->loadColumn()));
-		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked(self::Ip));
+		$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked(self::Ip));
 	}
 
 	public function testApiLoginsAreOnlyCountedIfSwitchedOn()

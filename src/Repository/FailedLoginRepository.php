@@ -21,6 +21,10 @@ class FailedLoginRepository extends Repository
 {
 	private const Table = '#__bfstop_failedlogin';
 
+	// upper bound for the rows, however the purge age is set: a visitor can
+	// add one for every request, from as many addresses as they like
+	public const MaxRows = 200000;
+
 	/**
 	 * Adds a failed login (an object with the columns of the table).
 	 *
@@ -41,6 +45,10 @@ class FailedLoginRepository extends Repository
 	 */
 	private function countQuery($time, $minutes, array &$values)
 	{
+		if ($minutes <= 0)
+		{
+			$this->logger->log("Invalid interval $minutes", \Joomla\CMS\Log\Log::WARNING);
+		}
 		$values = array('from' => self::minutesBefore($time, $minutes), 'to' => (string) $time);
 		return $this->db->createQuery()
 			->select('COUNT(*)')
@@ -216,8 +224,9 @@ class FailedLoginRepository extends Repository
 	 * Keeps the failed logins below $maxRows by deleting the oldest ones.
 	 * Fail-open: the next run does it.
 	 */
-	public function trim($maxRows)
+	public function trim($maxRows = null)
 	{
+		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('trim', function () use ($maxRows)
 		{
 			$this->trimOldest(self::Table, 'id', 'id ASC', $maxRows, 5000, ParameterType::INTEGER);

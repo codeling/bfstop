@@ -21,6 +21,14 @@ class DnsCacheRepository extends Repository
 {
 	private const Table = '#__bfstop_dnscache';
 
+	// how long a result is trusted before the lookup is redone: keeps the
+	// (potentially slow) gethostbyaddr() call to at most once per address and
+	// window, see issue #103
+	public const TtlDays = 7;
+	// upper bound for the rows: there is one per address, and a client with
+	// an IPv6 network can fail every login from another one
+	public const MaxRows = 10000;
+
 	/**
 	 * Returns false if there is no (unexpired) cached entry for this IP - the
 	 * caller should do a live lookup and cache it via put(). Returns null if
@@ -33,7 +41,7 @@ class DnsCacheRepository extends Repository
 	 * @param int $ttlDays how long a result is trusted
 	 * @return string|false|null
 	 */
-	public function get($ipaddress, $ttlDays)
+	public function get($ipaddress, $ttlDays = self::TtlDays)
 	{
 		return $this->failOpen('get', function () use ($ipaddress, $ttlDays)
 		{
@@ -104,8 +112,10 @@ class DnsCacheRepository extends Repository
 	 * more - and, oldest first, as many more as needed to keep at most
 	 * $maxRows. Fail-open: the next run does it.
 	 */
-	public function prune($ttlDays, $maxRows)
+	public function prune($ttlDays = null, $maxRows = null)
 	{
+		$ttlDays = $ttlDays ?? self::TtlDays;
+		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('prune', function () use ($ttlDays, $maxRows)
 		{
 			$query = $this->db->createQuery()

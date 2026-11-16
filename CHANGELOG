@@ -3,9 +3,12 @@
     class per table (src/Repository), which take values - an address, a
     username, a time - instead of the SQL fragments, table and column names
     the old DatabaseHelper methods took, and bind every one of them as a
-    parameter. DatabaseHelper only puts what the plugin does together from
-    them. A unit test keeps it that way. The component reads its settings
-    the same way
+    parameter. DatabaseHelper is gone: the plugin and the component hold
+    the repositories (Repository\Repositories), and what puts several of
+    them together - a login, a block, the daily maintenance - is a small
+    class of its own (src/Service). A unit test keeps the repositories
+    free of SQL built from values. The component reads its settings the
+    same way
   - What happens if the database fails is decided in one place now, per
     operation, and the same for each: counting and the bookkeeping fail
     open (nobody is blocked or let through because of it, and it is tried

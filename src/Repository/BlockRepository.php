@@ -23,6 +23,9 @@ class BlockRepository extends AddressTableRepository
 	protected const Table = '#__bfstop_bannedip';
 	protected const MatchLabel = 'Blocked';
 
+	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
+	public const UnlimitedDuration = 5256000;
+
 	// SQL for "the block t is active at :now"; names of columns and tables only
 	private function activeCondition($block, $lifted)
 	{
@@ -58,6 +61,15 @@ class BlockRepository extends AddressTableRepository
 				return (int) $entry->id;
 			}, $entries);
 		});
+	}
+
+	/**
+	 * Whether $ipaddress is blocked now. Whoever must not take a block list
+	 * which can't be read for "not blocked" asks activeIdsFor().
+	 */
+	public function isBlocked($ipaddress)
+	{
+		return count($this->activeIdsFor($ipaddress) ?? array()) > 0;
 	}
 
 	/**
@@ -172,7 +184,7 @@ class BlockRepository extends AddressTableRepository
 				->where($this->db->quoteName('t.crdate').' BETWEEN :from AND :to')
 				->where($this->db->quoteName('t.ipaddress').' = :ip')
 				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE t.id = u.block_id AND source = 0)');
-			$values = array('from' => self::minutesBefore($time, \Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper::$UNLIMITED_DURATION),
+			$values = array('from' => self::minutesBefore($time, self::UnlimitedDuration),
 				'to' => $time, 'ip' => (string) $ipaddress);
 			self::bindValues($query, $values);
 			$this->db->setQuery($query);

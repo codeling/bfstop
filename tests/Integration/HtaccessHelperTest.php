@@ -8,7 +8,7 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -411,7 +411,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.5', 'crdate' => self::minutesAgo(120), 'duration' => 60));
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.6', 'crdate' => self::minutesAgo(10), 'duration' => 60));
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8:1::/56', 'crdate' => self::minutesAgo(10), 'duration' => 0));
-		$db = new DatabaseHelper($this->logger);
+		$db = (new Repositories($this->logger))->blocks();
 		$h = $this->helper();
 		$this->assertSame(0, $h->removeStaleBlocks($db, false), 'no file');
 		$this->assertFileDoesNotExist($this->dir.'/.htaccess');

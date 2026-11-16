@@ -21,6 +21,12 @@ class KnownIpRepository extends Repository
 {
 	private const Table = '#__bfstop_knownip';
 
+	// addresses are forgotten after this long without a login from them, and
+	// the table is kept below this number of rows, oldest first: a visitor
+	// with an account can log in from as many addresses as they like
+	public const MaxAgeDays = 365;
+	public const MaxRows = 100000;
+
 	/**
 	 * Remembers that $username has logged in from $key (an IPv4 address, or
 	 * an IPv6 network, see IpHelper::trackedAddress()).
@@ -136,8 +142,10 @@ class KnownIpRepository extends Repository
 	 * and, oldest first, as many more as needed to keep at most $maxRows.
 	 * Fail-open: the next run does it.
 	 */
-	public function prune($maxAgeDays, $maxRows)
+	public function prune($maxAgeDays = null, $maxRows = null)
 	{
+		$maxAgeDays = $maxAgeDays ?? self::MaxAgeDays;
+		$maxRows = $maxRows ?? self::MaxRows;
 		$this->failOpen('prune', function () use ($maxAgeDays, $maxRows)
 		{
 			$query = $this->db->createQuery()
