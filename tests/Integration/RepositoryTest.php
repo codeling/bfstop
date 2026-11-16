@@ -16,7 +16,7 @@ use Codeling\Plugin\System\Bfstop\Repository\KnownIpRepository;
 use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Plugin\System\Bfstop\Repository\UserRepository;
 use Joomla\CMS\Log\Log;
-use Joomla\Database\DatabaseInterface;
+use Joomla\Database\DatabaseDriver;
 
 /**
  * The repositories: that values reach the database as values whatever they
@@ -33,10 +33,13 @@ class RepositoryTest extends IntegrationTestCase
 		FailurePolicy::reset();
 	}
 
-	/** a database which fails at the first query */
-	private function brokenDatabase(): DatabaseInterface
+	/**
+	 * a database which fails at the first query. A mock of the driver class:
+	 * Joomla 5.4's DatabaseInterface doesn't have createQuery() yet.
+	 */
+	private function brokenDatabase(): DatabaseDriver
 	{
-		$db = $this->createMock(DatabaseInterface::class);
+		$db = $this->createMock(DatabaseDriver::class);
 		$db->method('createQuery')->willThrowException(new \RuntimeException('database is gone'));
 		$db->method('setQuery')->willThrowException(new \RuntimeException('database is gone'));
 		$db->method('insertObject')->willThrowException(new \RuntimeException('database is gone'));
