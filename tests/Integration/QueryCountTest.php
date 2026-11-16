@@ -16,8 +16,9 @@ use Joomla\CMS\Factory;
  * for the failed logins, a way for an attacker to make the site do more work
  * per request. The numbers are the plugin's own queries (the scripts of
  * fixtures/ start counting when they hand the event to the plugin), the same
- * on every database. They are limits, not exact numbers: a change which
- * needs more queries has to say so by raising one - and which ones.
+ * on every database - except that Joomla's lookups of a table's columns are
+ * not counted (see queriesOf()). They are limits, not exact numbers: a change
+ * which needs more queries has to say so by raising one - and which ones.
  *
  * The performance comparison (tests/performance) measures what it costs.
  */
@@ -29,9 +30,9 @@ class QueryCountTest extends IntegrationTestCase
 	private const Limits = array(
 		'page view' => 2,
 		'blocked request' => 3,
-		'failed login, unknown user' => 8,
-		'failed login, account' => 8,
-		'failed login which blocks' => 20,
+		'failed login, unknown user' => 7,
+		'failed login, account' => 7,
+		'failed login which blocks' => 17,
 	);
 
 	private static $originalParams;
@@ -113,14 +114,23 @@ class QueryCountTest extends IntegrationTestCase
 		$output = implode("\n", $lines);
 		$this->assertSame(0, $exitCode, $output);
 		$queries = array();
+		$counted = 0;
 		foreach ($lines as $line)
 		{
-			if (strncmp($line, 'QUERY: ', 7) === 0)
+			if (strncmp($line, 'QUERY: ', 7) !== 0)
+			{
+				continue;
+			}
+			++$counted;
+			// insertObject() has Joomla look up the columns of its table first, once for
+			// each table in a request: one query on MySQL and MariaDB, two on
+			// PostgreSQL. The driver's business, which differs between databases.
+			if (!preg_match('/^SHOW FULL COLUMNS|current_schemas\(|pg_catalog\.pg_attribute/', substr($line, 7)))
 			{
 				$queries[] = substr($line, 7);
 			}
 		}
-		$this->assertMatchesRegularExpression('/^QUERIES: '.count($queries).'$/m', $output);
+		$this->assertMatchesRegularExpression('/^QUERIES: '.$counted.'$/m', $output);
 		return $queries;
 	}
 
