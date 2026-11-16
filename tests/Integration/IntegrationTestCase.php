@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
@@ -15,7 +15,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Collects what the code under test logs. The plugin catches database
- * exceptions and only logs them (see DatabaseHelper), so every test checks
+ * exceptions and only logs them (see FailurePolicy), so every test checks
  * afterwards that no errors were logged - otherwise a broken query would
  * just look like "no matching rows".
  */
@@ -112,13 +112,13 @@ abstract class IntegrationTestCase extends TestCase
 	/**
 	 * inserts a row, returns the new id if $key is given. For unblock tokens
 	 * the row is given with the token as it is in the mail; what the table
-	 * holds is its hash (see DatabaseHelper::hashToken())
+	 * holds is its hash (see UnblockTokenRepository::hash())
 	 */
 	protected function insert($table, array $row, $key = null)
 	{
 		if ($table === '#__bfstop_unblock_token' && isset($row['token']))
 		{
-			$row['token'] = DatabaseHelper::hashToken($row['token']);
+			$row['token'] = UnblockTokenRepository::hash($row['token']);
 		}
 		$object = (object) $row;
 		$this->db->insertObject($table, $object, $key);

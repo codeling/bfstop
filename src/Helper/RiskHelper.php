@@ -11,6 +11,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 defined('_JEXEC') or die;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Log\Log;
 use Joomla\Registry\Registry;
 
@@ -33,7 +34,7 @@ class RiskHelper
 		return (int) $params->get($paramName, $default);
 	}
 
-	private static function knownIpScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress, $username)
+	private static function knownIpScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $username)
 	{
 		if (!self::getBoolParam($params, 'riskKnownIpEnabled', true))
 		{
@@ -41,7 +42,7 @@ class RiskHelper
 		}
 		try
 		{
-			if ($db->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', Bfstop::DefaultSettings['ipv6PrefixLength'])))
+			if ($repositories->knownIps()->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', Bfstop::DefaultSettings['ipv6PrefixLength'])))
 			{
 				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
 			}
@@ -129,10 +130,10 @@ class RiskHelper
 	 * (DnsHelper::reverseLookup(), not gethostbyaddr(), which can't be) and
 	 * its result cached by the key the client is tracked under (an IPv6
 	 * client by its network: it could otherwise miss the cache with every
-	 * request, switching addresses), see DatabaseHelper::getCachedHostname().
+	 * request, switching addresses), see DnsCacheRepository::get().
 	 * A lookup which gets no answer in time counts as no record.
 	 */
-	private static function reverseDnsScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress, $cacheKey)
+	private static function reverseDnsScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $cacheKey)
 	{
 		if (!self::getBoolParam($params, 'riskReverseDnsEnabled', false))
 		{
@@ -140,7 +141,7 @@ class RiskHelper
 		}
 		try
 		{
-			$hostname = $db->getCachedHostname($cacheKey);
+			$hostname = $repositories->dnsCache()->get($cacheKey);
 			if ($hostname === false)
 			{
 				$hostname = DnsHelper::reverseLookup($ipaddress);
@@ -150,7 +151,7 @@ class RiskHelper
 						', the reverse DNS signal is skipped', Log::WARNING);
 					return 0;
 				}
-				$db->cacheHostname($cacheKey, $hostname);
+				$repositories->dnsCache()->put($cacheKey, $hostname);
 			}
 			if ($hostname === null)
 			{
@@ -169,15 +170,15 @@ class RiskHelper
 	 *                                    (IpHelper::trackedAddress()), if not
 	 *                                    its address
 	 */
-	public static function computeScore(DatabaseHelper $db, LoggerHelper $logger, Registry $params, $ipaddress, $username,
+	public static function computeScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $username,
 		$trackedAddress = null)
 	{
 		$score = 0;
-		$score += self::knownIpScore($db, $logger, $params, $ipaddress, $username);
+		$score += self::knownIpScore($repositories, $logger, $params, $ipaddress, $username);
 		$score += self::commonUsernameScore($params, $username);
 		$score += self::userAgentScore($params);
 		$score += self::geoScore($logger, $params, $ipaddress);
-		$score += self::reverseDnsScore($db, $logger, $params, $ipaddress, $trackedAddress ?? $ipaddress);
+		$score += self::reverseDnsScore($repositories, $logger, $params, $ipaddress, $trackedAddress ?? $ipaddress);
 		return $score;
 	}
 }

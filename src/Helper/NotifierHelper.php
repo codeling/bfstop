@@ -10,6 +10,8 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -20,24 +22,24 @@ class NotifierHelper
 {
 	public static $ONE_DAY = 1440;
 	private $logger;
-	private $db;
+	private $repositories;
 	private $notifyAddresses;
 
-	public function __construct(LoggerHelper $logger, DatabaseHelper $db, $emailAddress, $userID, $userGroup, $groupNotifEnabled)
+	public function __construct(LoggerHelper $logger, Repositories $repositories, $emailAddress, $userID, $userGroup, $groupNotifEnabled)
 	{
 		$this->logger = $logger;
-		$this->db = $db;
+		$this->repositories = $repositories;
 
 		$addresses = empty($emailAddress) ? array() : explode(";", $emailAddress);
 		// -1: no user chosen, nothing to look up
-		$userEmail = (int) $userID > 0 ? $this->db->getUserEmailByID($userID) : null;
+		$userEmail = (int) $userID > 0 ? $this->repositories->users()->emailById($userID) : null;
 		if (!empty($userEmail))
 		{
 			$addresses[] = $userEmail;
 		}
 		if ($groupNotifEnabled)
 		{
-			$addresses = array_merge($addresses, $this->db->getUserGroupEmail($userGroup));
+			$addresses = array_merge($addresses, $this->repositories->users()->emailsOfGroup($userGroup));
 		}
 		$this->notifyAddresses = self::validAddresses($addresses, $logger);
 		if (count($this->notifyAddresses) == 0)
@@ -103,9 +105,12 @@ class NotifierHelper
 			: Text::_('PLG_SYSTEM_BFSTOP_SITE_ADDRESS_NOT_SET');
 	}
 
-	public function isNotificationAllowed($logtime, $maxNumber,
-		$table = '#__bfstop_failedlogin',
-		$timecol = 'logtime')
+	/**
+	 * Whether another notification may be sent: at most $maxNumber of failed
+	 * logins (or, with $blocks, of blocks) in the last day, -1 for any number,
+	 * 0 for none.
+	 */
+	public function isNotificationAllowed($logtime, $maxNumber, $blocks = false)
 	{
 		// -1 stands for an unlimited number of notifications
 		if ($maxNumber == -1)
@@ -117,9 +122,32 @@ class NotifierHelper
 		{
 			return false;
 		}
-		return $this->db->eventsInInterval(
-			self::$ONE_DAY, $logtime, '', $table, $timecol)
-			<= $maxNumber;
+		$events = $blocks
+			? $this->repositories->blocks()->countCreatedInWindow($logtime, self::$ONE_DAY)
+			: $this->repositories->failedLogins()->countInWindow($logtime, self::$ONE_DAY);
+		return $events <= $maxNumber;
+	}
+
+	/**
+	 * The failed logins from $ipAddress in the $interval minutes up to
+	 * $curTime, as the table in the body of a mail.
+	 */
+	public function failedLoginList($ipAddress, $curTime, $interval)
+	{
+		$entries = $this->repositories->failedLogins()->listFromAddress($ipAddress, $curTime, $interval);
+		$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS'), 15)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME'), 20)." ".
+				str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN'), 8)."\n".
+				str_repeat("-", 97)."\n";
+		foreach ($entries as $entry)
+		{
+			$result .= str_pad(LoggerHelper::singleLine($entry->username), 25)." ".
+				str_pad($entry->ipaddress, 15)." ".
+				str_pad($entry->logtime, 20)." ".
+				str_pad(Bfstop::originName($entry->origin), 8)."\n";
+		}
+		return $result;
 	}
 
 	public function getBlockedBody($logEntry, $interval)
@@ -127,7 +155,7 @@ class NotifierHelper
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
 			self::siteAddress(),
-			$this->db->getFormattedFailedList($logEntry->ipaddress,
+			$this->failedLoginList($logEntry->ipaddress,
 				$logEntry->logtime,
 				$interval
 			)
@@ -146,7 +174,7 @@ class NotifierHelper
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME').":", 15).
 			$logEntry->logtime."\n";
 		$bodys .= str_pad(Text::_('PLG_SYSTEM_BFSTOP_ORIGIN').":", 15).
-			$this->db->getClientString($logEntry->origin)."\n";
+			Bfstop::originName($logEntry->origin)."\n";
 		return $bodys;
 	}
 
@@ -198,9 +226,7 @@ class NotifierHelper
 
 	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed(
-			$logEntry->logtime, $maxNumber,
-			'#__bfstop_bannedip', 'crdate'))
+		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
 		{
 			return;
 		}

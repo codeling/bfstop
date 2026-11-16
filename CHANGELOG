@@ -1,4 +1,23 @@
 2.0.0 (unreleased)
+  - Internal: the database access of the plugin is split into one small
+    class per table (src/Repository), which take values - an address, a
+    username, a time - instead of the SQL fragments, table and column names
+    the old DatabaseHelper methods took, and bind every one of them as a
+    parameter. DatabaseHelper is gone: the plugin and the component hold
+    the repositories (Repository\Repositories), and what puts several of
+    them together - a login, a block, the daily maintenance - is a small
+    class of its own (src/Service). A unit test keeps the repositories
+    free of SQL built from values. The component reads its settings the
+    same way
+  - What happens if the database fails is decided in one place now, per
+    operation, and the same for each: counting and the bookkeeping fail
+    open (nobody is blocked or let through because of it, and it is tried
+    again), what grants something fails closed (an address which can't be
+    looked up isn't on the allow list, isn't a known one, no unblock link
+    is sent), and the block list of a login attempt is reported as unknown
+    to its caller. Each failure is logged in the same form ("Database
+    failure in <operation> (fail-open|fail-closed|unknown)"), where the
+    plugin kept a failed counting silent before
   - IPv6: a login is remembered, and trusted (the unblock link of mode
     "addresses the user has logged in from", the known-address bonus of the
     risk score), per /64, no longer per /56. Failed logins and blocks keep

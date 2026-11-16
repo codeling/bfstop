@@ -8,7 +8,10 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\DnsCacheRepository;
+use Codeling\Plugin\System\Bfstop\Repository\KnownIpRepository;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Plugin\System\Bfstop\Service\LoginService;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\Registry\Registry;
@@ -44,18 +47,29 @@ class RiskHelperTest extends IntegrationTestCase
 		), $overrides));
 	}
 
+	/** the repositories of the signals, as the given mocks (or mocks which answer nothing) */
+	private function repos($known = null, $dns = null)
+	{
+		$repos = $this->createMock(Repositories::class);
+		$repos->method('knownIps')->willReturn($known ?? $this->createMock(KnownIpRepository::class));
+		$repos->method('dnsCache')->willReturn($dns ?? $this->createMock(DnsCacheRepository::class));
+		return $repos;
+	}
+
 	private function db($knownIp = false)
 	{
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('hasLoggedInFrom')->willReturn($knownIp);
-		return $db;
+		$known = $this->createMock(KnownIpRepository::class);
+		$known->method('hasLoggedInFrom')->willReturn($knownIp);
+		return $this->repos($known);
 	}
 
 	public function testAllSignalsDisabledScoresZero()
 	{
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->expects($this->never())->method('hasLoggedInFrom');
-		$db->expects($this->never())->method('getCachedHostname');
+		$known = $this->createMock(KnownIpRepository::class);
+		$known->expects($this->never())->method('hasLoggedInFrom');
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->expects($this->never())->method('get');
+		$db = $this->repos($known, $dns);
 		$_SERVER['HTTP_USER_AGENT'] = '';
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, self::allOff(), '203.0.113.5', 'admin'));
 	}
@@ -78,8 +92,9 @@ class RiskHelperTest extends IntegrationTestCase
 
 	public function testKnownIpLookupFailureFailsSafe()
 	{
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('hasLoggedInFrom')->willThrowException(new \RuntimeException('db down'));
+		$known = $this->createMock(KnownIpRepository::class);
+		$known->method('hasLoggedInFrom')->willThrowException(new \RuntimeException('db down'));
+		$db = $this->repos($known);
 		$logger = $this->logger;
 		$params = self::allOff(array('riskKnownIpEnabled' => 1));
 		$this->assertSame(0, RiskHelper::computeScore($db, $logger, $params, '203.0.113.5', 'jdoe'));
@@ -120,14 +135,16 @@ class RiskHelperTest extends IntegrationTestCase
 	{
 		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
 
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('getCachedHostname')->willReturn('host.example.org');
-		$db->expects($this->never())->method('cacheHostname');
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->method('get')->willReturn('host.example.org');
+		$dns->expects($this->never())->method('put');
+		$db = $this->repos(null, $dns);
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '203.0.113.5', 'jdoe'));
 
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('getCachedHostname')->willReturn(null); // cached "no PTR record"
-		$db->expects($this->never())->method('cacheHostname');
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->method('get')->willReturn(null); // cached "no PTR record"
+		$dns->expects($this->never())->method('put');
+		$db = $this->repos(null, $dns);
 		$this->assertSame(2, RiskHelper::computeScore($db, $this->logger, $params, '203.0.113.5', 'jdoe'));
 	}
 
@@ -136,8 +153,9 @@ class RiskHelperTest extends IntegrationTestCase
 		// an IPv6 client switching addresses would otherwise miss the cache,
 		// and cause a lookup, with every failed login
 		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->expects($this->once())->method('getCachedHostname')->with('2001:db8:1::/56')->willReturn('host.example.org');
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->expects($this->once())->method('get')->with('2001:db8:1::/56')->willReturn('host.example.org');
+		$db = $this->repos(null, $dns);
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'jdoe', '2001:db8:1::/56'));
 	}
 
@@ -151,9 +169,10 @@ class RiskHelperTest extends IntegrationTestCase
 			$this->markTestSkipped('no name server in /etc/resolv.conf');
 		}
 		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('getCachedHostname')->willReturn(false);
-		$db->expects($this->once())->method('cacheHostname')->with('2001:db8:1::/56', null);
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->method('get')->willReturn(false);
+		$dns->expects($this->once())->method('put')->with('2001:db8:1::/56', null);
+		$db = $this->repos(null, $dns);
 		$start = microtime(true);
 		$this->assertSame(2, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'jdoe', '2001:db8:1::/56'));
 		$this->assertLessThan(\Codeling\Plugin\System\Bfstop\Helper\DnsHelper::TimeoutSeconds + 0.5, microtime(true) - $start);
@@ -162,8 +181,9 @@ class RiskHelperTest extends IntegrationTestCase
 	public function testReverseDnsFailureFailsSafe()
 	{
 		$params = self::allOff(array('riskReverseDnsEnabled' => 1));
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('getCachedHostname')->willThrowException(new \RuntimeException('cache broken'));
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->method('get')->willThrowException(new \RuntimeException('cache broken'));
+		$db = $this->repos(null, $dns);
 		$logger = $this->logger;
 		$this->assertSame(0, RiskHelper::computeScore($db, $logger, $params, '203.0.113.5', 'jdoe'));
 		$this->assertTrue($logger->hasMessage(Log::WARNING, 'cache broken'));
@@ -175,9 +195,11 @@ class RiskHelperTest extends IntegrationTestCase
 			'riskCommonUsernames'   => 'admin',
 			'riskReverseDnsEnabled' => 1,
 		));
-		$db = $this->createMock(DatabaseHelper::class);
-		$db->method('hasLoggedInFrom')->willReturn(true);
-		$db->method('getCachedHostname')->willReturn(null);
+		$known = $this->createMock(KnownIpRepository::class);
+		$known->method('hasLoggedInFrom')->willReturn(true);
+		$dns = $this->createMock(DnsCacheRepository::class);
+		$dns->method('get')->willReturn(null);
+		$db = $this->repos($known, $dns);
 		unset($_SERVER['HTTP_USER_AGENT']);
 		// known IP -5, common username +2, no user agent +2, no rDNS +2
 		$this->assertSame(1, RiskHelper::computeScore($db, $this->logger, $params, '203.0.113.5', 'admin'));
@@ -185,10 +207,10 @@ class RiskHelperTest extends IntegrationTestCase
 
 	public function testKnownIpScoreRecognisesTheNetworkOfAnIpv6Client()
 	{
-		// logins are remembered by network (see DatabaseHelper::successfulLogin()),
+		// logins are remembered by network (see LoginService::recordSuccessfulLogin()),
 		// so an IPv6 client switching addresses is still a known one
-		$db = new DatabaseHelper($this->logger);
-		$db->successfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::/64');
+		$db = new Repositories($this->logger);
+		(new LoginService($db))->recordSuccessfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::/64');
 		$params = self::allOff(array('riskKnownIpEnabled' => 1, 'riskKnownIpPoints' => 5));
 		$this->assertSame(-5, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2:aaaa::9', 'bob'));
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:3::9', 'bob'), 'another network');
@@ -197,8 +219,8 @@ class RiskHelperTest extends IntegrationTestCase
 
 	public function testKnownIpScoreHonoursTheConfiguredNetworkSize()
 	{
-		$db = new DatabaseHelper($this->logger);
-		$db->successfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::5');
+		$db = new Repositories($this->logger);
+		(new LoginService($db))->recordSuccessfulLogin((object) array('ipaddress' => '2001:db8:1:2::5', 'username' => 'bob'), '2001:db8:1:2::5');
 		$params = self::allOff(array('riskKnownIpEnabled' => 1, 'riskKnownIpPoints' => 5, 'ipv6PrefixLength' => 128));
 		$this->assertSame(-5, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'bob'));
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::6', 'bob'));

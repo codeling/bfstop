@@ -8,7 +8,7 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -39,7 +39,7 @@ class NotifierHelperTest extends IntegrationTestCase
 	private function mails()
 	{
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
-		$notifier = new NotifierHelper($this->logger, new DatabaseHelper($this->logger), '', -1, -1, false);
+		$notifier = new NotifierHelper($this->logger, new Repositories($this->logger), '', -1, -1, false);
 		$entry = (object) array('ipaddress' => '203.0.113.5', 'username' => 'Admin', 'logtime' => date('Y-m-d H:i:s'),
 			'origin' => 0);
 		return array(
@@ -71,7 +71,7 @@ class NotifierHelperTest extends IntegrationTestCase
 	{
 		$this->assertSame(array('admin@example.org', 'other@example.org'),
 			NotifierHelper::validAddresses(array(' admin@example.org', 'nonsense', '', 'ADMIN@example.org ', 'other@example.org')));
-		$notifier = new NotifierHelper($this->logger, new DatabaseHelper($this->logger),
+		$notifier = new NotifierHelper($this->logger, new Repositories($this->logger),
 			'admin@example.org; not an address;other@example.org', -1, -1, false);
 		$this->assertSame(array('admin@example.org', 'other@example.org'), $notifier->getNotifyAddresses());
 	}
@@ -79,7 +79,7 @@ class NotifierHelperTest extends IntegrationTestCase
 	public function testAnInvalidRecipientDoesNotThrow()
 	{
 		// the mailer throws for one; this runs in the request of a failed login
-		$notifier = new NotifierHelper($this->logger, new DatabaseHelper($this->logger), '', -1, -1, false);
+		$notifier = new NotifierHelper($this->logger, new Repositories($this->logger), '', -1, -1, false);
 		$result = $notifier->sendMail('subject', 'body', array('not an address'));
 		$this->assertNotTrue($result);
 		$this->logger->errors = array(); // expected: "not successful"

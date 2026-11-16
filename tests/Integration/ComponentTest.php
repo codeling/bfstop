@@ -20,7 +20,7 @@ use Codeling\Component\Bfstop\Administrator\Model\HtblocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
-use Codeling\Plugin\System\Bfstop\Helper\DatabaseHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Factory\MVCFactory;
@@ -113,15 +113,15 @@ class ComponentTest extends IntegrationTestCase
 		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.5', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
 		$this->insert('#__bfstop_unblock_token', array('token' => 'expired', 'block_id' => $blockId, 'crdate' => self::minutesAgo(4 * 24 * 60)));
 		$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $blockId, 'crdate' => self::minutesAgo(60)));
-		$helper = new DatabaseHelper($this->logger);
-		$this->assertTrue($helper->isIPBlocked('203.0.113.5'));
+		$helper = new Repositories($this->logger);
+		$this->assertTrue($helper->blocks()->isBlocked('203.0.113.5'));
 
 		$model = $this->model(TokenunblockModel::class);
 		$this->assertFalse((bool) $model->unblock('expired', $this->logger), 'expired token must not unblock');
 		$this->logger->errors = array(); // expected: "token not found" error
 		$this->assertTrue((bool) $model->unblock('valid', $this->logger));
 
-		$this->assertFalse($helper->isIPBlocked('203.0.113.5'));
+		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.5'));
 		$this->assertSame(1, (int) $this->queryValue('SELECT source FROM #__bfstop_unblock WHERE block_id='.$blockId));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token'));
 	}
@@ -131,7 +131,7 @@ class ComponentTest extends IntegrationTestCase
 		$ip = '203.0.113.5';
 		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
 		$this->insert('#__bfstop_unblock_token', array('token' => 'valid', 'block_id' => $blockId, 'crdate' => self::minutesAgo(60)));
-		$helper = new DatabaseHelper($this->logger);
+		$helper = new Repositories($this->logger);
 		$model = $this->model(TokenunblockModel::class);
 		$tokens = 'SELECT COUNT(*) FROM #__bfstop_unblock_token';
 
@@ -139,21 +139,21 @@ class ComponentTest extends IntegrationTestCase
 
 		// opening the link (what a mail scanner does) changes nothing
 		$this->assertSame(TokenunblockModel::ResultConfirm, $model->process('valid', false, $ip, $this->logger));
-		$this->assertTrue($helper->isIPBlocked($ip));
+		$this->assertTrue($helper->blocks()->isBlocked($ip));
 		$this->assertSame(1, (int) $this->queryValue($tokens));
 
 		// confirming from another IP address doesn't unblock either
 		$this->assertSame(TokenunblockModel::ResultWrongIp, $model->process('valid', true, '198.51.100.9', $this->logger));
-		$this->assertTrue($helper->isIPBlocked($ip));
+		$this->assertTrue($helper->blocks()->isBlocked($ip));
 		$this->assertSame(1, (int) $this->queryValue($tokens));
 
 		// neither does an unknown token
 		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('unknown', true, $ip, $this->logger));
 		$this->logger->errors = array(); // expected: "token not found" error
-		$this->assertTrue($helper->isIPBlocked($ip));
+		$this->assertTrue($helper->blocks()->isBlocked($ip));
 
 		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, $ip, $this->logger));
-		$this->assertFalse($helper->isIPBlocked($ip));
+		$this->assertFalse($helper->blocks()->isBlocked($ip));
 		$this->assertSame(0, (int) $this->queryValue($tokens));
 	}
 
@@ -432,9 +432,9 @@ class ComponentTest extends IntegrationTestCase
 		// the one which was lifted already used to end the loop: the others
 		// selected with it stayed blocked
 		$this->assertTrue(UnblockHelper::unblockDB($this->db, $ids, 0, $this->logger));
-		$helper = new DatabaseHelper($this->logger);
-		$this->assertFalse($helper->isIPBlocked('203.0.113.71'));
-		$this->assertFalse($helper->isIPBlocked('203.0.113.72'));
+		$helper = new Repositories($this->logger);
+		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.71'));
+		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.72'));
 		$this->assertSame(3, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock'));
 	}
 
@@ -584,7 +584,7 @@ class ComponentTest extends IntegrationTestCase
 			$fill();
 			$save($blocking, array('blockMode' => 'loginonly', 'htaccessPath' => $former));
 			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs(), 'another blocking mode');
-			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.80'), 'the block stays in the database');
+			$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('203.0.113.80'), 'the block stays in the database');
 
 			// what the file holds of the time it blocked comes out with an
 			// unblock as well
@@ -707,9 +707,9 @@ class ComponentTest extends IntegrationTestCase
 		$allowId = $this->saveNew(AllowModel::class, array('ipaddress' => '2001:DB8::ABCD', 'notes' => ''));
 		$this->assertSame('203.0.113.0/24', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$blockId));
 		$this->assertSame('2001:db8::abcd', $this->queryValue('SELECT ipaddress FROM #__bfstop_allowlist WHERE id='.$allowId));
-		$helper = new DatabaseHelper($this->logger);
-		$this->assertTrue($helper->isIPBlocked('203.0.113.200'));
-		$this->assertTrue($helper->isIPOnAllowList('2001:db8::ABCD'));
+		$helper = new Repositories($this->logger);
+		$this->assertTrue($helper->blocks()->isBlocked('203.0.113.200'));
+		$this->assertTrue($helper->allowList()->contains('2001:db8::ABCD'));
 	}
 
 	public function testBlockDurationsAreShownAsText()
@@ -798,7 +798,7 @@ class ComponentTest extends IntegrationTestCase
 		$start = strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id));
 		$this->assertGreaterThanOrEqual($before, $start);
 		$this->assertLessThanOrEqual(time(), $start);
-		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.91'));
+		$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('203.0.113.91'));
 
 		$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.92', 'crdate' => '', 'duration' => '60'));
 		$this->assertGreaterThanOrEqual($before, strtotime($this->queryValue('SELECT crdate FROM #__bfstop_bannedip WHERE id='.$id)),
@@ -846,7 +846,7 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertSame(array('203.0.113.95', '192.0.2.0/24'), $htaccess->getDeniedIPs());
 			$messages = array_map(function ($message) { return $message['message']; }, Factory::getApplication()->getMessageQueue(true));
 			$this->assertContains(\Joomla\CMS\Language\Text::_('COM_BFSTOP_IPADDRESS_ALLOWED'), $messages);
-			$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('198.51.100.9'), 'blocked in the database');
+			$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('198.51.100.9'), 'blocked in the database');
 
 			// edited: another address, a duration which is over
 			$save = function ($id, array $data)
@@ -1280,7 +1280,7 @@ class ComponentTest extends IntegrationTestCase
 		$next = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81',
 			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$next));
-		$this->assertTrue((new DatabaseHelper($this->logger))->isIPBlocked('203.0.113.81'));
+		$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('203.0.113.81'));
 	}
 
 	public function testSettingsCheckOutNoExtension()
