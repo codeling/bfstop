@@ -10,8 +10,8 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Log\Log;
 
 class UnblockHelper

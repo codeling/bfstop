@@ -8,6 +8,7 @@
  * Plugin, component and package are released together, with one version
  * number, which is written in several places. This checks that they agree:
  *
+ *   - library/bfstop.xml (the library)
  *   - plugin/bfstop.xml (the system plugin)
  *   - task/bfstop.xml (the task plugin)
  *   - component/bfstop.xml (the component)
@@ -68,6 +69,7 @@ function fail($message)
 
 $versions = array(
 	'plugin/bfstop.xml' => manifestVersion($root.'/plugin/bfstop.xml'),
+	'library/bfstop.xml' => manifestVersion($root.'/library/bfstop.xml'),
 	'task/bfstop.xml' => manifestVersion($root.'/task/bfstop.xml'),
 	'component/bfstop.xml' => manifestVersion($root.'/component/bfstop.xml'),
 	'package/pkg_bfstop.xml' => manifestVersion($root.'/package/pkg_bfstop.xml'),

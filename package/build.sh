@@ -1,12 +1,14 @@
 #!/bin/bash
 #
-# Builds the release zips of BFStop from this repository: the system plugin
-# (plugin/), the task plugin (task/), the component (component/) and the
-# package containing all three, which is what users install. The checkout is
-# not changed; the zips go to the output directory (default: build/):
+# Builds the release zips of BFStop from this repository: the library
+# (library/), the system plugin (plugin/), the task plugin (task/), the
+# component (component/) and the package containing all four, which is what
+# users install. The checkout is not changed; the zips go to the output
+# directory (default: build/):
 #
-#   bfstop-<version>.zip, plg_task_bfstop-<version>.zip,
-#   com_bfstop-<version>.zip, pkg_bfstop-<version>.zip
+#   lib_bfstop-<version>.zip, bfstop-<version>.zip,
+#   plg_task_bfstop-<version>.zip, com_bfstop-<version>.zip,
+#   pkg_bfstop-<version>.zip
 #
 # All of them must have the same version (see tests/lint/check-versions.php),
 # so a package can't contain the extensions of another release.
@@ -40,13 +42,20 @@ build_extension() {
 build_extension plugin "bfstop-$version.zip"
 build_extension component "com_bfstop-$version.zip"
 
-# the task plugin is the directory task/, with its own manifest
-rm -f "$out/plg_task_bfstop-$version.zip"
-(cd "$root/task" && zip -qr "$out/plg_task_bfstop-$version.zip" bfstop.xml index.html script.php services src language)
-php "$root/tests/lint/check-zip.php" "$out/plg_task_bfstop-$version.zip" bfstop.xml > /dev/null
+# the library and the task plugin are their directory, with its own manifest
+zip_directory() {
+	local dir="$1" zip="$2"
+	shift 2
+	rm -f "$out/$zip"
+	(cd "$root/$dir" && zip -qr "$out/$zip" "$@")
+	php "$root/tests/lint/check-zip.php" "$out/$zip" bfstop.xml > /dev/null
+}
+zip_directory library "lib_bfstop-$version.zip" bfstop.xml index.html src language
+zip_directory task "plg_task_bfstop-$version.zip" bfstop.xml index.html script.php services src language
 
 mkdir -p "$work/pkg/packages"
 cp "$root/package/pkg_bfstop.xml" "$root/package/script.php" "$work/pkg/"
+cp "$out/lib_bfstop-$version.zip" "$work/pkg/packages/lib_bfstop.zip"
 cp "$out/bfstop-$version.zip" "$work/pkg/packages/plg_sys_bfstop.zip"
 cp "$out/plg_task_bfstop-$version.zip" "$work/pkg/packages/plg_task_bfstop.zip"
 cp "$out/com_bfstop-$version.zip" "$work/pkg/packages/com_bfstop.zip"
@@ -54,6 +63,6 @@ rm -f "$out/pkg_bfstop-$version.zip"
 (cd "$work/pkg" && zip -qr "$out/pkg_bfstop-$version.zip" pkg_bfstop.xml script.php packages)
 php "$root/tests/lint/check-zip.php" "$out/pkg_bfstop-$version.zip" pkg_bfstop.xml > /dev/null
 
-(cd "$out" && sha256sum "bfstop-$version.zip" "plg_task_bfstop-$version.zip" "com_bfstop-$version.zip" "pkg_bfstop-$version.zip" > "SHA256SUMS-$version")
+(cd "$out" && sha256sum "lib_bfstop-$version.zip" "bfstop-$version.zip" "plg_task_bfstop-$version.zip" "com_bfstop-$version.zip" "pkg_bfstop-$version.zip" > "SHA256SUMS-$version")
 echo "Built in $out:"
 cat "$out/SHA256SUMS-$version"

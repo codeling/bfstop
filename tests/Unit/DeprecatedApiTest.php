@@ -52,7 +52,7 @@ class DeprecatedApiTest extends TestCase
 
 	private function sources()
 	{
-		$roots = array(BFSTOP_PLUGIN_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/services', dirname(__DIR__, 2).'/task/src',
+		$roots = array(BFSTOP_LIBRARY_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/services', dirname(__DIR__, 2).'/task/src',
 			dirname(__DIR__, 2).'/task/services', BFSTOP_COMPONENT_ROOT.'/admin', BFSTOP_COMPONENT_ROOT.'/site');
 		$roots = array_merge($roots, $this->installerScripts());
 		foreach ($roots as $root)
@@ -114,7 +114,7 @@ class DeprecatedApiTest extends TestCase
 			$this->assertMatchesRegularExpression('/\nreturn new \w+\(\);\s*$/', file_get_contents($script),
 				basename($script).' has to return its InstallerScriptInterface');
 		}
-		$forms = array_merge(glob(BFSTOP_PLUGIN_ROOT.'/*.xml'), glob(dirname(__DIR__, 2).'/task/*.xml'),
+		$forms = array_merge(glob(BFSTOP_LIBRARY_ROOT.'/*.xml'), glob(BFSTOP_PLUGIN_ROOT.'/*.xml'), glob(dirname(__DIR__, 2).'/task/*.xml'),
 			glob(BFSTOP_COMPONENT_ROOT.'/*.xml'), glob(BFSTOP_COMPONENT_ROOT.'/admin/forms/*.xml'));
 		foreach ($forms as $form)
 		{

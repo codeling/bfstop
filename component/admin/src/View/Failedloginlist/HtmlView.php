@@ -12,7 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -28,7 +28,7 @@ class HtmlView extends BaseHtmlView
 		$this->sortColumn = $state->get('list.ordering');
 		$this->sortDirection = $state->get('list.direction');
 		$this->filterUsername = (string) $state->get('filter.username', '');
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Bfstop::DefaultSettings['deleteOld']);
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Settings::Defaults['deleteOld']);
 		$this->canPurge   = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
 		{

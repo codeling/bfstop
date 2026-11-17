@@ -106,7 +106,7 @@
 		</fieldset>
 		<fieldset name="advanced">
 			<!-- a checkbox per part; stored as their sum, a bitmask (1 frontend,
-				2 backend, 4 Web Services API, see the plugin's Bfstop::Origin*):
+				2 backend, 4 Web Services API, see the plugin's Origin):
 				SettingsModel converts between the two -->
 			<field name="enabledForOrigin" type="checkboxes" validate="options" required="true"
 				default="1,2,4"

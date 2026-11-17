@@ -7,10 +7,11 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Settings;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 
 /**
@@ -179,7 +180,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testApiLoginsAreOnlyCountedIfSwitchedOn()
 	{
-		$this->configure(array('enabledForOrigin' => Bfstop::OriginFrontend | Bfstop::OriginBackend));
+		$this->configure(array('enabledForOrigin' => Origin::Frontend | Origin::Backend));
 		$this->failedApiLogin(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw=='));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
 		$this->failedLogin('bob');
@@ -340,7 +341,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testRiskScoreAddsNoDelayByDefault()
 	{
-		$this->assertSame(0, Bfstop::DefaultSettings['riskDelaySecondsPerPoint']);
+		$this->assertSame(0, Settings::Defaults['riskDelaySecondsPerPoint']);
 		// "admin" is a common username, and there is no User-Agent: 4 points
 		$this->setPluginParams(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
 		$start = microtime(true);

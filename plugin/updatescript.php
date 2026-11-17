@@ -35,7 +35,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	private $htaccessNotRewritten = null;
 
 	// the bit of the "enabledForOrigin" setting for the Web Services API
-	// (Bfstop::OriginApi - the class of the version being replaced may be the
+	// (Origin::Api - the class of the version being replaced may be the
 	// one loaded while this runs)
 	private const OriginApi = 4;
 
@@ -213,9 +213,52 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		return true;
 	}
 
+	/**
+	 * What the plugin's directory held of the classes which are the
+	 * library's (lib_bfstop) since 2.0.0: the update doesn't remove them,
+	 * the manifest only names the folder src.
+	 */
+	private const MovedToLibrary = array(
+		'src/Helper',
+		'src/Repository',
+		'src/Service/BlockPolicy.php',
+		'src/Service/BlockService.php',
+		'src/Service/DailyMaintenance.php',
+		'src/Service/LoginService.php',
+		'src/Service/Maintenance.php',
+		'src/Service/MaintenanceSchedule.php',
+	);
+
+	/**
+	 * Removes the files of an earlier version which are the library's now
+	 * (see MovedToLibrary) from the plugin's directory $root.
+	 */
+	public static function removeMovedToLibrary($root)
+	{
+		foreach (self::MovedToLibrary as $path)
+		{
+			$path = $root.'/'.$path;
+			if (is_dir($path))
+			{
+				$files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+					RecursiveIteratorIterator::CHILD_FIRST);
+				foreach ($files as $file)
+				{
+					$file->isDir() ? @rmdir($file->getPathname()) : @unlink($file->getPathname());
+				}
+				@rmdir($path);
+			}
+			elseif (is_file($path))
+			{
+				@unlink($path);
+			}
+		}
+	}
+
 	public function update(InstallerAdapter $adapter): bool
 	{
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
+		self::removeMovedToLibrary(JPATH_PLUGINS.'/system/bfstop');
 
 		// for 2.0.0, the previously separate blockEnabled/useHtaccess switches
 		// and the (never released) two-value blockMode were unified into a

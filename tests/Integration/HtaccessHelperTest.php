@@ -8,8 +8,8 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -352,7 +352,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 	public function testTheLinkOfAnUnblockEmailGetsThrough()
 	{
 		$this->assertSame('/index.php', HtaccessHelper::unblockPagePath());
-		$link = \Codeling\Plugin\System\Bfstop\Extension\Bfstop::unblockLink(sha1('token'));
+		$link = \Codeling\Library\Bfstop\Helper\TokenHelper::unblockLink(sha1('token'));
 		$this->assertSame(1, preg_match('#'.str_replace('#', '\\#', HtaccessHelper::UnblockQueryPattern).'#',
 			(string) parse_url($link, PHP_URL_QUERY)), $link);
 		$this->assertSame(HtaccessHelper::unblockPagePath(), parse_url($link, PHP_URL_PATH));

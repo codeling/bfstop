@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\PluginHelper;
 use PHPUnit\Framework\Attributes\DataProvider;

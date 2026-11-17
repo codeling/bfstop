@@ -29,7 +29,7 @@ define("_JEXEC", 1);
 define("JPATH_BASE", __DIR__);
 require JPATH_BASE."/includes/defines.php";
 require JPATH_BASE."/includes/framework.php";
-require '.var_export(BFSTOP_PLUGIN_ROOT.'/src/Extension/Bfstop.php', true).';
+require '.var_export(BFSTOP_LIBRARY_ROOT.'/src/Helper/TokenHelper.php', true).';
 $c = \\Joomla\\CMS\\Factory::getContainer();
 $c->get("config")->set("live_site", '.var_export($liveSite, true).');
 foreach (array("session.web.site", "session.web.administrator", \\Joomla\\Session\\SessionInterface::class) as $alias)
@@ -37,7 +37,7 @@ foreach (array("session.web.site", "session.web.administrator", \\Joomla\\Sessio
 	$c->alias($alias, "session.cli");
 }
 \\Joomla\\CMS\\Factory::$application = $c->get(\\Joomla\\CMS\\Application\\'.$apps[$directory].'::class);
-echo "\nLINK: ", \\Codeling\\Plugin\\System\\Bfstop\\Extension\\Bfstop::unblockLink("T0KEN"), "\n";
+echo "\nLINK: ", \\Codeling\\Library\\Bfstop\\Helper\\TokenHelper::unblockLink("T0KEN"), "\n";
 ');
 		try
 		{

@@ -12,7 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;

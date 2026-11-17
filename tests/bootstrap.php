@@ -8,9 +8,9 @@
 // Test bootstrap, see tests/README.md. Unit tests only need the plugin
 // sources; the integration tests additionally need an installed Joomla site
 // (environment variable JOOMLA_ROOT), which is booted here as a site
-// application. The classes of the plugin and the component are always loaded
-// from this checkout (plugin/, component/), not from the copies installed
-// into that Joomla site.
+// application. The classes of the library, the plugin and the component are
+// always loaded from this checkout (library/, plugin/, component/), not from
+// the copies installed into that Joomla site.
 
 use Joomla\CMS\Application\SiteApplication;
 use Joomla\CMS\Factory;
@@ -51,10 +51,12 @@ if ($joomlaRoot)
 }
 
 // the directories of the extensions in this repository
+define('BFSTOP_LIBRARY_ROOT', dirname(__DIR__).'/library');
 define('BFSTOP_PLUGIN_ROOT', dirname(__DIR__).'/plugin');
 define('BFSTOP_COMPONENT_ROOT', dirname(__DIR__).'/component');
 
 $sourceNamespaces = array(
+	'Codeling\\Library\\Bfstop\\' => BFSTOP_LIBRARY_ROOT.'/src/',
 	'Codeling\\Plugin\\System\\Bfstop\\' => BFSTOP_PLUGIN_ROOT.'/src/',
 	'Codeling\\Component\\Bfstop\\Administrator\\' => BFSTOP_COMPONENT_ROOT.'/admin/src/',
 	'Codeling\\Component\\Bfstop\\Site\\' => BFSTOP_COMPONENT_ROOT.'/site/src/',

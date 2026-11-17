@@ -2,7 +2,7 @@
 
 - `Unit/`: tests needing nothing but PHP and [PHPUnit](https://phpunit.de) 11.
 - `Integration/`: tests against a real Joomla site with bfstop installed. They
-  run every database query of the plugin and of the component on the site's
+  run every database query of the library and of the component on the site's
   database, and let the plugin react
   to Joomla events as on a live site (failed logins, requests from blocked
   addresses). Skipped if `JOOMLA_ROOT` is not set.
@@ -16,8 +16,8 @@ in the site, so after changing them, copy them there first
 (`plugin/deploy.sh <joomla dir>` and `component/deploy.sh <joomla dir>`, or run
 `tests/ci/install-joomla.sh` again).
 
-The classes under test are always loaded from this checkout (`plugin/`,
-`component/`), not from the copies installed into the Joomla site, so
+The classes under test are always loaded from this checkout (`library/`,
+`plugin/`, `component/`), not from the copies installed into the Joomla site, so
 the site only needs to be set up again when the database schema changes.
 
 - `Upgrade/`: the update from the previous release, run by

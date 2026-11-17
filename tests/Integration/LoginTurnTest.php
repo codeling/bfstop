@@ -8,7 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Factory;
 
 /**

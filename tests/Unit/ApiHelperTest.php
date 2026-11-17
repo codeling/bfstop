@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
+use Codeling\Library\Bfstop\Helper\ApiHelper;
 use PHPUnit\Framework\TestCase;
 
 class ApiHelperTest extends TestCase

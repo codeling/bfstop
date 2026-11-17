@@ -10,9 +10,9 @@ namespace Codeling\Plugin\Task\Bfstop\Extension;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Service\DailyMaintenance;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\DailyMaintenance;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Component\Scheduler\Administrator\Event\ExecuteTaskEvent;

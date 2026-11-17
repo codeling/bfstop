@@ -10,18 +10,20 @@ namespace Codeling\Plugin\System\Bfstop\Extension;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
-use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
-use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
-use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
-use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
-use Codeling\Plugin\System\Bfstop\Service\BlockService;
-use Codeling\Plugin\System\Bfstop\Service\DailyMaintenance;
-use Codeling\Plugin\System\Bfstop\Service\LoginService;
+use Codeling\Library\Bfstop\Helper\ApiHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\NotifierHelper;
+use Codeling\Library\Bfstop\Helper\RiskHelper;
+use Codeling\Library\Bfstop\Helper\TokenHelper;
+use Codeling\Library\Bfstop\Helper\UsernameHelper;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Service\BlockService;
+use Codeling\Library\Bfstop\Service\DailyMaintenance;
+use Codeling\Library\Bfstop\Service\LoginService;
+use Codeling\Library\Bfstop\Settings;
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
 use Codeling\Plugin\System\Bfstop\Service\RequestClassifier;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
@@ -29,15 +31,15 @@ use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
-use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 
 /**
- * The plugin: what it does on Joomla's events. What a request is, what to do
- * about a failed login, what the client is told and the maintenance are the
- * classes of the Service namespace: RequestClassifier, BlockPolicy (with
- * BlockService and LoginService doing what it decides), Responder, LoginTurn
- * and DailyMaintenance.
+ * The plugin: what it does on Joomla's events. What to do about a failed
+ * login and the maintenance are the library's (lib_bfstop, namespace
+ * Codeling\Library\Bfstop): BlockPolicy, with BlockService and LoginService
+ * doing what it decides, and DailyMaintenance. What a request is and what
+ * the client is told are the plugin's own: RequestClassifier, Responder and
+ * LoginTurn (Service namespace of the plugin).
  */
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {
@@ -48,66 +50,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	protected $autoloadLanguage = false;
 	private bool $languageLoaded = false;
 
-	// see BlockPolicy
-	public const NotifyBlockedKnownAddress = BlockPolicy::NotifyBlockedKnownAddress;
-	public const NotifyBlockedAnyAddress = BlockPolicy::NotifyBlockedAnyAddress;
-
-	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
-	// plugin is active for. Joomla's other applications - the installation
-	// (client id 2) and the console (cli/joomla.php, client 4) - have no
-	// logins and no bit
-	public const OriginFrontend = 1;
-	public const OriginBackend = 2;
-	public const OriginApi = 4;
-	private const OriginClients = array(
-		'site' => self::OriginFrontend,
-		'administrator' => self::OriginBackend,
-		'api' => self::OriginApi,
-	);
-
 	/**
 	 * Values the plugin keeps among its settings for itself, which saving the
 	 * settings page must keep: none any more - its bookkeeping is the table
 	 * #__bfstop_state, which that page can't overwrite. com_bfstop's
-	 * SettingsModel::keepInternalSettings() goes through this until it is
+	 * SettingsModel::keepInternalSettings() went through this until it was
 	 * removed there; then so can this.
 	 */
 	public const InternalSettings = array();
-
-	/**
-	 * What the settings are while they have not been saved: the same as the
-	 * settings page shows for them (com_bfstop's forms/settings.xml - a test
-	 * compares them). The plugin is enabled by the installation, so it runs
-	 * with these until an administrator opens the settings.
-	 */
-	public const DefaultSettings = array(
-		'blockNumber' => 10,
-		'checkInterval' => 10080,
-		'maxBlocksBefore' => 3,
-		'notifyUsePasswordReminder' => 1,
-		'adaptiveDelayMax' => 0,
-		'adaptiveDelayThresholdMin' => 50,
-		'adaptiveDelayThresholdMax' => 200,
-		// failed logins are purged after this many weeks unless the
-		// administrator chose another time (0 = never). Keeping them for ever
-		// is not needed to protect anything, and they are personal data
-		// (addresses, usernames)
-		'deleteOld' => 4,
-		'logLevel' => 8, // Log::ERROR
-		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
-		// frontend, backend and the Web Services API
-		'enabledForOrigin' => self::OriginFrontend | self::OriginBackend | self::OriginApi,
-		// a delay ties up a PHP worker for its whole length, see
-		// Responder::delay(): the risk score adds none unless the
-		// administrator asks for it
-		'riskDelaySecondsPerPoint' => 0,
-		// what an IPv6 client is tracked by, see IpHelper::trackedAddress():
-		// a connection usually gets a /56 (or more), not just a /64, so a /64
-		// would let a client start over 256 times
-		'ipv6PrefixLength' => 56,
-		// at most this many responses are delayed at the same time
-		'delayMaxConcurrent' => 5,
-	);
 
 	private LoggerHelper $logger;
 	// created on first use (see notifier()): its constructor queries the
@@ -186,101 +136,15 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return $this->notifier;
 	}
 
-	/**
-	 * The link to the unblock page, which is a page of the site: Uri::root()
-	 * is the site's address in every application (Uri::base() is the
-	 * backend's in the backend, and the API's in the API). Like any address
-	 * Joomla builds, it has the host the request was sent to unless the
-	 * site's $live_site is set.
-	 */
-	public static function unblockLink($token)
-	{
-		return Uri::root().'index.php?option=com_bfstop&view=tokenunblock&token='.rawurlencode((string) $token);
-	}
-
-	/** See BlockPolicy::hasLiveSite() (used by com_bfstop). */
-	public static function hasLiveSite()
-	{
-		return BlockPolicy::hasLiveSite();
-	}
-
-	/** See BlockPolicy::effectiveNotifyBlockedUser() (used by com_bfstop). */
-	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
-	{
-		return BlockPolicy::effectiveNotifyBlockedUser($setting, $hasLiveSite);
-	}
-
-	/**
-	 * The name of the application of a request, as the log and mails show it:
-	 * the client id site 0, administrator 1, api 3.
-	 */
-	public static function originName($clientId)
-	{
-		switch ((int) $clientId)
-		{
-			case 0:
-				return 'Frontend';
-			case 3:
-				return 'API';
-			default:
-				return 'Backend';
-		}
-	}
-
-	/**
-	 * The "enabledForOrigin" setting as the bitmask it is stored as (see the
-	 * Origin* constants), also from the list of bits the settings form has
-	 * a checkbox for each (see com_bfstop's SettingsModel); other bits are
-	 * dropped.
-	 */
-	public static function originMask($value)
-	{
-		$mask = 0;
-		foreach (is_array($value) ? $value : array($value) as $bits)
-		{
-			$mask |= is_numeric($bits) ? (int) $bits : 0;
-		}
-		return $mask & array_sum(self::OriginClients);
-	}
-
-	/**
-	 * The bits set in an "enabledForOrigin" bitmask, as the settings form's
-	 * checkboxes take them (strings, in the order of the Origin* constants).
-	 */
-	public static function originList($mask)
-	{
-		$mask = self::originMask($mask);
-		$list = array();
-		foreach (self::OriginClients as $bit)
-		{
-			if ($mask & $bit)
-			{
-				$list[] = (string) $bit;
-			}
-		}
-		return $list;
-	}
-
 	private function isEnabledForCurrentOrigin()
 	{
-		$enabledFor = self::originMask($this->params->get('enabledForOrigin', self::DefaultSettings['enabledForOrigin']));
-		// by the application's name, not its client id: getClientId() + 1
-		// gave the bits only by luck (site 0, administrator 1, api 3), the
-		// installation (2) and the console (4, which hasn't even got the
-		// method) would come out as other parts' bits
-		foreach (self::OriginClients as $client => $bit)
-		{
-			if ($this->getApplication()->isClient($client))
-			{
-				return ($enabledFor & $bit) !== 0;
-			}
-		}
-		return false;
+		return Origin::isEnabled($this->params->get('enabledForOrigin', Settings::Defaults['enabledForOrigin']),
+			$this->getApplication());
 	}
 
 	private function trackedAddress($ipAddress)
 	{
-		return IpHelper::trackedAddress($ipAddress, $this->intParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']));
+		return IpHelper::trackedAddress($ipAddress, $this->intParam('ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength']));
 	}
 
 	/**
@@ -451,7 +315,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$this->logger->log("Existing user '".$logEntry->username."' was blocked, sending unblock instructions", Log::INFO);
 		$token = $this->repositories->unblockTokens()->add($id, TokenHelper::getToken($this->logger), $logEntry->username);
-		$this->notifier()->sendUnblockMail($userEmail, self::unblockLink($token));
+		$this->notifier()->sendUnblockMail($userEmail, TokenHelper::unblockLink($token));
 	}
 
 	public function onUserLogin(LoginEvent $event)
@@ -471,7 +335,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			' from IP address '.$info->ipaddress, Log::DEBUG);
 		$this->logins->recordSuccessfulLogin($info, $this->trackedAddress($info->ipaddress),
 			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
-				$this->intParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))));
+				$this->intParam('ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength']))));
 	}
 
 	public function onAfterInitialise($event)
@@ -551,7 +415,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$this->logger->log('Blocked IP Address '.$ipaddress.' trying to access '.
-			self::originName($this->getApplication()->getClientId()), Log::INFO);
+			Origin::name($this->getApplication()->getClientId()), Log::INFO);
 		if ($this->isPassedThrough($blockIds))
 		{
 			return;

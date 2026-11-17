@@ -7,10 +7,10 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
-use Codeling\Plugin\System\Bfstop\Service\MaintenanceSchedule;
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Service\MaintenanceSchedule;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\TestCase;

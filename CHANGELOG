@@ -526,6 +526,18 @@
     logins are counted against
   - Component: the list views escape everything they print, also what can
     only be a number, a date or one of the sort columns
+  - Internal: what plugins and component have in common is a library of
+    its own, lib_bfstop (library/, namespace Codeling\Library\Bfstop),
+    which the package installs first: the addresses and networks, the
+    block policy, the repositories of the tables, the .htaccess file, the
+    mails, the log and the daily maintenance, and the defaults of the
+    settings (Settings) and the parts of Joomla BFStop protects (Origin).
+    The component and the task plugin used the system plugin's classes,
+    so a site without the system plugin could not even show the unblock
+    page; now neither of them uses a class of the system plugin, which
+    keeps only what handles Joomla's events and requests (the classes of
+    the request, the responses and the turns of logins). The update takes
+    the classes which moved out of the plugin's directory
   - Internal: the component's repository, codeling/com_bfstop, is merged
     into this one, with its history: plugins and component are one code
     base, released together with one version, and a change spanning both

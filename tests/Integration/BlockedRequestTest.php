@@ -7,11 +7,11 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 
 /**
@@ -409,11 +409,11 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testApiIsOnlyProtectedIfSwitchedOn()
 	{
-		$this->configure(array('enabledForOrigin' => Bfstop::OriginFrontend | Bfstop::OriginBackend));
+		$this->configure(array('enabledForOrigin' => Origin::Frontend | Origin::Backend));
 		$this->block();
 		$this->assertStringContainsString('NOT BLOCKED', $this->apiRequest());
 		$this->assertBlocked();
-		$this->configure(array('enabledForOrigin' => Bfstop::OriginApi));
+		$this->configure(array('enabledForOrigin' => Origin::Api));
 		$this->assertStringNotContainsString('NOT BLOCKED', $this->apiRequest());
 		$this->assertNotBlocked();
 	}
@@ -445,15 +445,15 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testActiveForBitmask()
 	{
-		$this->assertSame(7, Bfstop::originMask(7));
-		$this->assertSame(5, Bfstop::originMask(array('1', '4')));
-		$this->assertSame(2, Bfstop::originMask('2'));
+		$this->assertSame(7, Origin::mask(7));
+		$this->assertSame(5, Origin::mask(array('1', '4')));
+		$this->assertSame(2, Origin::mask('2'));
 		// bits of no part, and what isn't a number, are dropped
-		$this->assertSame(1, Bfstop::originMask(array('1', '8', 'x', null)));
-		$this->assertSame(0, Bfstop::originMask(''));
-		$this->assertSame(array('1', '2', '4'), Bfstop::originList(15));
-		$this->assertSame(array('2', '4'), Bfstop::originList('6'));
-		$this->assertSame(array(), Bfstop::originList(0));
+		$this->assertSame(1, Origin::mask(array('1', '8', 'x', null)));
+		$this->assertSame(0, Origin::mask(''));
+		$this->assertSame(array('1', '2', '4'), Origin::list(15));
+		$this->assertSame(array('2', '4'), Origin::list('6'));
+		$this->assertSame(array(), Origin::list(0));
 	}
 
 	public function testActiveForStoredAsAListIsUnderstood()

@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
 use PHPUnit\Framework\TestCase;
 
 class LockHelperTest extends TestCase

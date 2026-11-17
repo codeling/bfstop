@@ -10,7 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Joomla\CMS\MVC\Controller\FormController;
 
 class BlockController extends FormController

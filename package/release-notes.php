@@ -66,7 +66,7 @@ if ($prerelease)
 		"> **Test release** of BFStop $base, for trying it out before the release - preferably on a test site.\n".
 		"> It is not offered through Joomla's update. A site which installs it is offered $base there once that is released; later test releases have to be installed the same way as this one.\n\n";
 }
-echo "Install **pkg_bfstop-$version.zip** (plugin and component) through Joomla's extension installer";
+echo "Install **pkg_bfstop-$version.zip** (library, plugins and component) through Joomla's extension installer";
 if ($joomla !== null && $php !== null)
 {
 	echo "; it needs Joomla! ".preg_replace('/\.0(\.0)?$/', '', $joomla)." or later and PHP ".preg_replace('/\.0$/', '', $php)." or later";

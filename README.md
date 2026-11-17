@@ -8,9 +8,14 @@ address through a link sent by email.
 
 This repository contains all of BFStop, which is released as one package:
 
+- `library/`: the **library** (`lib_bfstop`, namespace
+  `Codeling\Library\Bfstop`) which the others use: addresses and networks,
+  when and how a client is blocked (the block policy), the database tables
+  (one repository class each), the `.htaccess` file, the mails, the log and
+  the daily maintenance.
 - `plugin/`: the **system plugin** (`plg_system_bfstop`), which does the work
-  on every request: it watches the logins and rejects requests from blocked
-  addresses. It has no settings of its own.
+  on every request, by the library: it watches the logins and rejects
+  requests from blocked addresses. It has no settings of its own.
 - `component/`: the **component** (`com_bfstop`): the settings, the lists of
   blocked addresses, failed logins and allowed addresses, the log, username
   statistics and IP address information in the administrator backend, and the
@@ -22,7 +27,8 @@ This repository contains all of BFStop, which is released as one package:
 - `package/`: the package (`pkg_bfstop`) which contains them, and how it is
   built and released.
 
-Plugins and component only work together.
+Plugins and component only work together; none of them uses the classes
+of another, only those of the library.
 
 ## Usage
 
@@ -68,16 +74,16 @@ The reader is third-party code: keep it up to date!
 
 The optional GeoIP features (country risk score, "Information for IP Address")
 use a copy of the MaxMind DB reader (maxmind-db/reader, Apache-2.0), shipped in
-`plugin/src/Helper/Geo`, because a Joomla! extension cannot rely on composer at install
+`library/src/Helper/Geo`, because a Joomla! extension cannot rely on composer at install
 time. It parses a database file with untrusted-format binary data, so it has to
 be updated whenever MaxMind publishes a new release - releases of this plugin
 should never ship an outdated copy.
 
 - **Which version is shipped:** `composer.lock` (package maxmind-db/reader);
-  the header of `plugin/src/Helper/Geo/Reader.php` names it too.
+  the header of `library/src/Helper/Geo/Reader.php` names it too.
 - **How it is kept current:** Dependabot and a weekly GitHub Actions job
   (`.github/workflows/dependencies.yml`) report new releases and security
-  advisories; CI fails if `plugin/src/Helper/Geo` is not exactly the locked version.
+  advisories; CI fails if `library/src/Helper/Geo` is not exactly the locked version.
 - **How to update:** `composer update maxmind-db/reader && composer vendor-geoip`,
   review the diff, run the tests, release plugin and component.
 - The GeoLite2/GeoIP2 *database* (`.mmdb`) is separate: you download it and

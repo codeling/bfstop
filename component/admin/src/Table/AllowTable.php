@@ -10,7 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Table;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Table\Table;
 use Joomla\Database\DatabaseDriver;
 

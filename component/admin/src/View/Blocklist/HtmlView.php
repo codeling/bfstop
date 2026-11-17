@@ -13,7 +13,7 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -31,7 +31,7 @@ class HtmlView extends BaseHtmlView
 		// with .htaccess blocking, blocked requests never reach Joomla,
 		// so attempts can't be counted
 		$this->attemptsTracked = ParamHelper::get('blockMode', 'full') !== 'htaccess';
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Bfstop::DefaultSettings['deleteOld']);
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Settings::Defaults['deleteOld']);
 		// selecting a range of rows with shift-click, see grid.checkall in the head
 		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();

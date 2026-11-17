@@ -11,7 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\Rule;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormRule;
 use Joomla\CMS\Language\Text;

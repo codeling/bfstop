@@ -20,8 +20,8 @@ use Codeling\Component\Bfstop\Administrator\Model\HtblocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Factory\MVCFactory;
 
@@ -630,14 +630,14 @@ class ComponentTest extends IntegrationTestCase
 		// the plugin is enabled by the installation: until the settings are
 		// saved it must behave like the page says
 		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
-		foreach (\Codeling\Plugin\System\Bfstop\Extension\Bfstop::DefaultSettings as $name => $default)
+		foreach (\Codeling\Library\Bfstop\Settings::Defaults as $name => $default)
 		{
 			$field = $xml->xpath('//field[@name="'.$name.'"]');
 			$this->assertCount(1, $field, $name);
 			if ($name === 'enabledForOrigin')
 			{
 				// checkboxes, stored as a bitmask
-				$this->assertSame($default, \Codeling\Plugin\System\Bfstop\Extension\Bfstop::originMask(
+				$this->assertSame($default, \Codeling\Library\Bfstop\Origin::mask(
 					explode(',', (string) $field[0]['default'])), $name);
 				continue;
 			}
@@ -1002,7 +1002,7 @@ class ComponentTest extends IntegrationTestCase
 		$original = $app->getIdentity();
 		$input = $app->getInput();
 		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
-		$logFile = \Codeling\Plugin\System\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
+		$logFile = \Codeling\Library\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
 		$clear = function (array $actions) use ($app, $input, $logFile)
 		{
 			file_put_contents($logFile, "#<?php die('Forbidden.'); ?>\n2026-01-01T00:00:00+00:00 INFO an entry\n");

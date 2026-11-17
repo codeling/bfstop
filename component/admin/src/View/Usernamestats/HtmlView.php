@@ -11,7 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Usernamestats;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
-use Codeling\Plugin\System\Bfstop\Repository\UsernameStatsRepository;
+use Codeling\Library\Bfstop\Repository\UsernameStatsRepository;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;

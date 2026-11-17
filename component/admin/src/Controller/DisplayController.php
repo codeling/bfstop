@@ -13,9 +13,9 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
@@ -89,12 +89,12 @@ class DisplayController extends BaseController
 	/**
 	 * Unblock links were chosen (before this version checked it, or
 	 * $live_site was removed since), but they need $live_site: the plugin
-	 * sends none, see Bfstop::effectiveNotifyBlockedUser().
+	 * sends none, see BlockPolicy::effectiveNotifyBlockedUser().
 	 */
 	function warnIfUnblockLinksNeedLiveSite()
 	{
 		$setting = (int) ParamHelper::get('notifyBlockedUser', 0);
-		if (Bfstop::effectiveNotifyBlockedUser($setting, Bfstop::hasLiveSite()) !== $setting)
+		if (BlockPolicy::effectiveNotifyBlockedUser($setting, BlockPolicy::hasLiveSite()) !== $setting)
 		{
 			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_NOTIFY_ANY_WITHOUT_LIVE_SITE',
 				Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');

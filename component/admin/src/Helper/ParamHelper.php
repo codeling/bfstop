@@ -17,7 +17,7 @@ class ParamHelper
 {
 	/**
 	 * A setting of the plugin as it is stored now (the settings are the
-	 * plugin's, see Bfstop::DefaultSettings).
+	 * plugin's, see Settings::Defaults).
 	 *
 	 * @param string $name         the name of the setting
 	 * @param mixed  $defaultValue what is returned if the setting isn't stored

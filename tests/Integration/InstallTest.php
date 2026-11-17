@@ -75,4 +75,26 @@ class InstallTest extends IntegrationTestCase
 		$manifest = simplexml_load_file(BFSTOP_PLUGIN_ROOT.'/bfstop.xml');
 		$this->assertSame((string) $manifest->version, $row->version_id);
 	}
+
+	/**
+	 * The library is installed with the package, before the extensions which
+	 * use it, and Joomla loads its classes from its namespace (the
+	 * namespace map is what Joomla's autoloader goes by).
+	 */
+	public function testLibraryInstalledWithItsNamespace()
+	{
+		$this->db->setQuery("SELECT enabled, package_id, manifest_cache FROM #__extensions ".
+			"WHERE type='library' AND element='bfstop'");
+		$row = $this->db->loadObject();
+		$this->assertNotNull($row, 'lib_bfstop is not installed');
+		$this->assertSame(1, (int) $row->enabled);
+		$this->assertGreaterThan(0, (int) $row->package_id, 'lib_bfstop is installed by the package');
+		$manifest = simplexml_load_file(BFSTOP_LIBRARY_ROOT.'/bfstop.xml');
+		$this->assertSame((string) $manifest->version, json_decode($row->manifest_cache)->version);
+		$this->assertFileExists(JPATH_LIBRARIES.'/bfstop/src/Repository/Repositories.php');
+		$map = require JPATH_ADMINISTRATOR.'/cache/autoload_psr4.php';
+		$this->assertSame(array(JPATH_LIBRARIES.'/bfstop/src'), $map['Codeling\\Library\\Bfstop\\'] ?? null);
+		$xml = simplexml_load_file(dirname(__DIR__, 2).'/package/pkg_bfstop.xml');
+		$this->assertSame('library', (string) $xml->files->file[0]['type'], 'the library comes first in the package');
+	}
 }

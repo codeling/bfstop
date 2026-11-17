@@ -12,8 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\NotifierHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;

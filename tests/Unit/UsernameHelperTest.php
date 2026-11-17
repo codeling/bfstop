@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
+use Codeling\Library\Bfstop\Helper\UsernameHelper;
 use PHPUnit\Framework\TestCase;
 
 class UsernameHelperTest extends TestCase

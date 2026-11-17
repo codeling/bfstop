@@ -10,7 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
+use Codeling\Library\Bfstop\Helper\ApiHelper;
 use Joomla\CMS\Application\CMSApplicationInterface;
 
 /**

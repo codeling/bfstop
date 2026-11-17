@@ -12,7 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -55,7 +55,7 @@ class HtmlView extends BaseHtmlView
 		$this->pluginVersion = $versions['plugin'];
 		$this->componentVersion = $versions['component'];
 
-		if (!Bfstop::hasLiveSite())
+		if (!BlockPolicy::hasLiveSite())
 		{
 			Factory::getApplication()->enqueueMessage(self::liveSiteNote(), 'warning');
 		}
@@ -66,7 +66,7 @@ class HtmlView extends BaseHtmlView
 
 	/**
 	 * What the settings page says if the site's $live_site isn't set (see
-	 * Bfstop::effectiveNotifyBlockedUser()), with the line to put into
+	 * BlockPolicy::effectiveNotifyBlockedUser()), with the line to put into
 	 * configuration.php. The address it proposes is the one of this request,
 	 * sent by the administrator's browser: shown for them to check, never
 	 * used for anything.

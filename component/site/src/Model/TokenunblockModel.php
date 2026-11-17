@@ -11,8 +11,8 @@ namespace Codeling\Component\Bfstop\Site\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 

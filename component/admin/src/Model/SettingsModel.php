@@ -11,9 +11,11 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
@@ -68,8 +70,8 @@ class SettingsModel extends AdminModel
 	 */
 	public static function paramsForForm(array $params)
 	{
-		$params['enabledForOrigin'] = Bfstop::originList(
-			$params['enabledForOrigin'] ?? Bfstop::DefaultSettings['enabledForOrigin']);
+		$params['enabledForOrigin'] = Origin::list(
+			$params['enabledForOrigin'] ?? Settings::Defaults['enabledForOrigin']);
 		return $params;
 	}
 
@@ -83,7 +85,7 @@ class SettingsModel extends AdminModel
 	{
 		if (array_key_exists('enabledForOrigin', $params))
 		{
-			$mask = Bfstop::originMask($params['enabledForOrigin']);
+			$mask = Origin::mask($params['enabledForOrigin']);
 			if ($mask === 0)
 			{
 				unset($params['enabledForOrigin']);
@@ -98,13 +100,13 @@ class SettingsModel extends AdminModel
 
 	/**
 	 * Unblock links are only safe with the site's $live_site, see
-	 * Bfstop::effectiveNotifyBlockedUser(): without it, the settings page
+	 * BlockPolicy::effectiveNotifyBlockedUser(): without it, the settings page
 	 * doesn't take them (for any IP address or only known ones).
 	 */
 	public function validate($form, $data, $group = null)
 	{
 		$valid = parent::validate($form, $data, $group);
-		if (is_array($valid) && !Bfstop::hasLiveSite() &&
+		if (is_array($valid) && !BlockPolicy::hasLiveSite() &&
 			(int) ($valid['params']['notifyBlockedUser'] ?? 0) !== 0)
 		{
 			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));

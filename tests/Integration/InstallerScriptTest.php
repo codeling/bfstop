@@ -7,8 +7,8 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 
@@ -399,6 +399,39 @@ class InstallerScriptTest extends IntegrationTestCase
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 			$this->setPluginParams($original);
+		}
+	}
+
+	/**
+	 * The classes which the library has since 2.0.0 are taken out of the
+	 * plugin's directory by the update; the plugin's own stay.
+	 */
+	public function testUpdateRemovesTheClassesWhichAreTheLibrarys()
+	{
+		$root = sys_get_temp_dir().'/bfstop-moved-'.bin2hex(random_bytes(4));
+		foreach (array('src/Helper/Geo/Reader.php', 'src/Helper/IpHelper.php', 'src/Repository/Repository.php',
+			'src/Service/BlockPolicy.php', 'src/Service/MaintenanceSchedule.php', 'src/Service/Responder.php',
+			'src/Extension/Bfstop.php') as $file)
+		{
+			@mkdir(dirname($root.'/'.$file), 0777, true);
+			file_put_contents($root.'/'.$file, '<?php');
+		}
+		try
+		{
+			\PlgsystembfstopInstallerScript::removeMovedToLibrary($root);
+			$this->assertDirectoryDoesNotExist($root.'/src/Helper');
+			$this->assertDirectoryDoesNotExist($root.'/src/Repository');
+			$this->assertFileDoesNotExist($root.'/src/Service/BlockPolicy.php');
+			$this->assertFileDoesNotExist($root.'/src/Service/MaintenanceSchedule.php');
+			$this->assertFileExists($root.'/src/Service/Responder.php');
+			$this->assertFileExists($root.'/src/Extension/Bfstop.php');
+			// and once more, with nothing left to remove
+			\PlgsystembfstopInstallerScript::removeMovedToLibrary($root);
+			$this->assertFileExists($root.'/src/Extension/Bfstop.php');
+		}
+		finally
+		{
+			exec('rm -rf '.escapeshellarg($root));
 		}
 	}
 }

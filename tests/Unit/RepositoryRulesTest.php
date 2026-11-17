@@ -22,7 +22,7 @@ class RepositoryRulesTest extends TestCase
 	public static function repositoryFiles()
 	{
 		$files = array();
-		foreach (glob(BFSTOP_PLUGIN_ROOT.'/src/Repository/*.php') as $file)
+		foreach (glob(BFSTOP_LIBRARY_ROOT.'/src/Repository/*.php') as $file)
 		{
 			$files[basename($file)] = array($file);
 		}

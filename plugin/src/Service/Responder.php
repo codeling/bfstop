@@ -10,10 +10,10 @@ namespace Codeling\Plugin\System\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Application\CMSApplicationInterface;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -58,7 +58,7 @@ class Responder
 	public function showsRemainingAttempts(): bool
 	{
 		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
-			Bfstop::DefaultSettings['notifyUsePasswordReminder']);
+			Settings::Defaults['notifyUsePasswordReminder']);
 		return !$this->isApi() &&
 			((bool) $this->params->get('notifyRemainingAttempts', false) ||
 				$passwordReminder == -1 || $passwordReminder > 0);
@@ -76,7 +76,7 @@ class Responder
 			return;
 		}
 		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
-			Bfstop::DefaultSettings['notifyUsePasswordReminder']);
+			Settings::Defaults['notifyUsePasswordReminder']);
 		if ((bool) $this->params->get('notifyRemainingAttempts', false) && $attemptsLeft > 0)
 		{
 			$this->app->enqueueMessage(Text::sprintf('PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT', $attemptsLeft), 'warning');
@@ -241,7 +241,7 @@ class Responder
 			return false;
 		}
 		$maxConcurrent = max(1, (int) $this->params->get('delayMaxConcurrent',
-			Bfstop::DefaultSettings['delayMaxConcurrent']));
+			Settings::Defaults['delayMaxConcurrent']));
 		$opened = false;
 		foreach (self::delaySlotFiles($maxConcurrent) as $file)
 		{

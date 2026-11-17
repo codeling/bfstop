@@ -12,7 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\ListModel;
 

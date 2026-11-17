@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="library" method="upgrade">
+	<name>lib_bfstop</name>
+	<libraryname>bfstop</libraryname>
+	<author>Bernhard Froehler</author>
+	<description>LIB_BFSTOP_XML_DESCRIPTION</description>
+	<creationDate>November 2026</creationDate>
+	<copyright>Copyright (C) Bernhard Froehler</copyright>
+	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
+	<authorEmail>bfstop@bfroehler.info</authorEmail>
+	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
+	<version>2.0.0</version>
+	<namespace path="src">Codeling\Library\Bfstop</namespace>
+	<files>
+		<filename>bfstop.xml</filename>
+		<filename>index.html</filename>
+		<folder>src</folder>
+	</files>
+	<languages>
+		<language tag="en-GB">language/en-GB/en-GB.lib_bfstop.sys.ini</language>
+	</languages>
+</extension>

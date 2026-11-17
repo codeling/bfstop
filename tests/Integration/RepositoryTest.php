@@ -7,14 +7,14 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\AllowListRepository;
-use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
-use Codeling\Plugin\System\Bfstop\Repository\DnsCacheRepository;
-use Codeling\Plugin\System\Bfstop\Repository\FailedLoginRepository;
-use Codeling\Plugin\System\Bfstop\Repository\FailurePolicy;
-use Codeling\Plugin\System\Bfstop\Repository\KnownIpRepository;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
-use Codeling\Plugin\System\Bfstop\Repository\UserRepository;
+use Codeling\Library\Bfstop\Repository\AllowListRepository;
+use Codeling\Library\Bfstop\Repository\BlockRepository;
+use Codeling\Library\Bfstop\Repository\DnsCacheRepository;
+use Codeling\Library\Bfstop\Repository\FailedLoginRepository;
+use Codeling\Library\Bfstop\Repository\FailurePolicy;
+use Codeling\Library\Bfstop\Repository\KnownIpRepository;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Repository\UserRepository;
 use Joomla\CMS\Log\Log;
 use Joomla\Database\DatabaseDriver;
 
