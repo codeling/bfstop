@@ -147,12 +147,13 @@ class SettingsModel extends AdminModel
 	}
 
 	/**
-	 * The directory of the .htaccess file of the settings $params.
+	 * The directory of the .htaccess file of the settings $params (the
+	 * default is HtaccessHelper::resolvePath()'s), without a trailing slash,
+	 * so that two spellings of the same directory compare the same.
 	 */
 	public static function htaccessDirectory(array $params)
 	{
-		$path = rtrim((string) ($params['htaccessPath'] ?? ''), '/\\');
-		return $path === '' ? JPATH_ROOT : $path;
+		return HtaccessHelper::resolvePath(rtrim((string) ($params['htaccessPath'] ?? ''), '/\\'));
 	}
 
 	/**

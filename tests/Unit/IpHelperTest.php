@@ -37,6 +37,42 @@ class IpHelperTest extends TestCase
 		$this->assertFalse(IpHelper::isInSubnet('2001:db8:0:8000::1', '2001:db8::/49'));
 	}
 
+	/**
+	 * contains() with an address as the inner entry: what the component's
+	 * warning that a range holds the administrator's own address goes by
+	 * (IpValidateHelper::matchesCurrentIP(), which had a copy of the
+	 * matching of its own, built on ip2long).
+	 */
+	public static function addressInEntryProvider()
+	{
+		return array(
+			'v4 exact, no prefix'        => array('192.0.2.1', '192.0.2.1', true),
+			'v4 exact, no prefix, other' => array('192.0.2.2', '192.0.2.1', false),
+			'v4 /32'                     => array('192.0.2.1', '192.0.2.1/32', true),
+			'v4 /24 inside'              => array('192.0.2.200', '192.0.2.0/24', true),
+			'v4 /24 outside'             => array('192.0.3.1', '192.0.2.0/24', false),
+			'v4 /24 misaligned subnet'   => array('192.0.2.200', '192.0.2.99/24', true),
+			'v4 /0 matches everything'   => array('203.0.113.9', '0.0.0.0/0', true),
+			'v6 exact, no prefix'        => array('2001:db8::1', '2001:db8::1', true),
+			'v6 exact, other spelling'   => array('2001:DB8:0::1', '2001:db8::1', true),
+			'v6 exact, other'            => array('2001:db8::2', '2001:db8::1', false),
+			'v6 /64 inside'              => array('2001:db8:0:1:abcd::1', '2001:db8:0:1::/64', true),
+			'v6 /64 outside'             => array('2001:db8:0:2::1', '2001:db8:0:1::/64', false),
+			'v6 /64 misaligned subnet'   => array('2001:db8:0:1::5', '2001:db8:0:1:ffff::/64', true),
+			'v6 /33 odd bits inside'     => array('2001:db8:8000::1', '2001:db8:ffff::/33', true),
+			'v6 /33 odd bits outside'    => array('2001:db8:7fff::1', '2001:db8:ffff::/33', false),
+			'v4 address vs v6 range'     => array('192.0.2.1', '2001:db8::/32', false),
+			'invalid address vs v6'      => array('garbage', '2001:db8::/32', false),
+			'no address'                 => array('', '192.0.2.1', false),
+		);
+	}
+
+	#[DataProvider('addressInEntryProvider')]
+	public function testContainsAddress($ip, $entry, $expected)
+	{
+		$this->assertSame($expected, IpHelper::contains($entry, $ip));
+	}
+
 	public function testMalformedNeverMatches()
 	{
 		// prefix length out of range, not a number, missing, or too long

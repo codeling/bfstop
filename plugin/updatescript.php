@@ -209,7 +209,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	}
 
 	/**
-	 * The .htaccess file the plugin writes with the settings $params.
+	 * The .htaccess file the plugin writes with the settings $params. A copy
+	 * of the default of HtaccessHelper::resolvePath() on purpose: while an
+	 * update runs, the classes of the version before may still be loaded,
+	 * or the library may not be there yet.
 	 */
 	private static function htaccessFile($params)
 	{
@@ -217,6 +220,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			? (string) $params['htaccessPath'] : JPATH_ROOT;
 		return rtrim($htaccessPath, '/\\').'/.htaccess';
 	}
+
 	public function preflight($type, $adapter): bool
 	{
 		if (!parent::preflight($type, $adapter))

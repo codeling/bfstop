@@ -12,6 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
+use Codeling\Library\Bfstop\Repository\BlockRepository;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\ListModel;
 
@@ -55,7 +57,8 @@ class BlocklistModel extends ListModel
 
 	public function unblock($ids, $logger)
 	{
-		$unblocked = UnblockHelper::unblockDB($this->getDatabase(), $ids, 0, $logger);
+		$unblocked = (new Repositories($logger, $this->getDatabase()))->blocks()
+			->lift(is_array($ids) ? $ids : array(), BlockRepository::LiftedByAdministrator);
 		// with blocking through .htaccess, the web server would otherwise go on
 		// rejecting the addresses until the plugin's next maintenance
 		UnblockHelper::removeLiftedHtaccessBlocks($logger);

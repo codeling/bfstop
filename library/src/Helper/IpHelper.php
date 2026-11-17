@@ -228,17 +228,17 @@ class IpHelper
 	private static $proxySettingsSource = null;
 
 	/**
-	 * The proxy settings (see Settings), parsed once per distinct settings
-	 * (getAddress() and trustedProxies() are called several times in a
-	 * request).
+	 * The proxy settings (see Settings), worked out once for the settings
+	 * Joomla holds (getAddress() and trustedProxies() are called several
+	 * times in a request): that they are the same object tells that they
+	 * didn't change, without building a copy of them and comparing it.
 	 *
 	 * @return array{useProxy: bool, proxyIpAddress: string, header: string, trustedProxies: string[]}
 	 */
 	private static function proxySettings()
 	{
-		$params = Settings::stored();
-		$source = $params->toString();
-		if (self::$proxySettings !== null && self::$proxySettingsSource === $source)
+		$params = Settings::held();
+		if (self::$proxySettings !== null && self::$proxySettingsSource === $params)
 		{
 			return self::$proxySettings;
 		}
@@ -252,7 +252,8 @@ class IpHelper
 			$settings['trustedProxies'] = self::parseTrustedProxies($settings['proxyIpAddress']);
 		}
 		self::$proxySettings = $settings;
-		self::$proxySettingsSource = $source;
+		self::$proxySettingsSource = $params;
+		self::$address = null;
 		return $settings;
 	}
 
@@ -476,7 +477,29 @@ class IpHelper
 		{
 			return $remoteAddr;
 		}
+		// the plugin asks for it in several events of a request, the
+		// component again: worked out (and warned about) once for what it
+		// depends on
+		$header = $_SERVER[$settings['header']] ?? null;
+		if (self::$address !== null && self::$address['remote'] === $remoteAddr && self::$address['header'] === $header)
+		{
+			return self::$address['client'];
+		}
+		$client = self::addressBehindProxy($remoteAddr, $settings, $logger);
+		self::$address = array('remote' => $remoteAddr, 'header' => $header, 'client' => $client);
+		return $client;
+	}
 
+	// what getAddress() found last behind a proxy, for the settings
+	// proxySettings() holds: its REMOTE_ADDR, header and the client address
+	private static $address = null;
+
+	/**
+	 * The client address of a request which came through a proxy, if
+	 * REMOTE_ADDR is one of the trusted ones, see getAddress().
+	 */
+	private static function addressBehindProxy($remoteAddr, array $settings, LoggerHelper $logger)
+	{
 		$proxyIpAddress = $settings['proxyIpAddress'];
 		$trustedProxies = $settings['trustedProxies'];
 		if (count($trustedProxies) === 0 || !self::isTrustedProxy($remoteAddr, $trustedProxies))

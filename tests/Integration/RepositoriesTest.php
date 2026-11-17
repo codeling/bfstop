@@ -9,6 +9,7 @@ namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\BlockRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Library\Bfstop\Service\BlockService;
@@ -206,6 +207,45 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertFalse($this->repos->unblockTokens()->hasCurrentFor('Expired'), 'an expired token is not current');
 		$this->assertTrue($this->repos->unblockTokens()->exists('tokenA'));
 		$this->assertFalse($this->repos->unblockTokens()->exists('tokenB'));
+	}
+
+	public function testUnblockTokenIsIssuedForItsBlock()
+	{
+		$tokens = $this->repos->unblockTokens();
+		$blockId = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:db8:7::/56',
+			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$tokens->add($blockId, 'tokenI');
+		$this->assertSame(array('blockId' => $blockId, 'address' => '2001:db8:7::/56'), $tokens->issuedFor('tokenI'));
+		$this->assertNull($tokens->issuedFor('tokenX'), 'no such token');
+		// the stored hash is no token
+		$this->assertNull($tokens->issuedFor(UnblockTokenRepository::hash('tokenI')));
+
+		$this->insert('#__bfstop_unblock_token', array('token' => 'tokenOld', 'block_id' => $blockId,
+			'crdate' => self::minutesAgo(4 * 24 * 60)));
+		$this->assertNull($tokens->issuedFor('tokenOld'), 'expired');
+
+		$tokens->add($blockId + 1000, 'tokenOrphan');
+		$this->assertNull($tokens->issuedFor('tokenOrphan'), 'its block is gone');
+
+		$this->assertTrue($tokens->remove('tokenI'));
+		$this->assertNull($tokens->issuedFor('tokenI'), 'used up');
+		$this->assertFalse($tokens->exists('tokenI'));
+		$this->assertTrue($tokens->exists('tokenOld'), 'only the token used is deleted');
+	}
+
+	public function testLiftingABlock()
+	{
+		$blocks = $this->repos->blocks();
+		$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.90',
+			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+		$this->assertTrue($blocks->isBlocked('203.0.113.90'));
+		$this->assertTrue($blocks->lift(array((string) $id), BlockRepository::LiftedByToken));
+		$this->assertFalse($blocks->isBlocked('203.0.113.90'));
+		$this->assertSame(BlockRepository::LiftedByToken,
+			(int) $this->queryValue('SELECT source FROM #__bfstop_unblock WHERE block_id='.$id));
+		// lifting it again changes nothing, and is no failure
+		$this->assertTrue($blocks->lift(array($id), BlockRepository::LiftedByAdministrator));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock WHERE block_id='.$id));
 	}
 
 	public function testTokenHashFitsTheColumnAndIsStable()

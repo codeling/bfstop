@@ -20,6 +20,7 @@ use Codeling\Component\Bfstop\Administrator\Model\HtblocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
+use Codeling\Library\Bfstop\Repository\BlockRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
@@ -406,8 +407,8 @@ class ComponentTest extends IntegrationTestCase
 	public function testUnblockWithoutResultStillReportsFailure()
 	{
 		// an exception while unblocking must not leave the result undefined
-		$this->assertFalse(UnblockHelper::unblockDB($this->db, array(), 0, $this->logger));
-		$this->assertTrue($this->logger->hasMessage(\Joomla\CMS\Log\Log::ERROR, 'Invalid parameter'));
+		$this->assertFalse((new Repositories($this->logger))->blocks()->lift(array(), BlockRepository::LiftedByAdministrator));
+		$this->assertTrue($this->logger->hasMessage(\Joomla\CMS\Log\Log::ERROR, 'No blocks given'));
 		$this->logger->errors = array();
 	}
 
@@ -421,7 +422,7 @@ class ComponentTest extends IntegrationTestCase
 		$this->insert('#__bfstop_unblock', array('block_id' => $ids[0], 'source' => 0, 'crdate' => self::minutesAgo(5)));
 		// the one which was lifted already used to end the loop: the others
 		// selected with it stayed blocked
-		$this->assertTrue(UnblockHelper::unblockDB($this->db, $ids, 0, $this->logger));
+		$this->assertTrue((new Repositories($this->logger))->blocks()->lift($ids, BlockRepository::LiftedByAdministrator));
 		$helper = new Repositories($this->logger);
 		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.71'));
 		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.72'));
@@ -1248,7 +1249,8 @@ class ComponentTest extends IntegrationTestCase
 			'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
 		// block ids are handed out in order: entries for the ids to come would
 		// lift the next blocks before they are made
-		$this->assertTrue(UnblockHelper::unblockDB($this->db, array($id, $id + 1, $id + 2, 0, -1, 'x'), 0, $this->logger));
+		$this->assertTrue((new Repositories($this->logger))->blocks()->lift(array($id, $id + 1, $id + 2, 0, -1, 'x'),
+			BlockRepository::LiftedByAdministrator));
 		$this->assertSame(array((string) $id),
 			array_map('strval', $this->db->setQuery('SELECT block_id FROM #__bfstop_unblock')->loadColumn()));
 		$next = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81',
