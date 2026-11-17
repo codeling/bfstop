@@ -16,7 +16,7 @@
 // whoever took it over): the next run of our workflows would run what they
 // put there, with this repository's token and in its checkouts. Dependabot
 // (github-actions in .github/dependabot.yml) proposes the updates of pinned
-// actions. Kept identical in the com_bfstop repository.
+// actions.
 //
 // Exits with status 1 if a reference is not pinned.
 

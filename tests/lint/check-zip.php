@@ -9,8 +9,6 @@
  * contains everything its manifest references. Usage:
  *
  *   php tests/lint/check-zip.php <extension.zip> <manifest-name.xml>
- *
- * NOTE: this file is kept identical in the bfstop and com_bfstop repositories.
 **/
 
 if ($argc !== 3)
