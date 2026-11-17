@@ -37,6 +37,19 @@ final class Settings
 	}
 
 	/**
+	 * The settings as Joomla holds them for the request, not a copy: to be
+	 * read only. It is the same object until Joomla loads them again, so
+	 * whoever keeps what it works out from them can tell by the object
+	 * whether that is still up to date, without comparing the settings
+	 * (see IpHelper::getAddress()). While the component isn't installed,
+	 * each call gives a new, empty one.
+	 */
+	public static function held(): Registry
+	{
+		return ComponentHelper::getParams(self::Extension);
+	}
+
+	/**
 	 * What the settings are while they have not been saved: the same as the
 	 * settings page shows for them. The plugin is enabled by the
 	 * installation, so it runs with these until an administrator opens the

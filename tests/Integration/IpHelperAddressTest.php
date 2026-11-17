@@ -143,4 +143,31 @@ class IpHelperAddressTest extends IntegrationTestCase
 		$_SERVER['HTTP_CLIENT_IP'] = '203.0.113.77';
 		$this->assertSame('203.0.113.77', IpHelper::getAddress($this->logger));
 	}
+
+	public function testWorkedOutOnceForTheSameRequest()
+	{
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5, not-an-ip';
+		$warnings = function ()
+		{
+			return count(array_filter($this->logger->messages, function ($m)
+			{
+				return $m['priority'] === Log::WARNING;
+			}));
+		};
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertSame(1, $warnings(), 'the plugin and the component ask several times: warned once');
+
+		// another header, another REMOTE_ADDR, other settings: worked out again
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5';
+		$this->assertSame('203.0.113.5', IpHelper::getAddress($this->logger));
+		$_SERVER['REMOTE_ADDR'] = '192.0.2.99';
+		$this->assertSame('192.0.2.99', IpHelper::getAddress($this->logger));
+		$this->assertSame(2, $warnings(), 'not from the proxy');
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '192.0.2.99'));
+		$this->assertSame('203.0.113.5', IpHelper::getAddress($this->logger));
+		$this->configure(array('useProxy' => 0));
+		$this->assertSame('192.0.2.99', IpHelper::getAddress($this->logger));
+	}
 }

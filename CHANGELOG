@@ -39,6 +39,11 @@
     has Joomla look up the columns of the table first (one query on MySQL
     and MariaDB, two on PostgreSQL, for each table in a request); the
     repositories insert with a query of their own, with the values bound
+  - Behind a proxy, the client address of a request is worked out once,
+    not in each event of the plugin and again by the component, which
+    copied and compared all the settings each time (and logged the
+    warnings about a request which didn't come through the proxy several
+    times)
   - tests/Integration/QueryCountTest.php limits the number of queries a page
     view, a request of a blocked address and a failed login cause, and
     tests/performance fills the accounts and known addresses as well, so the
