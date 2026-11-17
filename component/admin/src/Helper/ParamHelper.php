@@ -10,30 +10,20 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Factory;
-use Joomla\Database\DatabaseInterface;
+use Codeling\Library\Bfstop\Settings;
 
 class ParamHelper
 {
 	/**
-	 * A setting of the plugin as it is stored now (the settings are the
-	 * plugin's, see Settings::Defaults).
+	 * A setting as it is stored now (see the library's Settings, and
+	 * Settings::Defaults for the defaults). Costs no query: Joomla has the
+	 * params of the components loaded.
 	 *
 	 * @param string $name         the name of the setting
 	 * @param mixed  $defaultValue what is returned if the setting isn't stored
 	 */
 	public static function get($name, $defaultValue)
 	{
-		$db = Factory::getContainer()->get(DatabaseInterface::class);
-		$query = $db->createQuery()
-			->select($db->quoteName('params'))
-			->from($db->quoteName('#__extensions'))
-			->where($db->quoteName('name').' = :name');
-		$extension = 'plg_system_bfstop';
-		$query->bind(':name', $extension);
-		$db->setQuery($query);
-		$rawSettings = $db->loadResult();
-		$settings = json_decode((string) $rawSettings, true);
-		return (is_array($settings) && array_key_exists($name, $settings)) ? $settings[$name] : $defaultValue;
+		return Settings::stored()->get($name, $defaultValue);
 	}
 }

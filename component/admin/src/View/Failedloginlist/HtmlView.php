@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Failedloginlist;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -59,6 +58,5 @@ class HtmlView extends BaseHtmlView
 		{
 			ToolbarHelper::modal('bfstopPurgeModal', 'icon-trash', 'COM_BFSTOP_FAILEDLOGIN_PURGE_BUTTON');
 		}
-		BfstopToolbarHelper::addOptions();
 	}
 }

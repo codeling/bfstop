@@ -12,7 +12,6 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -86,6 +85,5 @@ class HtmlView extends BaseHtmlView
 		{
 			ToolbarHelper::addNew('block.add');
 		}
-		BfstopToolbarHelper::addOptions();
 	}
 }

@@ -39,7 +39,9 @@ use Joomla\Event\SubscriberInterface;
  * Codeling\Library\Bfstop): BlockPolicy, with BlockService and LoginService
  * doing what it decides, and DailyMaintenance. What a request is and what
  * the client is told are the plugin's own: RequestClassifier, Responder and
- * LoginTurn (Service namespace of the plugin).
+ * LoginTurn (Service namespace of the plugin). Its params are the settings
+ * of BFStop, which are the component's (see services/provider.php and the
+ * library's Settings): the plugin has none of its own.
  */
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {
@@ -80,6 +82,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	public static function getSubscribedEvents(): array
 	{
+		// without the library (lib_bfstop, which the package installs first)
+		// there is nothing the plugin could do: better none of its events
+		// than a fatal error in every request
+		if (!class_exists(Settings::class))
+		{
+			return array();
+		}
 		return array(
 			'onUserLoginFailure' => 'onUserLoginFailure',
 			'onUserLogin'        => 'onUserLogin',

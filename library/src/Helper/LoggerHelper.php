@@ -50,9 +50,8 @@ class LoggerHelper
 	}
 
 	/**
-	 * The logger of the plugin's settings $params (a Registry of the plugin's
-	 * parameters), as the plugin and the task which runs its maintenance
-	 * make it.
+	 * The logger of the settings $params (a Registry, see Settings), as the
+	 * plugins and the component make it.
 	 */
 	public static function fromSettings(\Joomla\Registry\Registry $params)
 	{

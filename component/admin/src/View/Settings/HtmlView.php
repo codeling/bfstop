@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Settings;
 
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Joomla\CMS\Access\Exception\NotAllowed;
@@ -89,6 +88,5 @@ class HtmlView extends BaseHtmlView
 		ToolbarHelper::cancel('settings.cancel');
 		ToolbarHelper::custom('settings.testNotify', 'preview', '',
 			'COM_BFSTOP_TEST_NOTIFICATION', false, false);
-		BfstopToolbarHelper::addOptions();
 	}
 }

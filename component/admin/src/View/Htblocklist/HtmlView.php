@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Htblocklist;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -78,6 +77,5 @@ class HtmlView extends BaseHtmlView
 		{
 			ToolbarHelper::addNew('htblock.add');
 		}
-		BfstopToolbarHelper::addOptions();
 	}
 }

@@ -48,7 +48,10 @@ class com_bfstopInstallerScript extends InstallerScript implements InstallerScri
 	{
 		$bfstopPath = JPATH_ADMINISTRATOR."/components/com_bfstop/";
 		$oldFolders = array( "views/whitelist", "views/whiteip" );
-		$oldFiles = array( "models/whitelist.php", "models/whiteip.php" );
+		// config.xml: the "Options" page (com_config) is gone since 2.0.0 - it
+		// would save the component's params, which hold the settings, with
+		// only its permissions; they are part of the settings page now
+		$oldFiles = array( "models/whitelist.php", "models/whiteip.php", "config.xml" );
 		foreach ($oldFolders as $folder)
 		{
 			if (file_exists($bfstopPath.$folder) && is_dir($bfstopPath.$folder))

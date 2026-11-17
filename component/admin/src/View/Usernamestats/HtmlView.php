@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Usernamestats;
 
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Library\Bfstop\Repository\UsernameStatsRepository;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -58,6 +57,5 @@ class HtmlView extends BaseHtmlView
 		{
 			ToolbarHelper::modal('bfstopPurgeModal', 'icon-trash', 'COM_BFSTOP_USERNAMESTATS_PURGE_BUTTON');
 		}
-		BfstopToolbarHelper::addOptions();
 	}
 }

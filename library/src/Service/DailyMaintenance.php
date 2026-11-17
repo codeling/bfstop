@@ -32,7 +32,7 @@ class DailyMaintenance
 	private MaintenanceSchedule $schedule;
 
 	/**
-	 * @param Registry $settings the plugin's settings
+	 * @param Registry $settings the settings (see Settings)
 	 */
 	public function __construct(Repositories $repositories, Registry $settings)
 	{

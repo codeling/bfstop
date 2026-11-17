@@ -11,19 +11,16 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
-use Joomla\CMS\Log\Log;
-use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\Registry\Registry;
+use Codeling\Library\Bfstop\Settings;
 
 class LogHelper
 {
+	/**
+	 * The log, at the level of the settings - also while the plugin is
+	 * disabled: the page of an unblock link and the lists still work then.
+	 */
 	public static function getLogger()
 	{
-		// false if the plugin is disabled: the page of an unblock link and
-		// the lists still work then
-		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		$params = new Registry($plugin ? $plugin->params : null);
-		$loglevel = $params->get('logLevel', Log::ERROR);
-		return new LoggerHelper($loglevel);
+		return LoggerHelper::fromSettings(Settings::stored());
 	}
 }

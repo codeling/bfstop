@@ -526,6 +526,21 @@
     logins are counted against
   - Component: the list views escape everything they print, also what can
     only be a number, a date or one of the sort columns
+  - The settings are the component's now: they are stored with com_bfstop
+    (its params in Joomla's extensions table), no longer with the system
+    plugin; the update moves them. They were the plugin's because the
+    plugin was configured in the Plugin Manager once - where saving the
+    plugin, whose form there is only a note, replaced all the settings with
+    nothing. The plugins get them from the library's services
+    (Codeling\Library\Bfstop\Services, registered by their
+    services/provider.php), the component reads them without a query (it
+    ran one for every setting it showed), and the address of a client
+    behind a proxy is worked out with the proxy settings also while the
+    plugin is disabled (the backend's "your address")
+  - Component: the permissions are a tab of the settings page; the
+    "Options" button (Joomla's com_config) is gone. That page stores the
+    params of a component with only its own fields, and the settings are
+    those params now
   - Internal: what plugins and component have in common is a library of
     its own, lib_bfstop (library/, namespace Codeling\Library\Bfstop),
     which the package installs first: the addresses and networks, the

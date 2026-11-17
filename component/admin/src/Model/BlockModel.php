@@ -113,7 +113,7 @@ class BlockModel extends AdminModel
 	/**
 	 * Gives the duration of the block being edited an option of its own if
 	 * the list hasn't got one. The list only names some durations, but a
-	 * block can last any number of minutes: the plugin's settings offer a
+	 * block can last any number of minutes: the settings offer a
 	 * week and 30 days, and the progressive block duration multiplies the
 	 * duration with each repeat offense. Without an option for its value,
 	 * the browser shows the first one - unlimited - and saving the block,

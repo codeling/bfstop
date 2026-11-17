@@ -10,14 +10,32 @@ namespace Codeling\Library\Bfstop;
 
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Component\ComponentHelper;
+use Joomla\Registry\Registry;
+
 /**
- * The settings of Brute Force Stop: what they are while they have not been
- * saved. They are edited on the settings page of the component
- * (com_bfstop's forms/settings.xml, whose defaults a test compares with
- * these).
+ * The settings of Brute Force Stop. They are the component's: the params of
+ * com_bfstop's row of Joomla's extensions table, edited on its settings page
+ * (forms/settings.xml, whose defaults a test compares with Defaults below).
+ * Until 2.0.0, they were the system plugin's params; its update moves them
+ * (see the plugin's updatescript.php).
  */
 final class Settings
 {
+	/** the extension whose params the settings are */
+	public const Extension = 'com_bfstop';
+
+	/**
+	 * The settings as they are stored (an empty Registry while they have not
+	 * been saved, or if the component is not installed or is disabled: the
+	 * defaults apply then). Joomla has the params of all components loaded
+	 * anyway, so this costs no query; a copy, which the caller may change.
+	 */
+	public static function stored(): Registry
+	{
+		return new Registry(ComponentHelper::getParams(self::Extension)->toArray());
+	}
+
 	/**
 	 * What the settings are while they have not been saved: the same as the
 	 * settings page shows for them. The plugin is enabled by the

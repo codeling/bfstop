@@ -31,7 +31,7 @@ class DurationHelper
 	/**
 	 * The duration of a block (in minutes, 0 = unlimited) as text. Blocks can
 	 * last for any number of minutes, not only those of the block form: the
-	 * plugin's settings offer a week and 30 days, and the progressive block
+	 * settings offer a week and 30 days, and the progressive block
 	 * duration multiplies the duration with each repeat offense.
 	 */
 	public static function toReadable($duration)

@@ -7,6 +7,7 @@
 **/
 defined('_JEXEC') or die;
 
+use Joomla\CMS\Cache\CacheControllerFactoryInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Installer\InstallerScript;
@@ -100,7 +101,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		// refuse them for good
 		try
 		{
-			$file = self::htaccessFile(self::storedParams());
+			$file = self::htaccessFile(self::storedSettings(Factory::getContainer()->get(DatabaseInterface::class))['params']);
 			if (!self::removeHtaccessSection($file))
 			{
 				Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
@@ -118,20 +119,93 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	}
 
 	/**
-	 * The plugin's settings as they are stored, null if they can't be read.
+	 * The params of the extension $type/$folder/$element as they are stored:
+	 * null if it isn't installed, an empty array if it has none.
 	 */
-	private static function storedParams()
+	private static function extensionParams($db, $type, $folder, $element)
 	{
-		$db = Factory::getContainer()->get(DatabaseInterface::class);
 		$query = $db->createQuery()
 			->select($db->quoteName('params'))
 			->from($db->quoteName('#__extensions'))
-			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
-			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
-			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
+			->where($db->quoteName('type') . ' = ' . $db->quote($type))
+			->where($db->quoteName('folder') . ' = ' . $db->quote($folder))
+			->where($db->quoteName('element') . ' = ' . $db->quote($element));
 		$db->setQuery($query);
-		$params = json_decode((string) $db->loadResult(), true);
-		return is_array($params) ? $params : null;
+		$params = $db->loadResult();
+		if ($params === null)
+		{
+			return null;
+		}
+		$params = json_decode((string) $params, true);
+		return is_array($params) ? $params : array();
+	}
+
+	/**
+	 * The settings of BFStop as they are stored, and where: since 2.0.0 they
+	 * are the component's params (see the library's Settings), before they
+	 * were the plugin's.
+	 *
+	 * @return array 'params' => the settings, 'plugin' => whether they are
+	 *               still the plugin's params, 'component' => whether the
+	 *               component is installed (whose params they are to be)
+	 */
+	public static function storedSettings($db)
+	{
+		$component = self::extensionParams($db, 'component', '', 'com_bfstop');
+		$plugin = self::extensionParams($db, 'plugin', 'system', 'bfstop') ?? array();
+		// the note of the plugin's (otherwise empty) configuration form
+		unset($plugin['settingsMoved']);
+		// the plugin's params are emptied when they are moved, so settings
+		// there are those of a version before 2.0.0 - which the component's
+		// params can't have yet (only what its "Options" page stored)
+		return array(
+			'params' => empty($plugin) ? ($component ?? array()) : array_merge($component ?? array(), $plugin),
+			'plugin' => !empty($plugin),
+			'component' => $component !== null,
+		);
+	}
+
+	/**
+	 * Stores the settings $params where they belong: in the component's
+	 * params, and takes them out of the plugin's, where they were until
+	 * 2.0.0 - or, with no component installed (the package installs it
+	 * before the plugin), still in the plugin's.
+	 */
+	public static function storeSettings($db, array $params, array $stored)
+	{
+		$json = json_encode((object) $params);
+		$update = function ($type, $folder, $element, $value) use ($db)
+		{
+			$query = $db->createQuery()
+				->update($db->quoteName('#__extensions'))
+				->set($db->quoteName('params') . ' = ' . $db->quote($value))
+				->where($db->quoteName('type') . ' = ' . $db->quote($type))
+				->where($db->quoteName('folder') . ' = ' . $db->quote($folder))
+				->where($db->quoteName('element') . ' = ' . $db->quote($element));
+			$db->setQuery($query);
+			$db->execute();
+		};
+		if (!$stored['component'])
+		{
+			$update('plugin', 'system', 'bfstop', $json);
+			return;
+		}
+		$update('component', '', 'com_bfstop', $json);
+		if ($stored['plugin'])
+		{
+			$update('plugin', 'system', 'bfstop', '{}');
+		}
+		// the params of the components may be cached (with the site's caching
+		// on): the next requests would go on without the settings
+		try
+		{
+			Factory::getContainer()->get(CacheControllerFactoryInterface::class)
+				->createCacheController('callback', array('defaultgroup' => '_system'))->clean('_system');
+		}
+		catch (\Throwable $e)
+		{
+			// then the cache expires on its own
+		}
 	}
 
 	/**
@@ -267,16 +341,12 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		// unified value
 		try
 		{
-			$query = $db->createQuery()
-				->select($db->quoteName('params'))
-				->from($db->quoteName('#__extensions'))
-				->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
-				->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
-				->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
-			$db->setQuery($query);
-			$params = json_decode((string) $db->loadResult(), true);
+			// the settings: the plugin's params until 2.0.0, which this update
+			// moves to the component (see storeSettings())
+			$stored = self::storedSettings($db);
+			$params = $stored['params'];
 
-			$changed = false;
+			$changed = $stored['plugin'] && $stored['component'];
 			// until 2.0.0, requests converted the addresses of the block and allow list
 			// to the one spelling lookups depend on, the first one which found the
 			// setting "addressesCanonical" missing: done once here, not by a visitor
@@ -336,17 +406,10 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			}
 			if ($changed)
 			{
-				$query = $db->createQuery()
-					->update($db->quoteName('#__extensions'))
-					->set($db->quoteName('params') . ' = ' . $db->quote(json_encode($params)))
-					->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
-					->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
-					->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
-				$db->setQuery($query);
-				$db->execute();
+				self::storeSettings($db, $params, $stored);
 			}
 		}
-		catch (Exception $e)
+		catch (\Throwable $e)
 		{
 			// if the extension row can't be found/updated, there's nothing we can do
 //			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');

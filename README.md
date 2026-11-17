@@ -15,7 +15,8 @@ This repository contains all of BFStop, which is released as one package:
   the daily maintenance.
 - `plugin/`: the **system plugin** (`plg_system_bfstop`), which does the work
   on every request, by the library: it watches the logins and rejects
-  requests from blocked addresses. It has no settings of its own.
+  requests from blocked addresses. It has no settings of its own: they are
+  the component's.
 - `component/`: the **component** (`com_bfstop`): the settings, the lists of
   blocked addresses, failed logins and allowed addresses, the log, username
   statistics and IP address information in the administrator backend, and the

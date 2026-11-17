@@ -33,7 +33,7 @@ class FailedLoginTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -42,9 +42,7 @@ class FailedLoginTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
@@ -67,7 +65,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	private function configure(array $params = array())
 	{
-		$this->setPluginParams(json_encode($params + array(
+		$this->setSettings(json_encode($params + array(
 			'blockMode' => 'full',
 			'blockNumber' => 15,
 			'riskMinBlockNumber' => 1,
@@ -343,7 +341,7 @@ class FailedLoginTest extends IntegrationTestCase
 	{
 		$this->assertSame(0, Settings::Defaults['riskDelaySecondsPerPoint']);
 		// "admin" is a common username, and there is no User-Agent: 4 points
-		$this->setPluginParams(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
+		$this->setSettings(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
 		$start = microtime(true);
 		$this->failedLogin('admin', self::Ip, array('--server=HTTP_USER_AGENT='));
 		$this->assertLessThan(3.0, microtime(true) - $start);

@@ -20,20 +20,36 @@ use Joomla\CMS\Installer\InstallerAdapter;
 class InstallerScriptTest extends IntegrationTestCase
 {
 	private $originalManifestCache;
+	private $originalPluginParams;
 
 	protected function setUp(): void
 	{
 		parent::setUp();
 		require_once BFSTOP_PLUGIN_ROOT.'/updatescript.php';
 		$this->originalManifestCache = $this->queryValue(
-			"SELECT manifest_cache FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+			"SELECT manifest_cache FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
+		$this->originalPluginParams = $this->pluginParams();
 		Factory::getApplication()->getMessageQueue(true);
 	}
 
 	protected function tearDown(): void
 	{
 		$this->setInstalledVersion(null);
+		$this->setPluginParams($this->originalPluginParams);
 		Factory::getApplication()->getMessageQueue(true);
+	}
+
+	/** The plugin's own params, where versions before 2.0.0 kept the settings. */
+	private function pluginParams()
+	{
+		return $this->queryValue("SELECT params FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
+	}
+
+	private function setPluginParams($params)
+	{
+		$this->db->setQuery('UPDATE #__extensions SET params='.$this->db->quote($params).
+			" WHERE type='plugin' AND folder='system' AND element='bfstop'");
+		$this->db->execute();
 	}
 
 	private function setInstalledVersion($version)
@@ -46,7 +62,7 @@ class InstallerScriptTest extends IntegrationTestCase
 			$cache = json_encode($decoded);
 		}
 		$this->db->setQuery('UPDATE #__extensions SET manifest_cache='.$this->db->quote($cache).
-			" WHERE type='plugin' AND element='bfstop'");
+			" WHERE type='plugin' AND folder='system' AND element='bfstop'");
 		$this->db->execute();
 	}
 
@@ -91,17 +107,61 @@ class InstallerScriptTest extends IntegrationTestCase
 
 	/**
 	 * Runs the update of the installed plugin from $fromVersion, whose stored
-	 * settings are $params; returns the settings afterwards
+	 * settings are $params - in the plugin's params before 2.0.0, in the
+	 * component's since; returns the settings afterwards, which are the
+	 * component's.
 	 */
 	private function update($fromVersion, array $params)
 	{
 		$this->setInstalledVersion($fromVersion);
-		$this->setPluginParams(json_encode($params));
+		$before200 = version_compare($fromVersion, '2.0.0-dev', '<');
+		$this->setSettings($before200 ? '{}' : json_encode($params));
+		$this->setPluginParams($before200 ? json_encode($params) : '{}');
 		list($script, $adapter) = $this->script();
 		$this->assertTrue($script->preflight('update', $adapter));
 		$script->update($adapter);
 		$script->postflight('update', $adapter);
-		return json_decode($this->getPluginParams(), true);
+		$this->assertSame(array(), json_decode($this->pluginParams(), true), 'no settings are left with the plugin');
+		return json_decode($this->getSettings(), true);
+	}
+
+	/**
+	 * Until 2.0.0, the settings were the plugin's params; the update moves
+	 * them to the component, whose params they are now (see the library's
+	 * Settings) - once: a later update finds them there.
+	 */
+	public function testUpdateFromBefore200MovesTheSettingsToTheComponent()
+	{
+		$original = $this->getSettings();
+		try
+		{
+			$params = $this->update('1.5.2', array('blockMode' => 'htaccess', 'blockNumber' => '7',
+				'emailaddress' => "a@example.org\nb@example.org", 'settingsMoved' => ''));
+			$this->assertSame('htaccess', $params['blockMode']);
+			$this->assertSame('7', $params['blockNumber']);
+			$this->assertSame("a@example.org\nb@example.org", $params['emailaddress']);
+			$this->assertArrayNotHasKey('settingsMoved', $params, 'the note of the plugin\'s form is no setting');
+			$this->forgetLoadedSettings();
+			$this->assertSame('7', \Codeling\Library\Bfstop\Settings::stored()->get('blockNumber'));
+
+			// what the component's "Options" page of 1.x stored stays, the
+			// settings come to it
+			$this->setSettings(json_encode(array('somethingElse' => 1)));
+			$this->setInstalledVersion('1.5.2');
+			$this->setPluginParams(json_encode(array('blockMode' => 'off')));
+			list($script, $adapter) = $this->script();
+			$this->assertTrue($script->preflight('update', $adapter));
+			$script->update($adapter);
+			$this->assertSame(array('somethingElse' => 1, 'blockMode' => 'off'), json_decode($this->getSettings(), true));
+
+			// a later update leaves them where they are
+			$params = $this->update('2.0.0', array('blockMode' => 'full', 'blockNumber' => '9'));
+			$this->assertSame('9', $params['blockNumber']);
+		}
+		finally
+		{
+			$this->setSettings($original);
+		}
 	}
 
 	public function testUpdateFromBefore200ProtectsTheApi()
@@ -112,7 +172,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		{
 			return in_array($hint, array_map('strip_tags', $this->messages()), true);
 		};
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		try
 		{
 			// the frontend/backend setting of 1.x knew nothing of the API
@@ -131,7 +191,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
@@ -140,7 +200,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		// entries of earlier versions, or typed by hand, are not in the canonical form
 		// the lookups of the block and allow list rely on; until 2.0.0, the first
 		// request after the update converted them, and now the update does
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		try
 		{
 			$upper = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:DB8::41', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
@@ -156,7 +216,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
@@ -197,7 +257,7 @@ class InstallerScriptTest extends IntegrationTestCase
 	{
 		// a request which saved when it ran the maintenance wrote all the settings back
 		// as it had read them, racing with an administrator saving the settings page
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		try
 		{
 			$params = $this->update('1.5.2', array('blockMode' => 'full', 'lastPurge' => 1700000000, 'addressesCanonical' => 1));
@@ -216,7 +276,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
@@ -310,7 +370,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
 		$dir = sys_get_temp_dir().'/bfstop-update-htaccess-'.bin2hex(random_bytes(4));
 		mkdir($dir);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$legacy = "# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\nRequire not ip 192.0.2.1\n".
 			"ErrorDocument 403 \"Go away\"\n</RequireAll>\n# END BFStop Blocks\n\nAuthType Basic\nRequire valid-user\n";
 		$notRewritten = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_HTACCESS_NOT_REWRITTEN', $dir.'/.htaccess'));
@@ -343,7 +403,7 @@ class InstallerScriptTest extends IntegrationTestCase
 			@chmod($dir.'/.htaccess', 0644);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
@@ -354,7 +414,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
 		$dir = sys_get_temp_dir().'/bfstop-uninstall-htaccess-'.bin2hex(random_bytes(4));
 		mkdir($dir);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$section = "# BEGIN BFStop Blocks\n<If \"-R '192.0.2.1' || -R '2001:db8::/56'\">\nRequire all denied\n</If>\n".
 			"ErrorDocument 403 \"Go away\"\n";
 		$notRemoved = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UNINSTALL_HTACCESS_NOT_REMOVED', $dir.'/.htaccess'));
@@ -365,7 +425,7 @@ class InstallerScriptTest extends IntegrationTestCase
 		};
 		try
 		{
-			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
 			file_put_contents($dir.'/.htaccess', $section."# END BFStop Blocks\n\nAuthType Basic\nRequire valid-user\n");
 			$uninstall();
 			$this->assertSame("AuthType Basic\nRequire valid-user\n", file_get_contents($dir.'/.htaccess'));
@@ -398,7 +458,7 @@ class InstallerScriptTest extends IntegrationTestCase
 			@chmod($dir.'/.htaccess', 0644);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 

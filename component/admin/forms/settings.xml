@@ -344,4 +344,15 @@
 				description="COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_DESC" />
 		</fieldset>
 	</fields>
+	<!-- the permissions of the component, which Joomla's "Options" page
+	     (com_config) edited: that page would save the component's params
+	     with only its own fields - and the settings are those params, see
+	     SettingsModel. A change is stored right away by the field itself;
+	     SettingsModel::save() stores what is sent with the settings -->
+	<fieldset name="permissions" label="JCONFIG_PERMISSIONS_LABEL" description="JCONFIG_PERMISSIONS_DESC">
+		<field name="rules" type="rules"
+			label="JCONFIG_PERMISSIONS_LABEL"
+			filter="rules" validate="rules"
+			component="com_bfstop" section="component" />
+	</fieldset>
 </form>

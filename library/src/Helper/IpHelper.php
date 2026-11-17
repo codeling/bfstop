@@ -10,9 +10,8 @@ namespace Codeling\Library\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Log\Log;
-use Joomla\CMS\Plugin\PluginHelper;
-use Joomla\Registry\Registry;
 
 class IpHelper
 {
@@ -215,7 +214,7 @@ class IpHelper
 	}
 
 	/**
-	 * The trusted proxies of the plugin's settings, if proxy support is on
+	 * The trusted proxies of the settings, if proxy support is on
 	 * (see getAddress()); empty otherwise.
 	 *
 	 * @return string[]
@@ -229,32 +228,28 @@ class IpHelper
 	private static $proxySettingsSource = null;
 
 	/**
-	 * The proxy settings of the plugin, parsed once per distinct parameter
-	 * string (getAddress() and trustedProxies() are called several times in
-	 * a request).
+	 * The proxy settings (see Settings), parsed once per distinct settings
+	 * (getAddress() and trustedProxies() are called several times in a
+	 * request).
 	 *
 	 * @return array{useProxy: bool, proxyIpAddress: string, header: string, trustedProxies: string[]}
 	 */
 	private static function proxySettings()
 	{
-		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		$source = $plugin ? (string) (is_string($plugin->params) ? $plugin->params : json_encode($plugin->params)) : null;
+		$params = Settings::stored();
+		$source = $params->toString();
 		if (self::$proxySettings !== null && self::$proxySettingsSource === $source)
 		{
 			return self::$proxySettings;
 		}
 		$settings = array('useProxy' => false, 'proxyIpAddress' => '',
 			'header' => 'HTTP_X_FORWARDED_FOR', 'trustedProxies' => array());
-		if ($plugin)
+		$settings['useProxy'] = (bool) $params->get('useProxy', false);
+		$settings['proxyIpAddress'] = (string) $params->get('proxyIpAddress', '');
+		$settings['header'] = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
+		if ($settings['useProxy'])
 		{
-			$params = new Registry($plugin->params);
-			$settings['useProxy'] = (bool) $params->get('useProxy', false);
-			$settings['proxyIpAddress'] = (string) $params->get('proxyIpAddress', '');
-			$settings['header'] = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
-			if ($settings['useProxy'])
-			{
-				$settings['trustedProxies'] = self::parseTrustedProxies($settings['proxyIpAddress']);
-			}
+			$settings['trustedProxies'] = self::parseTrustedProxies($settings['proxyIpAddress']);
 		}
 		self::$proxySettings = $settings;
 		self::$proxySettingsSource = $source;

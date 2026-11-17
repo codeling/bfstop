@@ -16,14 +16,21 @@ use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Codeling\Library\Bfstop\Settings;
+use Joomla\CMS\Access\Rules;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
+use Joomla\CMS\Table\Asset;
 use Joomla\CMS\Table\Extension;
 
+/**
+ * The settings of BFStop, which are the params of the component's row of
+ * Joomla's extensions table (see the library's Settings), and the
+ * permissions of the component.
+ */
 class SettingsModel extends AdminModel
 {
-	// the settings are the plugin's row of Joomla's extensions table
+	// the settings are the component's row of Joomla's extensions table
 	public function getTable($name = '', $prefix = '', $options = array())
 	{
 		return new Extension($this->getDatabase());
@@ -42,13 +49,13 @@ class SettingsModel extends AdminModel
 
 	public function getItem($pk = null)
 	{
-		return parent::getItem($this->resolvePluginExtensionId());
+		return parent::getItem($this->resolveExtensionId());
 	}
 
 	// AdminModel's own loadFormData() default (via FormBehaviorTrait) always
 	// returns an empty array, so without this override the settings form
 	// would bind against nothing and every field would show its XML default
-	// instead of the value actually stored on the plugin's #__extensions row.
+	// instead of the value actually stored on the component's #__extensions row.
 	protected function loadFormData()
 	{
 		$data = Factory::getApplication()->getUserState('com_bfstop.edit.settings.data', array());
@@ -117,7 +124,17 @@ class SettingsModel extends AdminModel
 
 	public function save($data)
 	{
-		$id = $this->resolvePluginExtensionId();
+		$id = $this->resolveExtensionId();
+		if ($id < 1)
+		{
+			$this->setError(Text::_('JLIB_APPLICATION_ERROR_SAVE_FAILED'));
+			return false;
+		}
+		if (isset($data['rules']) && !$this->saveRules($data['rules']))
+		{
+			return false;
+		}
+		unset($data['rules']);
 		$data[$this->getTable()->getKeyName()] = $id;
 		$stored = $this->loadStoredParams($id);
 		$data['params'] = self::paramsForStorage($data['params'] ?? array());
@@ -183,6 +200,37 @@ class SettingsModel extends AdminModel
 		}
 	}
 
+	/**
+	 * Stores the permissions of the component, as Joomla's "Options" page
+	 * does it (com_config's ComponentModel::save()): only for who may change
+	 * them.
+	 */
+	private function saveRules(array $rules)
+	{
+		$user = Factory::getApplication()->getIdentity();
+		if (!$user || !$user->authorise('core.admin', 'com_bfstop'))
+		{
+			$this->setError(Text::_('JLIB_APPLICATION_ERROR_SAVE_NOT_PERMITTED'));
+			return false;
+		}
+		$asset = new Asset($this->getDatabase());
+		if (!$asset->loadByName('com_bfstop'))
+		{
+			$root = new Asset($this->getDatabase());
+			$root->loadByName('root.1');
+			$asset->name = 'com_bfstop';
+			$asset->title = 'com_bfstop';
+			$asset->setLocation($root->id, 'last-child');
+		}
+		$asset->rules = (string) new Rules($rules);
+		if (!$asset->check() || !$asset->store())
+		{
+			$this->setError($asset->getError());
+			return false;
+		}
+		return true;
+	}
+
 	private function loadStoredParams($id)
 	{
 		$table = $this->getTable();
@@ -195,20 +243,21 @@ class SettingsModel extends AdminModel
 	}
 
 	// the "settings" being edited here are not stored in a table of this
-	// component; they are the plugin's own params, on its #__extensions row.
-	protected function resolvePluginExtensionId()
+	// component; they are its params, on its #__extensions row.
+	protected function resolveExtensionId()
 	{
 		$table = $this->getTable();
-		$table->load(array('name' => 'plg_system_bfstop'));
+		$table->load(array('type' => 'component', 'element' => Settings::Extension));
 		return (int) $table->extension_id;
 	}
 
 	/**
 	 * The settings are not checked out for editing. The record is a row of
 	 * Joomla's extensions table, which has the columns for it: FormController
-	 * would check out the plugin with "Save" (the Plugin Manager then shows
-	 * it as locked by whoever changed the settings last) - or, given another
-	 * id, any other extension.
+	 * would check out the extension with "Save" (until 2.0.0, the settings
+	 * were the plugin's, and the Plugin Manager showed it as locked by
+	 * whoever changed the settings last) - or, given another id, any other
+	 * extension.
 	 */
 	public function checkout($pk = null)
 	{
@@ -216,27 +265,32 @@ class SettingsModel extends AdminModel
 	}
 
 	/**
-	 * Only ever the plugin, whatever id is given: also releases it if an
-	 * earlier version left it checked out. That it can't be (somebody else
-	 * holds it) is no error of saving the settings.
+	 * Only ever the component, whatever id is given - and the plugin, which
+	 * "Save" checked out until 2.0.0, when the settings were its params (the
+	 * Plugin Manager showed it as locked). That they can't be (somebody else
+	 * holds them) is no error of saving the settings.
 	 */
 	public function checkin($pks = array())
 	{
-		$id = $this->resolvePluginExtensionId();
-		if ($id > 0)
+		$table = $this->getTable();
+		$table->load(array('type' => 'plugin', 'folder' => 'system', 'element' => 'bfstop'));
+		foreach (array($this->resolveExtensionId(), (int) $table->extension_id) as $id)
 		{
-			parent::checkin($id);
+			if ($id > 0)
+			{
+				parent::checkin($id);
+			}
 		}
 		return true;
 	}
 
 	// the default cleanCache() only clears the "com_bfstop" group, but the
-	// enabled-plugins list (with params) that PluginHelper::getPlugin() reads
-	// at runtime is cached under "com_plugins" - without this override, a
-	// saved change here (e.g. to the proxy/load balancer settings) wouldn't
-	// actually take effect until that separate cache expired on its own.
+	// params of the components, which the settings are read from
+	// (ComponentHelper::getParams()), are cached under "_system" - without
+	// this override, a saved change wouldn't take effect until that cache
+	// expired on its own (com_config cleans the same group)
 	protected function cleanCache($group = null)
 	{
-		parent::cleanCache('com_plugins');
+		parent::cleanCache('_system');
 	}
 }

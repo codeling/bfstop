@@ -41,10 +41,10 @@ class PluginEventsTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
-		$db->setQuery('UPDATE #__extensions SET params='.$db->quote(json_encode(self::Params)).
-			", enabled=1 WHERE type='plugin' AND element='bfstop'");
+		self::storeSettings($db, json_encode(self::Params));
+		$db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND element='bfstop'");
 		$db->execute();
 		// forget the plugin list possibly already loaded with the old params
 		(new \ReflectionProperty(PluginHelper::class, 'plugins'))->setValue(null, null);
@@ -57,9 +57,7 @@ class PluginEventsTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 

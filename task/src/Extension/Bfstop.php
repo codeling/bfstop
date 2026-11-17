@@ -10,23 +10,20 @@ namespace Codeling\Plugin\Task\Bfstop\Extension;
 
 defined('_JEXEC') or die;
 
-use Codeling\Library\Bfstop\Helper\LoggerHelper;
-use Codeling\Library\Bfstop\Repository\Repositories;
-use Codeling\Library\Bfstop\Service\DailyMaintenance;
 use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Plugin\PluginHelper;
 use Joomla\Component\Scheduler\Administrator\Event\ExecuteTaskEvent;
 use Joomla\Component\Scheduler\Administrator\Task\Status;
 use Joomla\Component\Scheduler\Administrator\Traits\TaskPluginTrait;
 use Joomla\Event\SubscriberInterface;
-use Joomla\Registry\Registry;
 
 /**
  * Runs the daily maintenance of Brute Force Stop - purging what is old, the
  * tables kept below their bounds, the .htaccess file, the log - as a task of
  * Joomla's Task Scheduler, instead of in the request of whichever visitor
- * comes first after a day. All it needs is the system plugin, whose settings
- * it uses and whose services it calls.
+ * comes first after a day. It is the library's DailyMaintenance (lib_bfstop),
+ * with BFStop's settings, made by services/provider.php; it runs while the
+ * system plugin is enabled.
  */
 final class Bfstop extends CMSPlugin implements SubscriberInterface
 {
@@ -44,6 +41,19 @@ final class Bfstop extends CMSPlugin implements SubscriberInterface
 
 	protected $autoloadLanguage = true;
 
+	/** @var \Closure makes the DailyMaintenance (null without the library) */
+	private \Closure $makeMaintenance;
+
+	/**
+	 * @param array    $config      the plugin's configuration, see CMSPlugin
+	 * @param \Closure $makeMaintenance makes the maintenance to run, see services/provider.php
+	 */
+	public function __construct(array $config, \Closure $makeMaintenance)
+	{
+		parent::__construct($config);
+		$this->makeMaintenance = $makeMaintenance;
+	}
+
 	public static function getSubscribedEvents(): array
 	{
 		return [
@@ -56,15 +66,18 @@ final class Bfstop extends CMSPlugin implements SubscriberInterface
 	{
 		// enabled plugins only: with the system plugin off, the site isn't protected
 		// and there is no maintenance of its data to do
-		$plugin = PluginHelper::getPlugin('system', 'bfstop');
-		if (!$plugin || !class_exists(DailyMaintenance::class))
+		if (!PluginHelper::isEnabled('system', 'bfstop'))
 		{
 			$this->logTask('The plugin "System - Brute Force Stop" is not enabled: nothing to do');
 			return Status::OK;
 		}
-		$settings = new Registry($plugin->params);
-		$repositories = new Repositories(LoggerHelper::fromSettings($settings));
-		if ((new DailyMaintenance($repositories, $settings))->runNow())
+		$maintenance = ($this->makeMaintenance)();
+		if ($maintenance === null)
+		{
+			$this->logTask('The library of Brute Force Stop (lib_bfstop) is not installed: nothing to do');
+			return Status::OK;
+		}
+		if ($maintenance->runNow())
 		{
 			$this->logTask('The maintenance of Brute Force Stop is done');
 		}

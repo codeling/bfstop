@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Log;
 
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Access\Exception\NotAllowed;
@@ -54,6 +53,5 @@ class HtmlView extends BaseHtmlView
 			ToolbarHelper::modal('bfstopClearLogModal', 'icon-trash', 'COM_BFSTOP_LOG_CLEAR_BUTTON');
 		}
 		ToolbarHelper::divider();
-		BfstopToolbarHelper::addOptions();
 	}
 }

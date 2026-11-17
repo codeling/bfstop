@@ -30,7 +30,7 @@ class BlockedRequestTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -39,15 +39,13 @@ class BlockedRequestTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
 	private function configure(array $params = array())
 	{
-		$this->setPluginParams(json_encode($params + array(
+		$this->setSettings(json_encode($params + array(
 			'blockMode' => 'full',
 			'blockedMessage' => self::BlockedMessage,
 			'logLevel' => 8, // errors only
@@ -169,7 +167,7 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertSame(array('203.0.113.78'), $this->db->setQuery('SELECT ipaddress FROM #__bfstop_dnscache')->loadColumn());
 		$this->assertSame(array(UnblockTokenRepository::hash(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
 		$this->assertGreaterThan(time() - 60, (int) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
-		$saved = json_decode($this->getPluginParams(), true);
+		$saved = json_decode($this->getSettings(), true);
 		$this->assertArrayNotHasKey('lastPurge', $saved, 'the settings are not written for this any more');
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
 	}
@@ -420,7 +418,7 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testUnsavedSettingsProtectTheApi()
 	{
-		$this->setPluginParams(json_encode(array('blockedMessage' => self::BlockedMessage, 'logLevel' => 8)));
+		$this->setSettings(json_encode(array('blockedMessage' => self::BlockedMessage, 'logLevel' => 8)));
 		$this->block();
 		$this->assertStringNotContainsString('NOT BLOCKED', $this->apiRequest());
 	}

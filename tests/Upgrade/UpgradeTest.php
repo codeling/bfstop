@@ -51,7 +51,7 @@ class UpgradeTest extends IntegrationTestCase
 
 	private function pluginId()
 	{
-		return (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		return (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
 	}
 
 	private function schemaVersion()
@@ -97,7 +97,7 @@ class UpgradeTest extends IntegrationTestCase
 		$this->assertSame(array('component' => $version, 'package' => $version, 'plugin' => $version),
 			$this->installedVersions());
 		$this->assertSame(self::latestSchema(), $this->schemaVersion());
-		$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND element='bfstop'"));
+		$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'"));
 	}
 
 	public function testUpdateMessages()
@@ -115,7 +115,13 @@ class UpgradeTest extends IntegrationTestCase
 
 	public function testSettingsAreKeptAndMigrated()
 	{
-		$params = json_decode($this->getPluginParams(), true);
+		// they are the component's params since 2.0.0, the plugin's before
+		$this->assertSame(array(), json_decode((string) $this->queryValue(
+			"SELECT params FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'"), true) ?: array(),
+			'the settings moved from the plugin to the component');
+		// whose "Options" page would store its params with only the permissions
+		$this->assertFileDoesNotExist(JPATH_ADMINISTRATOR.'/components/com_bfstop/config.xml');
+		$params = json_decode($this->getSettings(), true);
 		$this->assertSame('full', $params['blockMode'] ?? null, 'blockEnabled/useHtaccess became blockMode');
 		$this->assertSame('15', (string) $params['blockNumber']);
 		$this->assertSame('90', (string) $params['delayDuration']);
@@ -154,7 +160,7 @@ class UpgradeTest extends IntegrationTestCase
 		$this->db->setQuery('SELECT ipaddress FROM #__bfstop_bannedip ORDER BY id');
 		$this->assertSame(array('2001:db8::5', '203.0.113.0/24', '198.51.100.9'), $this->db->loadColumn());
 		$this->assertSame('abcd::1', $this->queryValue('SELECT ipaddress FROM #__bfstop_allowlist'));
-		$params = json_decode($this->getPluginParams(), true);
+		$params = json_decode($this->getSettings(), true);
 		$this->assertArrayNotHasKey('addressesCanonical', $params);
 		$this->assertArrayNotHasKey('lastPurge', $params, 'the bookkeeping is not in the settings any more');
 		$this->assertNotNull($this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
