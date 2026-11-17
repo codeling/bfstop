@@ -10,6 +10,7 @@ namespace Codeling\Plugin\System\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 
@@ -46,6 +47,18 @@ class LoggerHelper
 			$priorities,
 			array(self::LogCategory));
 		}
+	}
+
+	/**
+	 * The logger of the plugin's settings $params (a Registry of the plugin's
+	 * parameters), as the plugin and the task which runs its maintenance
+	 * make it.
+	 */
+	public static function fromSettings(\Joomla\Registry\Registry $params)
+	{
+		return new self(
+			(int) $params->get('logLevel', Bfstop::DefaultSettings['logLevel']),
+			self::maxBytesFromMegabytes($params->get('logMaxSize', self::DefaultMaxSizeMB)));
 	}
 
 	/**

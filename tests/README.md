@@ -41,6 +41,10 @@ the site only needs to be set up again when the database schema changes.
   against a real Apache 2.4 (CI job ".htaccess blocks on Apache"): it turns
   away the blocked addresses and doesn't open up what the directory's other
   access controls keep out.
+- `Integration/MaintenanceTest.php` is about the daily maintenance: when a request
+  has to do it (it didn't run for two days), what it does, and that Joomla's
+  Task Scheduler runs it through the task plugin (the scheduler's own
+  command line is called, on the installed site).
 - `Integration/QueryCountTest.php` keeps the number of queries a page view, the
   request of a blocked address and a failed login send within limits (the
   scripts of `Integration/fixtures` print the queries when called with

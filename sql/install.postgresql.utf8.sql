@@ -98,3 +98,13 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_username_stats" (
 );
 CREATE INDEX IF NOT EXISTS "#__bfstop_username_stats_attempts" ON "#__bfstop_username_stats" ("attempts");
 CREATE INDEX IF NOT EXISTS "#__bfstop_username_stats_last_attempt" ON "#__bfstop_username_stats" ("last_attempt");
+
+
+-- the plugin's own bookkeeping (name => value), apart from its settings: when
+-- the maintenance last ran
+CREATE TABLE IF NOT EXISTS "#__bfstop_state" (
+  "name" varchar(64) NOT NULL,
+  "value" varchar(255) NOT NULL,
+  "changed" timestamp without time zone NOT NULL,
+  PRIMARY KEY ("name")
+);

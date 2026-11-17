@@ -10,6 +10,7 @@
  *
  *   - bfstop.xml (the plugin)
  *   - package/pkg_bfstop.xml (the package)
+ *   - task/bfstop.xml (the task plugin)
  *   - bfstop.xml of the component, if COM_BFSTOP_ROOT is set
  *   - the first entry of CHANGELOG ("2.0.0 (unreleased)" or "2.0.0 (2026-11-06)")
  *
@@ -68,6 +69,7 @@ function fail($message)
 $versions = array(
 	'bfstop.xml' => manifestVersion($root.'/bfstop.xml'),
 	'package/pkg_bfstop.xml' => manifestVersion($root.'/package/pkg_bfstop.xml'),
+	'task/bfstop.xml' => manifestVersion($root.'/task/bfstop.xml'),
 );
 $componentRoot = getenv('COM_BFSTOP_ROOT');
 if ($componentRoot)

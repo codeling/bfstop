@@ -1,4 +1,25 @@
 2.0.0 (unreleased)
+  - The daily maintenance - purging old failed logins, blocks and unblock
+    links, keeping the tables below their bounds, taking expired blocks out
+    of the .htaccess file, removing old logs - no longer runs in the
+    request of whichever visitor comes first after a day: the purge alone is
+    several DELETE statements, and a fresh site's first page view ran 18
+    queries for it. It is a task of Joomla's Task Scheduler now, made by a
+    new plugin, "Task - Brute Force Stop" (plg_task_bfstop), which the
+    package installs, switched on, together with the task "Brute Force Stop
+    maintenance", every 24 hours. The Task Scheduler runs it in the lazy mode
+    (a visitor's browser asks for it, in a request of its own), through a web
+    cron job or on the command line (`php cli/joomla.php scheduler:run`).
+    Where it isn't used - the scheduler is switched off, or the task was
+    deleted or switched off - the next request does the maintenance once it
+    didn't run for two days, as the plugin did before; it costs no query to
+    find that out
+  - The plugin's own bookkeeping (when the maintenance ran) is in a table of
+    its own, no longer among the plugin's settings: a request which stored
+    it wrote all the settings back as it had read them, and so raced with an
+    administrator saving the settings page. The one-time conversion of the
+    block and allow list to the spelling the lookups rely on, which the
+    first request after the update from 1.x did, is part of the update now
   - Faster failed logins on sites with many accounts and known addresses.
     Every failed login looked the user name up among the site's accounts
     with LOWER(username), which reads the whole table of accounts; MySQL and

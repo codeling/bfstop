@@ -15,6 +15,7 @@
 	<files folder="packages">
 		<file type="component" id="com_bfstop">com_bfstop.zip</file>
 		<file type="plugin" id="bfstop" group="system">plg_sys_bfstop.zip</file>
+		<file type="plugin" id="bfstop" group="task">plg_task_bfstop.zip</file>
 	</files>
 	<updateservers>
 		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>

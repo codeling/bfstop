@@ -64,6 +64,16 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
 		$db->setQuery($query);
 		$db->execute();
+		// the scheduled task is on its way (it is made by the task plugin, which the
+		// package installs next): a request needn't run the maintenance meanwhile
+		try
+		{
+			self::seedMaintenanceState($db, time());
+		}
+		catch (\Throwable $e)
+		{
+			// without the table, the first request does it (and cannot store it either)
+		}
 		return true;
 	}
 
@@ -224,6 +234,31 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			$params = json_decode((string) $db->loadResult(), true);
 
 			$changed = false;
+			// until 2.0.0, requests converted the addresses of the block and allow list
+			// to the one spelling lookups depend on, the first one which found the
+			// setting "addressesCanonical" missing: done once here, not by a visitor
+			if ($this->updatesFromBefore200('update'))
+			{
+				self::canonicalizeAddresses($db);
+			}
+			// the plugin's bookkeeping lived in its settings, where whoever wrote it
+			// wrote all the settings back as they had read them - and so raced with an
+			// administrator saving them: it is a table of its own now
+			$lastPurge = 0;
+			if (is_array($params))
+			{
+				foreach (array('lastPurge', 'addressesCanonical') as $internal)
+				{
+					if (array_key_exists($internal, $params))
+					{
+						$lastPurge = $internal === 'lastPurge' ? (int) $params[$internal] : $lastPurge;
+						unset($params[$internal]);
+						$changed = true;
+					}
+				}
+			}
+			// the maintenance ran then (never: it is due, but the task has a day for it)
+			self::seedMaintenanceState($db, $lastPurge > 0 ? $lastPurge : time());
 			if (is_array($params) && !array_key_exists('blockMode', $params))
 			{
 				$newMode = 'full';
@@ -274,6 +309,102 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 //			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
 		}
 		return true;
+	}
+
+	/**
+	 * Stores when the maintenance last ran in #__bfstop_state, unless it
+	 * says already.
+	 */
+	public static function seedMaintenanceState($db, $time)
+	{
+		$query = $db->createQuery()
+			->select($db->quoteName('name'))
+			->from($db->quoteName('#__bfstop_state'))
+			->where($db->quoteName('name') . ' = ' . $db->quote('lastMaintenance'));
+		$db->setQuery($query);
+		if ($db->loadResult() !== null)
+		{
+			return;
+		}
+		$row = new \stdClass();
+		$row->name = 'lastMaintenance';
+		$row->value = (string) (int) $time;
+		$row->changed = gmdate('Y-m-d H:i:s');
+		$db->insertObject('#__bfstop_state', $row);
+	}
+
+	/**
+	 * The one spelling in which addresses and networks are stored in the
+	 * block and allow list: IpHelper::canonicalEntry() of the plugin, which
+	 * the update can't call (the class of the version being replaced may be
+	 * the one loaded in this request) - a test checks that both agree.
+	 *
+	 * @return string|null null if $value is neither an address nor a network
+	 */
+	public static function canonicalAddress($value)
+	{
+		$value = trim((string) $value);
+		if (!self::isAddressOrNetwork($value))
+		{
+			return null;
+		}
+		$parts = explode('/', $value);
+		$bin = inet_pton($parts[0]);
+		if (count($parts) === 1)
+		{
+			return inet_ntop($bin);
+		}
+		$bits = (int) $parts[1];
+		$mask = str_repeat("\xff", intdiv($bits, 8));
+		if ($bits % 8 > 0)
+		{
+			$mask .= chr((0xff << (8 - $bits % 8)) & 0xff);
+		}
+		return inet_ntop($bin & str_pad($mask, strlen($bin), "\x00")).'/'.$bits;
+	}
+
+	/**
+	 * Brings the addresses in the block and allow list into canonical form
+	 * (see canonicalAddress()): entries written by earlier versions, or by
+	 * hand, may be spelled differently ("2001:DB8::1", "203.0.113.5/24").
+	 * Entries which are no address or network are left alone.
+	 *
+	 * @return int the number of entries changed
+	 */
+	public static function canonicalizeAddresses($db)
+	{
+		$changed = 0;
+		foreach (array('#__bfstop_bannedip', '#__bfstop_allowlist') as $table)
+		{
+			$lastId = 0;
+			do
+			{
+				$query = $db->createQuery()
+					->select($db->quoteName(array('id', 'ipaddress')))
+					->from($db->quoteName($table))
+					->where($db->quoteName('id') . ' > ' . (int) $lastId)
+					->order($db->quoteName('id') . ' ASC');
+				$db->setQuery($query, 0, 5000);
+				$rows = $db->loadObjectList();
+				foreach ($rows as $row)
+				{
+					$lastId = (int) $row->id;
+					$canonical = self::canonicalAddress($row->ipaddress);
+					if ($canonical !== null && $canonical !== $row->ipaddress)
+					{
+						$update = $db->createQuery()
+							->update($db->quoteName($table))
+							->set($db->quoteName('ipaddress') . ' = ' . $db->quote($canonical))
+							->where($db->quoteName('id') . ' = ' . (int) $row->id);
+						$db->setQuery($update);
+						$db->execute();
+						++$changed;
+					}
+				}
+			}
+			while (count($rows) === 5000);
+		}
+		return $changed;
 	}
 
 	/**

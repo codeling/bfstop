@@ -83,8 +83,8 @@ class Repositories
 		return $this->repository(UserRepository::class);
 	}
 
-	public function pluginSettings(): PluginSettingsRepository
+	public function state(): StateRepository
 	{
-		return $this->repository(PluginSettingsRepository::class);
+		return $this->repository(StateRepository::class);
 	}
 }

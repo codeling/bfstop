@@ -7,6 +7,8 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 
@@ -130,6 +132,133 @@ class InstallerScriptTest extends IntegrationTestCase
 		finally
 		{
 			$this->setPluginParams($original);
+		}
+	}
+
+	public function testStoredAddressesAreConvertedByTheUpdateFromBefore200()
+	{
+		// entries of earlier versions, or typed by hand, are not in the canonical form
+		// the lookups of the block and allow list rely on; until 2.0.0, the first
+		// request after the update converted them, and now the update does
+		$original = $this->getPluginParams();
+		try
+		{
+			$upper = $this->insert('#__bfstop_bannedip', array('ipaddress' => '2001:DB8::41', 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+			$allow = $this->insert('#__bfstop_allowlist', array('ipaddress' => '10.1.2.3/16', 'notes' => ''), 'id');
+			$this->update('1.5.2', array('blockEnabled' => '1'));
+			$this->assertSame('2001:db8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$upper));
+			$this->assertSame('10.1.0.0/16', $this->queryValue('SELECT ipaddress FROM #__bfstop_allowlist WHERE id='.$allow));
+			$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked('2001:db8::41'));
+			// a later update has nothing to convert (and doesn't read the lists)
+			$this->db->setQuery("UPDATE #__bfstop_bannedip SET ipaddress='2001:DB8::41' WHERE id=".$upper)->execute();
+			$this->update('2.0.0', array('blockMode' => 'full'));
+			$this->assertSame('2001:DB8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$upper));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
+
+	public function testTheInstallersSpellingOfAddressesIsThatOfTheLookups()
+	{
+		// the update can't call IpHelper (the class of the version it replaces may be
+		// loaded), so it has a copy of the canonical form: they must agree
+		$samples = array('203.0.113.5', '203.0.113.77/24', '203.0.113.0/24', '10.0.0.1/8', '0.0.0.0/0', '1.2.3.4/32',
+			'2001:DB8::ABCD', '2001:0DB8:0:0:0:0:0:5/64', '2001:db8:1:2::/64', '::1', '::/0', '2001:db8::1/128',
+			'2001:db8::1/127', '::ffff:203.0.113.5', ' 203.0.113.5 ', '203.0.113.5/33', '2001:db8::/129',
+			'203.0.113.0/abc', '203.0.113.5/', 'nonsense', '', '1.2.3', '203.0.113.5/24/8', '203.0.113.5/-1');
+		foreach ($samples as $sample)
+		{
+			$this->assertSame(IpHelper::canonicalEntry($sample), \PlgsystembfstopInstallerScript::canonicalAddress($sample),
+				"'$sample'");
+		}
+	}
+
+	public function testStoredAddressesAreConvertedInBatches()
+	{
+		// more entries than one batch of the conversion
+		$values = array();
+		for ($i = 0; $i < 5100; ++$i)
+		{
+			$values[] = "('10.".intdiv($i, 250).'.'.($i % 250).".1/16', '".self::minutesAgo(0)."', 60)";
+		}
+		$this->db->setQuery('INSERT INTO #__bfstop_bannedip (ipaddress, crdate, duration) VALUES '.implode(',', $values));
+		$this->db->execute();
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.0/abc', 'crdate' => self::minutesAgo(0), 'duration' => 60));
+		$this->assertSame(5100, \PlgsystembfstopInstallerScript::canonicalizeAddresses($this->db));
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress LIKE '%.1/16'"));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress = '203.0.113.0/abc'"),
+			'what is no entry is left alone');
+		$this->assertSame(0, \PlgsystembfstopInstallerScript::canonicalizeAddresses($this->db), 'nothing left to do');
+	}
+
+	public function testBookkeepingMovesOutOfTheSettingsIntoTheStateTable()
+	{
+		// a request which saved when it ran the maintenance wrote all the settings back
+		// as it had read them, racing with an administrator saving the settings page
+		$original = $this->getPluginParams();
+		try
+		{
+			$params = $this->update('1.5.2', array('blockMode' => 'full', 'lastPurge' => 1700000000, 'addressesCanonical' => 1));
+			$this->assertArrayNotHasKey('lastPurge', $params);
+			$this->assertArrayNotHasKey('addressesCanonical', $params);
+			$this->assertSame('full', $params['blockMode'], 'the settings stay');
+			$this->assertSame('1700000000', $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"),
+				'the maintenance ran then');
+			// updating again doesn't make it newer
+			$this->update('2.0.0', array('blockMode' => 'full', 'lastPurge' => 1800000000));
+			$this->assertSame('1700000000', $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
+			// never run, as far as it says: it is due - the task is the first to do it
+			$this->db->setQuery('DELETE FROM #__bfstop_state')->execute();
+			$this->update('2.0.0', array('blockMode' => 'full'));
+			$this->assertGreaterThan(time() - 60, (int) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
+		}
+		finally
+		{
+			$this->setPluginParams($original);
+		}
+	}
+
+	public function testInstallationSeedsTheMaintenanceState()
+	{
+		// the task is made by the task plugin, which the package installs next: a
+		// request needn't do the maintenance of a site which has nothing to purge
+		list($script, $adapter) = $this->script();
+		$this->assertTrue($script->install($adapter));
+		$this->assertGreaterThan(time() - 60, (int) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
+	}
+
+	public function testTaskPluginInstallationMakesTheScheduledTaskOnce()
+	{
+		$script = require_once dirname(__DIR__, 2).'/task/script.php';
+		$taskRows = function ()
+		{
+			return (int) $this->queryValue("SELECT COUNT(*) FROM #__scheduler_tasks WHERE type='bfstop.maintenance'");
+		};
+		$this->db->setQuery("DELETE FROM #__scheduler_tasks WHERE type='bfstop.maintenance'")->execute();
+		try
+		{
+			$adapter = $this->createMock(InstallerAdapter::class);
+			$this->assertTrue($script->install($adapter));
+			$this->assertSame(1, $taskRows());
+			$task = $this->db->setQuery("SELECT * FROM #__scheduler_tasks WHERE type='bfstop.maintenance'")->loadObject();
+			$this->assertSame(1, (int) $task->state);
+			$this->assertSame('PT24H', json_decode($task->cron_rules)->exp, 'every 24 hours');
+			$this->assertLessThanOrEqual(time(), strtotime($task->next_execution.' UTC'), 'due');
+			$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='task' AND element='bfstop'"),
+				'the plugin which runs it is switched on');
+			// installing again (the update from a version which made it) adds none
+			$this->assertTrue($script->install($adapter));
+			$this->assertSame(1, $taskRows());
+			// uninstalling takes it away
+			$this->assertTrue($script->uninstall($adapter));
+			$this->assertSame(0, $taskRows());
+		}
+		finally
+		{
+			// the site as it was installed: with its task
+			\PlgtaskbfstopInstallerScript::createTask($this->db);
 		}
 	}
 
