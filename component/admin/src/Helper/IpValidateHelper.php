@@ -73,43 +73,16 @@ class IpValidateHelper
 		return true;
 	}
 
-	private static function cidrMatchIPv6($ip, $subnet, $bits)
-	{
-		$ipBin = @inet_pton($ip);
-		$subnetBin = @inet_pton($subnet);
-		if ($ipBin === false || $subnetBin === false)
-		{
-			return false;
-		}
-		$mask = IpRangeHelper::ipv6Mask($bits);
-		$subnetBin &= $mask; # nb: in case the supplied subnet wasn't correctly aligned
-		return ($ipBin & $mask) === $subnetBin;
-	}
-
-	// from https://stackoverflow.com/a/594134
-	public static function cidrMatch($ip, $range)
-	{
-		$rangeParts = explode('/', $range);
-		$subnet = $rangeParts[0];
-		$isIPv6 = IpRangeHelper::isIPv6($subnet);
-		$bits = isset($rangeParts[1]) ? (int) $rangeParts[1] : ($isIPv6 ? 128 : 32);
-
-		if ($isIPv6)
-		{
-			return self::cidrMatchIPv6($ip, $subnet, $bits);
-		}
-
-		$ip = ip2long($ip);
-		$subnet = ip2long($subnet);
-		$mask = -1 << (32 - $bits);
-		$subnet &= $mask; # nb: in case the supplied subnet wasn't correctly aligned
-		return ($ip & $mask) == $subnet;
-	}
-
+	/**
+	 * Whether the current client's address is in $range (an address, or a
+	 * network in CIDR notation), with a warning if it is: a block of it would
+	 * shut out whoever is entering it. Matched by the library's IpHelper,
+	 * like the block and allow list themselves.
+	 */
 	public static function matchesCurrentIP($range)
 	{
 		$curIP = IpHelper::getAddress(LogHelper::getLogger());
-		$result = self::cidrMatch($curIP, $range);
+		$result = IpHelper::contains($range, $curIP);
 		if ($result)
 		{
 			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_BLOCKS_USER', self::e($range), self::e($curIP)), 'warning');
