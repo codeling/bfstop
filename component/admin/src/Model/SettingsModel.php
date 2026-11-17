@@ -118,7 +118,7 @@ class SettingsModel extends AdminModel
 		$id = $this->resolvePluginExtensionId();
 		$data[$this->getTable()->getKeyName()] = $id;
 		$stored = $this->loadStoredParams($id);
-		$data['params'] = self::keepInternalSettings(self::paramsForStorage($data['params'] ?? array()), $stored);
+		$data['params'] = self::paramsForStorage($data['params'] ?? array());
 		if (!parent::save($data))
 		{
 			return false;
@@ -179,26 +179,6 @@ class SettingsModel extends AdminModel
 			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NOT_TIDIED',
 				htmlspecialchars($htaccess->getFileName(), ENT_QUOTES, 'UTF-8')), 'warning');
 		}
-	}
-
-	/**
-	 * The form's values replace all the plugin's params when they are saved,
-	 * so the values the plugin keeps there for itself (which the form doesn't
-	 * have, Bfstop::InternalSettings) have to be put back in: without them,
-	 * it would convert all stored addresses again on the next request and run
-	 * its daily maintenance at once.
-	 */
-	public static function keepInternalSettings($params, array $stored)
-	{
-		$params = is_array($params) ? $params : array();
-		foreach (Bfstop::InternalSettings as $name)
-		{
-			if (array_key_exists($name, $stored) && !array_key_exists($name, $params))
-			{
-				$params[$name] = $stored[$name];
-			}
-		}
-		return $params;
 	}
 
 	private function loadStoredParams($id)
