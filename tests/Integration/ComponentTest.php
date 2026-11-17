@@ -511,35 +511,6 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
-	public function testSavingTheSettingsKeepsWhatThePluginStoresForItself()
-	{
-		// the form only has the settings; the plugin's own values must survive
-		// a save, or it would e.g. convert all stored addresses again
-		$original = $this->getPluginParams();
-		try
-		{
-			$this->setPluginParams(json_encode(array('blockNumber' => 7, 'lastPurge' => 1700000000,
-				'addressesCanonical' => 1)));
-			$model = $this->model(SettingsModel::class);
-			$model->getState();
-			$this->assertTrue($model->save(array('params' => array('blockNumber' => 8, 'logLevel' => 8))),
-				implode(', ', $model->getErrors()));
-			$saved = json_decode($this->getPluginParams(), true);
-			$this->assertSame(8, (int) $saved['blockNumber']);
-			$this->assertSame(1700000000, $saved['lastPurge']);
-			$this->assertSame(1, $saved['addressesCanonical']);
-			$this->assertSame(\Codeling\Plugin\System\Bfstop\Extension\Bfstop::InternalSettings,
-				array_values(array_intersect(array_keys($saved), \Codeling\Plugin\System\Bfstop\Extension\Bfstop::InternalSettings)));
-			// a value given in the data wins (not that the form has them)
-			$this->assertSame(array('lastPurge' => 5), SettingsModel::keepInternalSettings(array('lastPurge' => 5),
-				array('lastPurge' => 1700000000)));
-		}
-		finally
-		{
-			$this->setPluginParams($original);
-		}
-	}
-
 	/**
 	 * The plugin only takes entries out of the .htaccess file which blocks:
 	 * the file which did until the settings were changed would keep refusing

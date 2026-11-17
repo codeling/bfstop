@@ -107,6 +107,13 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertSame(3, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_username_stats'));
 	}
 
+	/** what the update does to the entries of earlier versions (see the installer script) */
+	private function convertStoredAddresses()
+	{
+		require_once dirname(__DIR__, 2).'/updatescript.php';
+		return \PlgsystembfstopInstallerScript::canonicalizeAddresses($this->db);
+	}
+
 	public function testActiveBlocks()
 	{
 		$exact = $this->block('203.0.113.5', 0, 60);
@@ -122,7 +129,7 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->insert('#__bfstop_unblock', array('block_id' => $unblocked, 'source' => 0, 'crdate' => self::minutesAgo(0)));
 		// entries of earlier versions (and typed by hand) are not in the canonical
 		// form the lookup relies on: the upper case ones are the two IPv6 entries
-		$this->assertSame(2, $this->maintenance->canonicalizeStoredAddresses());
+		$this->assertSame(2, $this->convertStoredAddresses());
 
 		$this->assertSame(array($exact, $net4small), $this->activeBlocks('203.0.113.5'));
 		$this->assertSame(array(), $this->activeBlocks('203.0.113.6'), 'expired');
@@ -174,7 +181,7 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '10.1.0.0/16', 'notes' => ''));
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:DB8:FFFF::1', 'notes' => ''));
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.3', 'notes' => ''));
-		$this->assertSame(1, $this->maintenance->canonicalizeStoredAddresses());
+		$this->assertSame(1, $this->convertStoredAddresses());
 
 		$this->assertTrue($this->repos->allowList()->contains('10.1.2.3'));
 		$this->assertFalse($this->repos->allowList()->contains('10.2.0.1'));
@@ -364,23 +371,6 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertSame(array('2001:db8::2', '2001:db8::4'), $addresses());
 	}
 
-	public function testSettingChangesOnlyThatValue()
-	{
-		$original = $this->getPluginParams();
-		try
-		{
-			// what an administrator saved after the request started must survive
-			$this->setPluginParams(json_encode(array('blockNumber' => 7, 'lastPurge' => 1)));
-			$this->repos->pluginSettings()->set('lastPurge', 1700000000);
-			$saved = json_decode($this->getPluginParams(), true);
-			$this->assertSame(array('blockNumber' => 7, 'lastPurge' => 1700000000), $saved);
-		}
-		finally
-		{
-			$this->setPluginParams($original);
-		}
-	}
-
 	public function testTrimUsernameStatsKeepsTheMostAttackedAndMostRecent()
 	{
 		$names = array(
@@ -458,43 +448,6 @@ class RepositoriesTest extends IntegrationTestCase
 		// the newest are kept
 		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY id');
 		$this->assertSame(array('user7', 'user8', 'user9', 'user10', 'user11'), $this->db->loadColumn());
-	}
-
-	public function testCanonicalizeStoredAddresses()
-	{
-		$unaligned = $this->block('203.0.113.77/24', 0, 60);
-		$upper = $this->block('2001:DB8::ABCD', 0, 60);
-		$fine = $this->block('198.51.100.9', 0, 60);
-		$garbage = $this->block('203.0.113.0/abc', 0, 60);
-		$allow = $this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:0DB8:0:0:0:0:0:5/64', 'notes' => ''), 'id');
-
-		$this->assertSame(3, $this->maintenance->canonicalizeStoredAddresses());
-		$stored = function ($table, $id)
-		{
-			return $this->queryValue('SELECT ipaddress FROM '.$table.' WHERE id='.(int) $id);
-		};
-		$this->assertSame('203.0.113.0/24', $stored('#__bfstop_bannedip', $unaligned));
-		$this->assertSame('2001:db8::abcd', $stored('#__bfstop_bannedip', $upper));
-		$this->assertSame('198.51.100.9', $stored('#__bfstop_bannedip', $fine));
-		$this->assertSame('203.0.113.0/abc', $stored('#__bfstop_bannedip', $garbage), 'what is no entry is left alone');
-		$this->assertSame('2001:db8::/64', $stored('#__bfstop_allowlist', $allow));
-		$this->assertSame(0, $this->maintenance->canonicalizeStoredAddresses(), 'nothing left to do');
-		$this->assertTrue($this->repos->allowList()->contains('2001:db8:0:0:1::1'));
-	}
-
-	public function testCanonicalizeStoredAddressesInBatches()
-	{
-		// more entries than one batch of the migration
-		$values = array();
-		for ($i = 0; $i < 5100; ++$i)
-		{
-			$values[] = "('10.".intdiv($i, 250).'.'.($i % 250).".1/16', '".self::minutesAgo(0)."', 60)";
-		}
-		$this->db->setQuery('INSERT INTO #__bfstop_bannedip (ipaddress, crdate, duration) VALUES '.implode(',', $values));
-		$this->db->execute();
-		$this->assertSame(5100, $this->maintenance->canonicalizeStoredAddresses());
-		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress LIKE '%.1/16'"));
-		$this->assertSame(0, $this->maintenance->canonicalizeStoredAddresses());
 	}
 
 	public function testBlocksAreStoredInCanonicalForm()

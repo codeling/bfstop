@@ -38,7 +38,7 @@ jobs:
       - name: The Joomla! packages of the matrix have checksums
         run: php tests/lint/check-joomla-checksums.php
       - name: Language files
-        run: php tests/lint/check-language.php bfstop.xml PLG_SYSTEM_BFSTOP
+        run: php tests/lint/check-language.php bfstop.xml PLG_SYSTEM_BFSTOP PLG_TASK_BFSTOP
       - name: Plugin, package and CHANGELOG have the same version
         run: php tests/lint/check-versions.php
       - name: Composer manifest is valid

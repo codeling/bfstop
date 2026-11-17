@@ -7,7 +7,9 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Plugin\System\Bfstop\Service\MaintenanceSchedule;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
@@ -64,7 +66,7 @@ class RecordingLogger extends LoggerHelper
 abstract class IntegrationTestCase extends TestCase
 {
 	public const Tables = array('failedlogin', 'bannedip', 'unblock',
-		'unblock_token', 'allowlist', 'knownip', 'dnscache', 'username_stats');
+		'unblock_token', 'allowlist', 'knownip', 'dnscache', 'username_stats', 'state');
 
 	protected $db;
 	protected $logger;
@@ -82,6 +84,17 @@ abstract class IntegrationTestCase extends TestCase
 		$this->db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
 		$this->logger = new RecordingLogger();
 		$this->emptyTables();
+		// the maintenance has never run: the first request which asks does it
+		@unlink(MaintenanceSchedule::stampFile());
+	}
+
+	/**
+	 * Makes the daily maintenance look as if it just ran (the state table and
+	 * the stamp file say so), so that no request does it.
+	 */
+	protected function markMaintenanceDone($time = null)
+	{
+		(new MaintenanceSchedule((new Repositories($this->logger))->state()))->recordRun($time);
 	}
 
 	protected function emptyTables()

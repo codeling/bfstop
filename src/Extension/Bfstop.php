@@ -23,7 +23,7 @@ use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
 use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Service\BlockService;
 use Codeling\Plugin\System\Bfstop\Service\LoginService;
-use Codeling\Plugin\System\Bfstop\Service\Maintenance;
+use Codeling\Plugin\System\Bfstop\Service\DailyMaintenance;
 use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Factory;
@@ -69,11 +69,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * with these until an administrator opens the settings.
 	 */
 	/**
-	 * Values the plugin keeps among its settings for itself: they are not on
-	 * the settings page, so saving that page must keep them (see com_bfstop's
-	 * SettingsModel).
+	 * Values the plugin keeps among its settings for itself, which saving the
+	 * settings page must keep: none any more - its bookkeeping is the table
+	 * #__bfstop_state, which that page can't overwrite. com_bfstop's
+	 * SettingsModel::keepInternalSettings() goes through this until it is
+	 * removed there; then so can this.
 	 */
-	public const InternalSettings = array('addressesCanonical', 'lastPurge');
+	public const InternalSettings = array();
 
 	public const DefaultSettings = array(
 		'blockNumber' => 10,
@@ -112,7 +114,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private Repositories $repositories;
 	private LoginService $logins;
 	private BlockService $blocker;
-	private Maintenance $maintenance;
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
@@ -583,12 +584,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			$this->languageLoaded = $this->loadLanguage();
 		}
-		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
-			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
+		$this->logger = LoggerHelper::fromSettings($this->params);
 		$this->repositories = new Repositories($this->logger);
 		$this->logins = new LoginService($this->repositories);
 		$this->blocker = new BlockService($this->repositories);
-		$this->maintenance = new Maintenance($this->repositories);
 		$this->notifier = null;
 		$this->accounts = array();
 	}
@@ -1294,117 +1293,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		// lookups of the block and allow list need the addresses in canonical
-		// form, which entries of earlier versions are not in: once, before the
-		// first lookup of this version (every request has one, later). The
-		// installer script can't do this reliably - the class of the previous
-		// version may be loaded still
-		if (!$this->getBoolParam('addressesCanonical', false))
-		{
-			$this->canonicalizeStoredAddressesOnce();
-		}
-		// periodic maintenance, at most once a day
-		$purgeInterval = 86400; // = 24*60*60 => one day
-		$lastPurge = $this->params->get('lastPurge', 0);
-		$now = time();
-		if ($now > ($lastPurge + $purgeInterval))
-		{
-			// before the purge, which deletes the blocks that ran out long
-			// ago: without them, their entries couldn't be told from those
-			// added by hand
-			$this->tidyHtaccess();
-			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
-			if ($purgeAge > 0)
-			{
-				$this->maintenance->purgeOldEntries($purgeAge);
-			}
-			// regardless of the purge age setting: these are not deleted by age
-			$this->maintenance->keepWithinBounds();
-			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
-			$this->params->set('lastPurge', $now);
-			$this->repositories->pluginSettings()->set('lastPurge', (int) $now);
-		}
-	}
-
-	/**
-	 * The daily maintenance of the .htaccess file, whatever the blocking mode
-	 * is now:
-	 *
-	 * - a block section of an earlier version grants access (see
-	 *   HtaccessHelper::LegacyLines), and one which doesn't let the unblock
-	 *   page through makes the links of unblock emails lead nowhere: it is
-	 *   written in the current form (the update can't, see updatescript.php);
-	 * - the web server knows nothing of durations and unblocks: with blocking
-	 *   through the file, the addresses whose blocks are over come out of it;
-	 *   with another blocking mode, every address the plugin has blocked -
-	 *   the entries are left from the time the file blocked, and would turn
-	 *   the addresses away for good, see HtaccessHelper::removeStaleBlocks().
-	 */
-	private function tidyHtaccess()
-	{
-		$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
-		if (!is_file($htaccess->getFileName()))
-		{
-			return;
-		}
-		if (!$htaccess->upgradeFormat())
-		{
-			$this->logger->log('Could not write the block section of '.$htaccess->getFileName().' in its current form '.
-				'- make the file writable: one of an earlier version lets everybody who isn\'t blocked past the other '.
-				'access controls of the directory, and without the current form, the links of unblock emails can\'t be '.
-				'followed', Log::ERROR);
-		}
-		$throughFile = $this->getStringParam('blockMode', 'full') === 'htaccess';
-		if ($htaccess->removeStaleBlocks($this->repositories->blocks(), $throughFile) === false)
-		{
-			$this->logger->log('Could not take the addresses the plugin blocked out of '.$htaccess->getFileName().
-				': the web server goes on refusing them - make the file writable', Log::ERROR);
-		}
-	}
-
-	/**
-	 * Brings the stored addresses into canonical form, if no other request
-	 * did or does: every request starts out with the settings as they were
-	 * when it began, so after the update all requests arriving before the
-	 * first of them is done would see the setting unset, and each would go
-	 * through the whole block and allow list (and update the same rows) - on
-	 * a busy site with a long list, many at once. The first takes a lock; the
-	 * others go on without waiting (their lookups may miss an entry which
-	 * isn't converted yet, as they would have before the update). Once it has
-	 * the lock, a request checks the stored setting again, as another one may
-	 * have finished in the meantime. If no lock can be taken (no writable
-	 * temporary directory), it is done without one: it can be run more than
-	 * once, it only costs time.
-	 */
-	private function canonicalizeStoredAddressesOnce()
-	{
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
-			LockHelper::siteHash().'.lock';
-		$handle = @fopen($lockFile, 'c');
-		if ($handle !== false && !flock($handle, LOCK_EX | LOCK_NB))
-		{
-			fclose($handle);
-			$this->logger->log('Another request is converting the stored addresses, not waiting for it', Log::DEBUG);
-			return;
-		}
-		try
-		{
-			if (!$this->repositories->pluginSettings()->get('addressesCanonical', false))
-			{
-				$changed = $this->maintenance->canonicalizeStoredAddresses();
-				$this->repositories->pluginSettings()->set('addressesCanonical', 1);
-				$this->logger->log('Converted '.$changed.' stored address(es) to canonical form', Log::INFO);
-			}
-			$this->params->set('addressesCanonical', 1);
-		}
-		finally
-		{
-			if ($handle !== false)
-			{
-				flock($handle, LOCK_UN);
-				fclose($handle);
-			}
-		}
+		// the daily maintenance is the task of Joomla's Task Scheduler (plugin
+		// plg_task_bfstop); only if it didn't run for two days - the site doesn't
+		// use the scheduler, or the task is gone - a request does it, which costs
+		// no query as long as it did (see MaintenanceSchedule)
+		(new DailyMaintenance($this->repositories, $this->params))->runIfOverdue();
 	}
 
 	/**

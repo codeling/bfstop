@@ -58,15 +58,4 @@ class Maintenance
 		$this->repositories->dnsCache()->prune();
 		$this->repositories->unblockTokens()->purgeExpired();
 	}
-
-	/**
-	 * Brings the addresses in the block and allow list into canonical form
-	 * (IpHelper::canonicalEntry()), which lookups depend on.
-	 *
-	 * @return int the number of entries changed
-	 */
-	public function canonicalizeStoredAddresses()
-	{
-		return $this->repositories->blocks()->canonicalize() + $this->repositories->allowList()->canonicalize();
-	}
 }

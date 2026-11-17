@@ -124,34 +124,6 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertNotBlocked('', '203.0.113.42');
 	}
 
-	public function testStoredAddressesAreConvertedByOneRequestAtATime()
-	{
-		// after the update, the first request converts the stored addresses;
-		// the ones arriving while it is at it must not all do the same
-		$this->configure();
-		$id = $this->block('2001:DB8::41');
-		$app = Factory::getApplication();
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
-			md5((string) $app->get('db').(string) $app->get('dbprefix')).'.lock';
-		$handle = fopen($lockFile, 'c');
-		$this->assertTrue(flock($handle, LOCK_EX), 'the test takes the lock of the "first request"');
-		try
-		{
-			$this->request('', '203.0.113.99');
-			$this->assertSame('2001:DB8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$id),
-				'converted although another request holds the lock');
-			$this->assertArrayNotHasKey('addressesCanonical', json_decode($this->getPluginParams(), true));
-		}
-		finally
-		{
-			flock($handle, LOCK_UN);
-			fclose($handle);
-		}
-		$this->request('', '203.0.113.99');
-		$this->assertSame('2001:db8::41', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip WHERE id='.$id));
-		$this->assertSame(1, json_decode($this->getPluginParams(), true)['addressesCanonical']);
-	}
-
 	public function testBlockIsEnforcedOnlyAfterRouting()
 	{
 		// with SEF URLs option/view are empty until the router ran, so the
@@ -195,8 +167,9 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertSame(array('203.0.113.2'), $this->knownIps());
 		$this->assertSame(array('203.0.113.78'), $this->db->setQuery('SELECT ipaddress FROM #__bfstop_dnscache')->loadColumn());
 		$this->assertSame(array(UnblockTokenRepository::hash(str_repeat('cd', 20))), $this->db->setQuery('SELECT token FROM #__bfstop_unblock_token')->loadColumn());
+		$this->assertGreaterThan(time() - 60, (int) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
 		$saved = json_decode($this->getPluginParams(), true);
-		$this->assertGreaterThan(time() - 60, $saved['lastPurge']);
+		$this->assertArrayNotHasKey('lastPurge', $saved, 'the settings are not written for this any more');
 		$this->assertSame(7, $saved['blockNumber'], 'the other settings are left alone');
 	}
 
@@ -275,12 +248,38 @@ class BlockedRequestTest extends IntegrationTestCase
 		}
 	}
 
-	public function testMaintenanceRunsOnlyOncePerDay()
+	public function testNoRequestRunsTheMaintenanceWhichRanAnHourAgo()
 	{
-		$this->configure(array('lastPurge' => time() - 3600));
+		$this->configure();
+		$this->markMaintenanceDone(time() - 3600);
 		$this->knownIp('203.0.113.1', 400);
 		$this->assertNotBlocked();
 		$this->assertSame(array('203.0.113.1'), $this->knownIps(), 'ran an hour ago already');
+	}
+
+	public function testNoRequestRunsTheMaintenanceWhileTheTaskKeepsUpWithIt()
+	{
+		// the task runs every 24 hours: a request waits for two days
+		$this->configure();
+		$this->markMaintenanceDone(time() - 47 * 3600);
+		$this->knownIp('203.0.113.1', 400);
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.1'), $this->knownIps(), 'not overdue yet');
+	}
+
+	public function testARequestRunsTheMaintenanceTheTaskDidNot()
+	{
+		// no scheduler, or its task is gone or switched off
+		$this->configure();
+		$this->markMaintenanceDone(time() - 49 * 3600);
+		$this->knownIp('203.0.113.1', 400);
+		$this->assertNotBlocked();
+		$this->assertSame(array(), $this->knownIps(), 'overdue: done by the request');
+		$this->assertGreaterThan(time() - 60, (int) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
+		// and then not again
+		$this->knownIp('203.0.113.1', 400);
+		$this->assertNotBlocked();
+		$this->assertSame(array('203.0.113.1'), $this->knownIps());
 	}
 
 	public function testBlockPageIsNeverCached()
