@@ -12,7 +12,8 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
-use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Repository\BlockRepository;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
@@ -51,25 +52,9 @@ class TokenunblockModel extends BaseDatabaseModel
 		}
 	}
 
-	/**
-	 * The IP address the block belongs to which the token was issued for, or
-	 * null if there is no such token or block, or they can't be read.
-	 */
-	private function getBlockedIp($token)
+	private function repositories($logger): Repositories
 	{
-		try
-		{
-			$db = $this->getDatabase();
-			$db->setQuery('SELECT b.ipaddress FROM #__bfstop_unblock_token t '.
-				'INNER JOIN #__bfstop_bannedip b ON b.id = t.block_id '.
-				'WHERE t.token='.$db->quote(UnblockTokenRepository::hash($token)));
-			$ip = $db->loadResult();
-			return ($ip === null || $ip === false) ? null : (string) $ip;
-		}
-		catch (\RuntimeException $e)
-		{
-			return null;
-		}
+		return new Repositories($logger, $this->getDatabase());
 	}
 
 	// $blocked is an address, or a network in CIDR notation for clients which
@@ -110,8 +95,9 @@ class TokenunblockModel extends BaseDatabaseModel
 		{
 			return self::ResultConfirm;
 		}
-		$blockedIp = $this->getBlockedIp($token);
-		if ($blockedIp === null)
+		$repositories = $this->repositories($logger);
+		$issued = $this->issuedFor($repositories, $token);
+		if ($issued === null)
 		{
 			// no such token, no block for it (any more), or the tables can't
 			// be read: without the block's address, the token can't be bound
@@ -119,64 +105,63 @@ class TokenunblockModel extends BaseDatabaseModel
 			$logger->log("com_bfstop-tokenunblock: No block found for the token.", Log::ERROR);
 			return self::ResultNotFound;
 		}
-		if (!self::sameAddress($blockedIp, $requestIp))
+		if (!self::sameAddress($issued['address'], $requestIp))
 		{
 			$logger->log("com_bfstop-tokenunblock: Token used from an IP address ".
 				"other than the blocked one.", Log::WARNING);
 			return self::ResultWrongIp;
 		}
-		return $this->unblockWithResult($token, $logger);
+		return $this->lift($repositories, $token, $issued['blockId'], $logger);
 	}
 
+	/**
+	 * Unblocks with $token, from wherever (see process() for what a request
+	 * of the page has to show first).
+	 */
 	public function unblock($token, $logger)
 	{
-		return $this->unblockWithResult($token, $logger) === self::ResultUnblocked;
+		$repositories = $this->repositories($logger);
+		$issued = $this->issuedFor($repositories, $token);
+		if ($issued === null)
+		{
+			$logger->log("com_bfstop-tokenunblock: Token not found.", Log::ERROR);
+			return false;
+		}
+		return $this->lift($repositories, $token, $issued['blockId'], $logger) === self::ResultUnblocked;
 	}
 
-	private function unblockWithResult($token, $logger)
+	/**
+	 * The block $token was issued for, see UnblockTokenRepository::issuedFor().
+	 * The expired tokens are deleted first: a request of this page is where
+	 * they are seen.
+	 */
+	private function issuedFor(Repositories $repositories, $token)
 	{
-		$db = $this->getDatabase();
-		// prune old tokens:
-		try
+		$repositories->unblockTokens()->purgeExpired();
+		return $repositories->unblockTokens()->issuedFor($token);
+	}
+
+	/**
+	 * Lifts the block $blockId which $token was issued for, and uses the
+	 * token up. If the block can't be lifted, the token stays, so that the
+	 * link can be tried again.
+	 */
+	private function lift(Repositories $repositories, $token, $blockId, $logger)
+	{
+		if (!$repositories->blocks()->lift(array($blockId), BlockRepository::LiftedByToken))
 		{
-			// cutoff computed in PHP, as DATE_ADD is MySQL-only (issue bfstop#206)
-			$db->setQuery('DELETE FROM #__bfstop_unblock_token '.
-				'WHERE crdate < '.
-				$db->quote(date('Y-m-d H:i:s', time() - UnblockTokenRepository::ValidDays * 86400)));
-			$db->execute();
-			// get token:
-			// only the hash of a token is stored, see UnblockTokenRepository::hash()
-			$stored = UnblockTokenRepository::hash($token);
-			$db->setQuery('SELECT * FROM #__bfstop_unblock_token WHERE token='.
-				$db->quote($stored));
-			$unblockTokenEntry = $db->loadObject();
-			if ($unblockTokenEntry == null)
-			{
-				$logger->log("com_bfstop-tokenunblock: Token not found.", Log::ERROR);
-				return self::ResultNotFound;
-			}
-			UnblockHelper::unblockDB($db, array($unblockTokenEntry->block_id), 1, $logger);
-			$sql = 'DELETE FROM #__bfstop_unblock_token WHERE token='.
-					$db->quote($stored);
-			$db->setQuery($sql);
-			$success = $db->execute();
-			// with blocking through .htaccess, the web server would otherwise
-			// go on rejecting the address until the plugin's next maintenance
-			UnblockHelper::removeLiftedHtaccessBlocks($logger);
+			$logger->log("com_bfstop-tokenunblock: Could not unblock with the token.", Log::ERROR);
+			return self::ResultFailed;
 		}
-		catch (\RuntimeException $e)
+		if (!$repositories->unblockTokens()->remove($token))
 		{
-			$success = false;
-			$logger->log($e->getMessage(), Log::ERROR);
-		}
-		if (!$success)
-		{
+			// the block is lifted all the same; the token expires
 			$logger->log("com_bfstop-tokenunblock: Could not delete unblock_token.", Log::ERROR);
 		}
-		else
-		{
-			$logger->log("com_bfstop-tokenunblock: Successfully unblocked with token.", Log::INFO);
-		}
-		return $success ? self::ResultUnblocked : self::ResultFailed;
+		// with blocking through .htaccess, the web server would otherwise
+		// go on rejecting the address until the plugin's next maintenance
+		UnblockHelper::removeLiftedHtaccessBlocks($logger);
+		$logger->log("com_bfstop-tokenunblock: Successfully unblocked with token.", Log::INFO);
+		return self::ResultUnblocked;
 	}
 }

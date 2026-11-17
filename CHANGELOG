@@ -52,7 +52,10 @@
     them together - a login, a block, the daily maintenance - is a small
     class of its own (src/Service). A unit test keeps the repositories
     free of SQL built from values. The component reads its settings the
-    same way
+    same way, and the unblock page and the block list's "Unblock" lift
+    blocks and use up unblock links through the repositories as well
+    (an unblock link whose block can't be lifted is no longer used up, so
+    it can be tried again)
   - Internal: the plugin class (src/Extension/Bfstop.php) only handles
     Joomla's events; what it did itself is split up in src/Service:
     RequestClassifier (what a request does - a login, the unblock page, the

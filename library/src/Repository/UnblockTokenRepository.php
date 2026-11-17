@@ -128,6 +128,56 @@ class UnblockTokenRepository extends Repository
 	}
 
 	/**
+	 * The block an unexpired token was issued for: its id, and the address
+	 * (or network) it blocks, which is the only one the token may unblock
+	 * from. Null if there is no such token (it never existed, expired or was
+	 * used), or its block is gone: without the block's address the token
+	 * can't be bound to it.
+	 *
+	 * Fail-closed: null, nothing is unblocked.
+	 *
+	 * @return array{blockId: int, address: string}|null
+	 */
+	public function issuedFor($token)
+	{
+		return $this->failClosed('issuedFor', function () use ($token)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName(array('t.block_id', 'b.ipaddress')))
+				->from($this->db->quoteName(self::Table, 't'))
+				->innerJoin($this->db->quoteName('#__bfstop_bannedip', 'b').' ON '.
+					$this->db->quoteName('b.id').' = '.$this->db->quoteName('t.block_id'))
+				->where($this->db->quoteName('t.token').' = :token')
+				->where($this->db->quoteName('t.crdate').' >= :since');
+			$values = array('token' => self::hash($token), 'since' => self::validSince());
+			$row = $this->row($query, $values);
+			if ($row === null || $row['ipaddress'] === null)
+			{
+				return null;
+			}
+			return array('blockId' => (int) $row['block_id'], 'address' => (string) $row['ipaddress']);
+		}, null);
+	}
+
+	/**
+	 * Deletes the token, once it was used.
+	 *
+	 * Fail-open: false; the token expires (and is purged) all the same.
+	 */
+	public function remove($token): bool
+	{
+		return $this->failOpen('remove', function () use ($token)
+		{
+			$query = $this->db->createQuery()
+				->delete($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('token').' = :token');
+			$values = array('token' => self::hash($token));
+			$this->execute($query, $values);
+			return true;
+		}, false);
+	}
+
+	/**
 	 * Deletes the tokens which can't be used any more. A used token is
 	 * deleted when it is used, and the unblock page deletes the expired ones
 	 * when somebody visits it - but nobody may, and the purge by age only runs

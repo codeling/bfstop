@@ -11,6 +11,7 @@ namespace Codeling\Library\Bfstop\Repository;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Joomla\CMS\Log\Log;
 use Joomla\Database\ParameterType;
 
 /**
@@ -25,6 +26,13 @@ class BlockRepository extends AddressTableRepository
 
 	// 10 years in minutes. For all intents here sufficiently large to stand for "forever":
 	public const UnlimitedDuration = 5256000;
+
+	// who lifted a block (the source of its #__bfstop_unblock row): an
+	// administrator in the block list, or the user through the link of a mail
+	public const LiftedByAdministrator = 0;
+	public const LiftedByToken = 1;
+
+	private const LiftTable = '#__bfstop_unblock';
 
 	// SQL for "the block t is active at :now"; names of columns and tables only
 	private function activeCondition($block, $lifted)
@@ -167,7 +175,7 @@ class BlockRepository extends AddressTableRepository
 			$values = array();
 			$query = $this->windowQuery(self::Table, 'crdate', self::now(), self::UnlimitedDuration, $values)
 				->where($this->db->quoteName('ipaddress').' = :ip')
-				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE '.self::Table.'.id = u.block_id AND source = 0)');
+				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE '.self::Table.'.id = u.block_id AND source = '.self::LiftedByAdministrator.')');
 			$values['ip'] = (string) $ipaddress;
 			return $this->count($query, $values);
 		}, 0);
@@ -207,5 +215,72 @@ class BlockRepository extends AddressTableRepository
 				->delete('#__bfstop_unblock')
 				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)'));
 		}, null);
+	}
+
+	/**
+	 * Lifts the blocks $ids: whoever is blocked by them gets through again
+	 * (the blocks themselves stay, the next block's duration is based on
+	 * them, see countPrevious()). Only blocks which exist are lifted: block
+	 * ids are handed out in order, so a record for one which doesn't exist
+	 * yet would lift a block to come in advance - whoever may unblock could
+	 * switch the blocking off that way, which takes the permission to change
+	 * the settings. A block which was lifted already is left as it is; the
+	 * others given with it are still lifted.
+	 *
+	 * Fail-closed, block by block: one which can't be lifted stays.
+	 *
+	 * @param int[] $ids
+	 * @param int   $source LiftedByAdministrator or LiftedByToken
+	 * @return bool whether all the blocks of $ids which exist are lifted now;
+	 *              false if none is given
+	 */
+	public function lift(array $ids, $source): bool
+	{
+		if (count($ids) === 0)
+		{
+			$this->logger->log('No blocks given to lift!', Log::ERROR);
+			return false;
+		}
+		$result = true;
+		$now = self::now();
+		foreach ($ids as $id)
+		{
+			$id = (int) $id;
+			$outcome = $this->failClosed('lift', function () use ($id, $source, $now)
+			{
+				$values = array('id' => $id);
+				if ($this->count($this->db->createQuery()
+					->select('COUNT(*)')
+					->from($this->db->quoteName(self::Table))
+					->where($this->db->quoteName('id').' = :id'), $values) === 0)
+				{
+					return "There is no block $id";
+				}
+				if ($this->count($this->db->createQuery()
+					->select('COUNT(*)')
+					->from($this->db->quoteName(self::LiftTable))
+					->where($this->db->quoteName('block_id').' = :id'), $values) > 0)
+				{
+					return "Block $id was lifted already";
+				}
+				// a failed insert throws: fail-closed, see above
+				$this->insert(self::LiftTable, array('block_id' => $id, 'source' => (int) $source, 'crdate' => $now));
+				return true;
+			}, false);
+			if ($outcome === true)
+			{
+				$this->logger->log("Lifted block $id", Log::INFO);
+			}
+			elseif ($outcome === false)
+			{
+				$result = false;
+				$this->logger->log("Could not lift block $id!", Log::ERROR);
+			}
+			else
+			{
+				$this->logger->log($outcome, Log::INFO);
+			}
+		}
+		return $result;
 	}
 }
