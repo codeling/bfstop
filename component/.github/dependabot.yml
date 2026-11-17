@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # the actions the workflows use are pinned to commit SHAs (checked by
+  # tests/lint/check-workflows.php); Dependabot proposes updates of the pins
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels: [dependencies]

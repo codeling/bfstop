@@ -1,0 +1,94 @@
+<?php
+/*
+ * @package BFStop Component (com_bfstop) for Joomla!
+ * @author Bernhard Froehler
+ * @copyright (C) Bernhard Froehler
+ * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
+**/
+
+namespace Codeling\Component\Bfstop\Administrator\View\Settings;
+
+defined('_JEXEC') or die;
+
+use Codeling\Component\Bfstop\Administrator\Helper\ToolbarHelper as BfstopToolbarHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Joomla\CMS\Access\Exception\NotAllowed;
+use Joomla\CMS\Factory;
+use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
+use Joomla\CMS\Toolbar\ToolbarHelper;
+use Joomla\CMS\Uri\Uri;
+
+class HtmlView extends BaseHtmlView
+{
+	protected $form;
+	protected $item;
+	protected $canSave;
+	protected $pluginVersion;
+	protected $componentVersion;
+
+	public function display($tpl = null)
+	{
+		// the settings show where the plugin writes files, which proxy it
+		// trusts and who gets the notifications: not for everybody who may
+		// merely look at the lists
+		if (!Factory::getApplication()->getIdentity()->authorise('core.admin', 'com_bfstop'))
+		{
+			throw new NotAllowed(Text::_('JERROR_ALERTNOAUTHOR'), 403);
+		}
+		// the form field labels/descriptions are reused verbatim from the
+		// plugin's own language file; that file isn't auto-loaded for us.
+		// the strings live in the .sys.ini, not the plain .ini - see
+		// InstallerAdapter::doLoadLanguage() for the same load pattern.
+		$language = Factory::getApplication()->getLanguage();
+		$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
+			|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS . '/system/bfstop');
+
+		$this->form = $this->getModel()->getForm();
+		$this->item = $this->getModel()->getItem();
+
+		$user = Factory::getApplication()->getIdentity();
+		$this->canSave = $user && $user->authorise('core.admin', 'com_bfstop');
+
+		$versions = VersionHelper::getInstalledVersions();
+		$this->pluginVersion = $versions['plugin'];
+		$this->componentVersion = $versions['component'];
+
+		if (!Bfstop::hasLiveSite())
+		{
+			Factory::getApplication()->enqueueMessage(self::liveSiteNote(), 'warning');
+		}
+
+		$this->addToolbar();
+		parent::display($tpl);
+	}
+
+	/**
+	 * What the settings page says if the site's $live_site isn't set (see
+	 * Bfstop::effectiveNotifyBlockedUser()), with the line to put into
+	 * configuration.php. The address it proposes is the one of this request,
+	 * sent by the administrator's browser: shown for them to check, never
+	 * used for anything.
+	 */
+	public static function liveSiteNote()
+	{
+		$line = 'public $live_site = '.var_export(rtrim(Uri::root(), '/'), true).';';
+		return Text::sprintf('COM_BFSTOP_WARNING_NO_LIVE_SITE',
+			'<code>'.htmlspecialchars($line, ENT_QUOTES, 'UTF-8').'</code>');
+	}
+
+	protected function addToolbar()
+	{
+		ToolbarHelper::title(Text::_('COM_BFSTOP_HEADING_SETTINGS'));
+		if ($this->canSave)
+		{
+			ToolbarHelper::apply('settings.apply');
+			ToolbarHelper::save('settings.save');
+		}
+		ToolbarHelper::cancel('settings.cancel');
+		ToolbarHelper::custom('settings.testNotify', 'preview', '',
+			'COM_BFSTOP_TEST_NOTIFICATION', false, false);
+		BfstopToolbarHelper::addOptions();
+	}
+}

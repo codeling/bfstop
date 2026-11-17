@@ -1,0 +1,76 @@
+<?php
+/*
+ * @package BFStop Component (com_bfstop) for Joomla!
+ * @author Bernhard Froehler
+ * @copyright (C) Bernhard Froehler
+ * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
+**/
+
+namespace Codeling\Component\Bfstop\Administrator\Model;
+
+defined('_JEXEC') or die;
+
+use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
+use Joomla\CMS\Language\Text;
+use Joomla\CMS\MVC\Model\ListModel;
+
+class BlocklistModel extends ListModel
+{
+	public function __construct($config = array())
+	{
+		$config['filter_fields'] = array(
+			'b.id',
+			'b.ipaddress',
+			'b.crdate',
+			'b.duration',
+			'b.attempts',
+			'b.last_attempt',
+			'unblocked'
+		);
+		parent::__construct($config);
+	}
+
+	protected function getListQuery()
+	{
+		$db = $this->getDatabase();
+		$query = $db->createQuery();
+		$query->select('b.id, b.ipaddress, b.crdate, b.duration, b.attempts, b.last_attempt, u.crdate as unblocked');
+		$query->from('#__bfstop_bannedip b left join #__bfstop_unblock u on b.id=u.block_id');
+		$query->order(OrderingHelper::clause($db, $this->getState('list.ordering'), $this->getState('list.direction'),
+			$this->filter_fields, 'b.id', 'ASC'));
+		return $query;
+	}
+
+	public function getItems()
+	{
+		$result = parent::getItems();
+		return $result;
+	}
+
+	protected function populateState($ordering = null, $direction = null)
+	{
+		parent::populateState('b.crdate', 'DESC');
+	}
+
+	public function unblock($ids, $logger)
+	{
+		$unblocked = UnblockHelper::unblockDB($this->getDatabase(), $ids, 0, $logger);
+		// with blocking through .htaccess, the web server would otherwise go on
+		// rejecting the addresses until the plugin's next maintenance
+		UnblockHelper::removeLiftedHtaccessBlocks($logger);
+		if ($unblocked)
+		{
+			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
+		}
+		else
+		{
+			return Text::_("COM_BFSTOP_UNBLOCK_FAILED");
+		}
+	}
+
+	public function getTotal()
+	{
+		return parent::getTotal();
+	}
+}
