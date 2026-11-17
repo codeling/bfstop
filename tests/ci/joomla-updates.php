@@ -18,8 +18,8 @@
 //                    matrix - whether to support it is a decision, not a bump
 //   php tests/ci/joomla-updates.php apply FROM TO SHA256
 //       replaces version FROM by TO in the matrix and adds the checksum of TO
-//       to tests/ci/joomla-checksums.sha256 (the entry of FROM stays: the
-//       workflow of com_bfstop installs through the same checksum file)
+//       to tests/ci/joomla-checksums.sha256 (the entry of FROM stays; once
+//       no branch uses it, it can be removed)
 //
 // Only stable releases with a full package are considered.
 

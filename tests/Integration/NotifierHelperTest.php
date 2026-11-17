@@ -8,8 +8,8 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Uri\Uri;

@@ -28,12 +28,8 @@ class UnblockPageHttpTest extends IntegrationTestCase
 	public static function setUpBeforeClass(): void
 	{
 		parent::setUpBeforeClass();
-		if (!getenv('COM_BFSTOP_ROOT'))
-		{
-			self::markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
-		}
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -42,9 +38,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
@@ -83,7 +77,7 @@ class UnblockPageHttpTest extends IntegrationTestCase
 
 	private function configure(array $params = array())
 	{
-		$this->setPluginParams(json_encode($params + array('blockMode' => 'full', 'logLevel' => 8)));
+		$this->setSettings(json_encode($params + array('blockMode' => 'full', 'logLevel' => 8)));
 	}
 
 	/** @return array [status, lower-cased headers, body] */

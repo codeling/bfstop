@@ -9,7 +9,7 @@ namespace Codeling\Bfstop\Tests\Support;
 
 /**
  * Writes a minimal MaxMind DB file (IPv4 only, 24 bit records), so that the
- * vendored reader (src/Helper/Geo) can be tested with a real lookup without
+ * vendored reader (library/src/Helper/Geo) can be tested with a real lookup without
  * shipping a third-party database. See the MaxMind DB specification,
  * https://maxmind.github.io/MaxMind-DB/.
  */

@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

@@ -8,8 +8,8 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
 
@@ -352,7 +352,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 	public function testTheLinkOfAnUnblockEmailGetsThrough()
 	{
 		$this->assertSame('/index.php', HtaccessHelper::unblockPagePath());
-		$link = \Codeling\Plugin\System\Bfstop\Extension\Bfstop::unblockLink(sha1('token'));
+		$link = \Codeling\Library\Bfstop\Helper\TokenHelper::unblockLink(sha1('token'));
 		$this->assertSame(1, preg_match('#'.str_replace('#', '\\#', HtaccessHelper::UnblockQueryPattern).'#',
 			(string) parse_url($link, PHP_URL_QUERY)), $link);
 		$this->assertSame(HtaccessHelper::unblockPagePath(), parse_url($link, PHP_URL_PATH));
@@ -464,5 +464,65 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertSame(array(), $h->getDeniedIPs());
 		$this->assertSame("RewriteEngine On\r\n# BEGIN BFStop Blocks\n# END BFStop Blocks\nRewriteRule ^a$ b\r\n", $this->content(),
 			'the lines outside the section are left as they are');
+	}
+
+	/**
+	 * What the file gets for a block: an IPv6 client tracked by its /56 (see
+	 * IpHelper::trackedAddress()) gets its /64, everything else what it is
+	 * tracked as.
+	 */
+	public function testAnIpv6ClientsEntryIsItsSlash64()
+	{
+		$this->assertSame('2001:db8:1:2a::/64', HtaccessHelper::entryFor('2001:db8:1::/56', '2001:db8:1:2a::5'));
+		$this->assertSame('2001:db8:1:2a::/64', HtaccessHelper::entryFor('2001:db8::/32', '2001:db8:1:2a:ffff::1'));
+		// the client is not known, or not in the network
+		$this->assertSame('2001:db8:1::/56', HtaccessHelper::entryFor('2001:db8:1::/56', null));
+		$this->assertSame('2001:db8:1::/56', HtaccessHelper::entryFor('2001:db8:1::/56', '2001:db8:9::1'));
+		// tracked by a /64 or less, or not aggregated (6to4), or IPv4
+		$this->assertSame('2001:db8:1:2a::/64', HtaccessHelper::entryFor('2001:db8:1:2a::/64', '2001:db8:1:2a::5'));
+		$this->assertSame('2001:db8:1:2a:5::/80', HtaccessHelper::entryFor('2001:db8:1:2a:5::/80', '2001:db8:1:2a:5::1'));
+		$this->assertSame('2002:cb00:7105::1', HtaccessHelper::entryFor('2002:cb00:7105::1', '2002:cb00:7105::1'));
+		$this->assertSame('203.0.113.5', HtaccessHelper::entryFor('203.0.113.5', '203.0.113.5'));
+		$this->assertSame('203.0.113.0/24', HtaccessHelper::entryFor('203.0.113.0/24', '203.0.113.5'));
+
+		$this->assertTrue(HtaccessHelper::isEntryOf('2001:db8:1::/56', '2001:db8:1::/56'));
+		$this->assertTrue(HtaccessHelper::isEntryOf('2001:db8:1:2a::/64', '2001:db8:1::/56'));
+		$this->assertTrue(HtaccessHelper::isEntryOf('203.0.113.5', '203.0.113.5'));
+		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:2:2a::/64', '2001:db8:1::/56'), 'another network');
+		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:1:2a::/80', '2001:db8:1::/56'), 'no /64: written by hand');
+		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:1:2a::5', '2001:db8:1::/56'));
+		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:1:2a::/64', '2001:db8:1:2a::/64/'), 'garbage');
+		$this->assertFalse(HtaccessHelper::isEntryOf('203.0.113.5', '203.0.113.0/24'));
+	}
+
+	/**
+	 * The /64 entries come out of the file with the block of their network -
+	 * also the /56 entries the file got from earlier versions - unless
+	 * another block which covers them is still active.
+	 */
+	public function testTheSlash64EntriesComeOutWithTheirNetworksBlock()
+	{
+		$block = function ($address, $minutesAgo, $duration)
+		{
+			return $this->insert('#__bfstop_bannedip', array('ipaddress' => $address,
+				'crdate' => self::minutesAgo($minutesAgo), 'duration' => $duration), 'id');
+		};
+		$block('2001:db8:1::/56', 120, 60);      // over
+		$block('2001:db8:1:2c::/64', 0, 60);     // made by hand, active
+		$block('2001:db8:3::/56', 0, 60);        // active
+		$h = $this->helper();
+		foreach (array('2001:db8:1:2a::/64', '2001:db8:1::/56', '2001:db8:1:2b::/80', '2001:db8:1:2c::/64',
+			'2001:db8:3:1::/64', '2001:db8:4:1::/64') as $entry)
+		{
+			$this->assertTrue($h->denyIP($entry));
+		}
+		$this->assertSame(2, $h->removeLiftedBlocks((new Repositories($this->logger))->blocks()));
+		$this->assertSame(array('2001:db8:1:2b::/80', '2001:db8:1:2c::/64', '2001:db8:3:1::/64', '2001:db8:4:1::/64'),
+			$h->getDeniedIPs(), 'the /64 of the block which is over and its /56 came out; '.
+			'what was written by hand, is still blocked or has no block stays');
+
+		// a file which doesn't block any more loses every entry of a block
+		$this->assertSame(2, $h->removeDatabaseBlocks((new Repositories($this->logger))->blocks()));
+		$this->assertSame(array('2001:db8:1:2b::/80', '2001:db8:4:1::/64'), $h->getDeniedIPs());
 	}
 }

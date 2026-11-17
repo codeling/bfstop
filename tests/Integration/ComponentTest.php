@@ -20,26 +20,16 @@ use Codeling\Component\Bfstop\Administrator\Model\HtblocklistModel;
 use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\UsernamestatsModel;
 use Codeling\Component\Bfstop\Site\Model\TokenunblockModel;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Factory\MVCFactory;
 
 /**
- * Database access of the component (https://github.com/codeling/com_bfstop),
- * loaded from the checkout given in COM_BFSTOP_ROOT.
+ * Database access of the component (component/).
  */
 class ComponentTest extends IntegrationTestCase
 {
-	public static function setUpBeforeClass(): void
-	{
-		parent::setUpBeforeClass();
-		if (!getenv('COM_BFSTOP_ROOT'))
-		{
-			self::markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
-		}
-	}
-
 	private function model($class)
 	{
 		$model = new $class(array('dbo' => $this->db), new MVCFactory('Codeling\\Component\\Bfstop'));
@@ -219,7 +209,7 @@ class ComponentTest extends IntegrationTestCase
 		ob_start();
 		(function ()
 		{
-			include getenv('COM_BFSTOP_ROOT').'/admin/tmpl/log/default_body.php';
+			include BFSTOP_COMPONENT_ROOT.'/admin/tmpl/log/default_body.php';
 		})->call($view);
 		$html = ob_get_clean();
 		$this->assertStringNotContainsString('<script>', $html);
@@ -285,7 +275,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// Joomla shows the messages as HTML
 		$app = Factory::getApplication();
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$app->getMessageQueue(true);
 		$evil = '<script>alert(1)</script>';
 		$this->assertFalse(IpValidateHelper::validIPRange($evil));
@@ -303,7 +293,7 @@ class ComponentTest extends IntegrationTestCase
 	private function settingsForm()
 	{
 		$form = new \Joomla\CMS\Form\Form('com_bfstop.settings');
-		$form->loadFile(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$form->loadFile(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		return $form;
 	}
 
@@ -348,27 +338,27 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame(3, preg_match_all('/<input type="checkbox"/', $html), $html);
 		$this->assertSame(array('1', '4'), preg_match_all('/<input type="checkbox"[^>]*value="(\d)"[^>]*checked/', $html, $m) ? $m[1] : array(), $html);
 
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		try
 		{
-			$this->setPluginParams(json_encode(array('enabledForOrigin' => 3)));
+			$this->setSettings(json_encode(array('enabledForOrigin' => 3)));
 			$model = $this->model(SettingsModel::class);
 			$model->getState();
 			$formData = (new \ReflectionMethod($model, 'loadFormData'))->invoke($model);
 			$this->assertSame(array('1', '2'), $formData->params['enabledForOrigin']);
 			$this->assertTrue($model->save(array('params' => array('enabledForOrigin' => array('2', '4')))),
 				implode(', ', $model->getErrors()));
-			$this->assertSame(6, json_decode($this->getPluginParams(), true)['enabledForOrigin']);
+			$this->assertSame(6, json_decode($this->getSettings(), true)['enabledForOrigin']);
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
 	public function testEveryListAndIntegerSettingIsValidatedAgainstItsOptions()
 	{
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		$fields = $xml->xpath('//field[@type="list" or @type="integer" or @type="checkboxes"]');
 		$this->assertGreaterThan(30, count($fields));
 		foreach ($fields as $field)
@@ -444,10 +434,10 @@ class ComponentTest extends IntegrationTestCase
 		// until the plugin's next maintenance, up to a day later
 		$dir = sys_get_temp_dir().'/bfstop-unblock-'.bin2hex(random_bytes(4));
 		mkdir($dir);
-		$params = $this->getPluginParams();
+		$params = $this->getSettings();
 		try
 		{
-			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
 			$block = function ($ip)
 			{
 				return $this->insert('#__bfstop_bannedip', array('ipaddress' => $ip, 'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
@@ -468,10 +458,23 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertSame(TokenunblockModel::ResultUnblocked,
 				$this->model(TokenunblockModel::class)->process('valid', true, '203.0.113.62', $this->logger));
 			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
+
+			// an IPv6 client is blocked by its /56, the file has its /64 (see
+			// HtaccessHelper::entryFor()): unblocking the /56 takes that out
+			$byBackend = $block('2001:db8:5::/56');
+			$byToken = $block('2001:db8:6::/56');
+			$this->insert('#__bfstop_unblock_token', array('token' => 'valid6', 'block_id' => $byToken, 'crdate' => self::minutesAgo(1)));
+			$htaccess->denyIP('2001:db8:5:1::/64');
+			$htaccess->denyIP('2001:db8:6:9::/64');
+			$this->model(BlocklistModel::class)->unblock(array($byBackend), $this->logger);
+			$this->assertSame(array('203.0.113.61', '203.0.113.63', '2001:db8:6:9::/64'), $htaccess->getDeniedIPs());
+			$this->assertSame(TokenunblockModel::ResultUnblocked,
+				$this->model(TokenunblockModel::class)->process('valid6', true, '2001:db8:6:9::1', $this->logger));
+			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
 		}
 		finally
 		{
-			$this->setPluginParams($params);
+			$this->setSettings($params);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
@@ -522,7 +525,7 @@ class ComponentTest extends IntegrationTestCase
 		$other = sys_get_temp_dir().'/bfstop-other-'.bin2hex(random_bytes(4));
 		mkdir($former);
 		mkdir($other);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.80', 'crdate' => self::minutesAgo(10), 'duration' => 60));
 		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.81', 'crdate' => self::minutesAgo(120), 'duration' => 60));
 		$htaccess = new HtaccessHelper($former, $this->logger);
@@ -535,7 +538,7 @@ class ComponentTest extends IntegrationTestCase
 		};
 		$save = function (array $stored, array $params)
 		{
-			$this->setPluginParams(json_encode($stored));
+			$this->setSettings(json_encode($stored));
 			$model = $this->model(SettingsModel::class);
 			$model->getState();
 			$this->assertTrue($model->save(array('params' => $params + array('logLevel' => 8))), implode(', ', $model->getErrors()));
@@ -560,7 +563,7 @@ class ComponentTest extends IntegrationTestCase
 			// what the file holds of the time it blocked comes out with an
 			// unblock as well
 			$fill();
-			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $former)));
+			$this->setSettings(json_encode(array('blockMode' => 'full', 'htaccessPath' => $former)));
 			UnblockHelper::removeLiftedHtaccessBlocks($this->logger);
 			$this->assertSame(array('203.0.113.82'), $htaccess->getDeniedIPs());
 
@@ -572,7 +575,7 @@ class ComponentTest extends IntegrationTestCase
 
 			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
 			{
-				Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+				Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 				Factory::getApplication()->getMessageQueue(true);
 				$fill();
 				chmod($former.'/.htaccess', 0444);
@@ -587,7 +590,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 			foreach (array($former, $other) as $dir)
 			{
 				@chmod($dir, 0755);
@@ -600,11 +603,11 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testInstallerScriptHintAndVersionCheck()
 	{
-		require_once getenv('COM_BFSTOP_ROOT').'/installscript.php';
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
 		$app = \Joomla\CMS\Factory::getApplication();
 		$adapter = $this->createMock(\Joomla\CMS\Installer\InstallerAdapter::class);
 		$adapter->method('getName')->willReturn('com_bfstop');
-		$adapter->method('getManifest')->willReturn(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/bfstop.xml'));
+		$adapter->method('getManifest')->willReturn(simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/bfstop.xml'));
 		$script = new \com_bfstopInstallerScript($adapter);
 		$app->getMessageQueue(true);
 
@@ -639,15 +642,15 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// the plugin is enabled by the installation: until the settings are
 		// saved it must behave like the page says
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
-		foreach (\Codeling\Plugin\System\Bfstop\Extension\Bfstop::DefaultSettings as $name => $default)
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
+		foreach (\Codeling\Library\Bfstop\Settings::Defaults as $name => $default)
 		{
 			$field = $xml->xpath('//field[@name="'.$name.'"]');
 			$this->assertCount(1, $field, $name);
 			if ($name === 'enabledForOrigin')
 			{
 				// checkboxes, stored as a bitmask
-				$this->assertSame($default, \Codeling\Plugin\System\Bfstop\Extension\Bfstop::originMask(
+				$this->assertSame($default, \Codeling\Library\Bfstop\Origin::mask(
 					explode(',', (string) $field[0]['default'])), $name);
 				continue;
 			}
@@ -660,9 +663,9 @@ class ComponentTest extends IntegrationTestCase
 		// a path with a leading slash would become "//administrator/...", a link to another host
 		foreach (array('Allow' => 'block', 'Block' => 'block', 'Htblock' => 'htblock') as $view => $folder)
 		{
-			$source = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/src/View/'.$view.'/HtmlView.php');
+			$source = file_get_contents(BFSTOP_COMPONENT_ROOT.'/admin/src/View/'.$view.'/HtmlView.php');
 			$this->assertSame(1, preg_match("#registerAndUseStyle\(\s*'([\w.]+)',\s*'([^']+)'\)#", $source, $m), $view);
-			$this->assertFileExists(getenv('COM_BFSTOP_ROOT').'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
+			$this->assertFileExists(BFSTOP_COMPONENT_ROOT.'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
 			$wa = new \Joomla\CMS\WebAsset\WebAssetManager(new \Joomla\CMS\WebAsset\WebAssetRegistry());
 			$wa->registerAndUseStyle($m[1], $m[2]);
 			$uri = $wa->getAsset('style', $m[1])->getUri();
@@ -685,7 +688,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testBlockDurationsAreShownAsText()
 	{
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 		$this->assertSame('unlimited', DurationHelper::toReadable(0));
 		$this->assertSame('15 minutes', DurationHelper::toReadable('15'));
 		$this->assertSame('1 day', DurationHelper::toReadable(1440));
@@ -696,7 +699,7 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame('16 hours', DurationHelper::toReadable(960));
 		$this->assertSame('20 minutes', DurationHelper::toReadable(20));
 		$this->assertSame('90 minutes', DurationHelper::toReadable(90));
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		$options = $xml->xpath('//field[@name="blockDuration"]/option');
 		$this->assertNotEmpty($options);
 		foreach ($options as $option)
@@ -720,7 +723,7 @@ class ComponentTest extends IntegrationTestCase
 		{
 			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
 		}
-		\Joomla\CMS\Form\Form::addFormPath(getenv('COM_BFSTOP_ROOT').'/admin/forms');
+		\Joomla\CMS\Form\Form::addFormPath(BFSTOP_COMPONENT_ROOT.'/admin/forms');
 		$model = $this->model(BlockModel::class);
 		$model->getState(); // populated now, so it doesn't overwrite the id
 		$model->setState('block.id', $id);
@@ -733,8 +736,8 @@ class ComponentTest extends IntegrationTestCase
 		// week and the progressive block duration doubles it: without an
 		// option for its value, the browser selected the first one -
 		// unlimited - and saving the block, even unchanged, made it permanent
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
-		$listed = count(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/block.xml')
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
+		$listed = count(simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/block.xml')
 			->xpath('//field[@name="duration"]/option'));
 		foreach (array(10080 => '7 days', 2880 => '2 days', 1440 => null, 0 => null) as $duration => $added)
 		{
@@ -797,15 +800,15 @@ class ComponentTest extends IntegrationTestCase
 	 */
 	public function testBlocksOfTheBlocklistGoIntoTheHtaccessFile()
 	{
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 		$dir = sys_get_temp_dir().'/bfstop-blocklist-'.bin2hex(random_bytes(4));
 		mkdir($dir);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$htaccess = new HtaccessHelper($dir, $this->logger);
 		$today = date('Y-m-d');
 		try
 		{
-			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
 			Factory::getApplication()->getMessageQueue(true);
 			$id = $this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.95', 'crdate' => $today, 'duration' => '60'));
 			$network = $this->saveNew(BlockModel::class, array('ipaddress' => '192.0.2.0/24', 'crdate' => $today, 'duration' => '0'));
@@ -831,13 +834,13 @@ class ComponentTest extends IntegrationTestCase
 			$save($network, array('ipaddress' => '192.0.2.0/24', 'crdate' => '2026-01-02', 'duration' => '60'));
 			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs());
 
-			$this->setPluginParams(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'full', 'htaccessPath' => $dir)));
 			$this->saveNew(BlockModel::class, array('ipaddress' => '203.0.113.97', 'crdate' => $today, 'duration' => '60'));
 			$this->assertSame(array('203.0.113.96'), $htaccess->getDeniedIPs(), 'only with blocking through .htaccess');
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
@@ -889,7 +892,7 @@ class ComponentTest extends IntegrationTestCase
 			'usernamestats' => UsernamestatsModel::class);
 		foreach ($models as $view => $class)
 		{
-			$head = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/tmpl/'.$view.'/default_head.php');
+			$head = file_get_contents(BFSTOP_COMPONENT_ROOT.'/admin/tmpl/'.$view.'/default_head.php');
 			preg_match_all("#'grid\.sort',\s*'\w+',\s*'([^']+)'#", $head, $m);
 			$this->assertNotEmpty($m[1], $view);
 			$filterFields = (new \ReflectionProperty($class, 'filter_fields'))->getValue($this->model($class));
@@ -922,7 +925,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// without $live_site, the link would have the host the attacker's
 		// request named, see BlockPolicy::effectiveNotifyBlockedUser()
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$data = array('params' => array('enabledForOrigin' => array('1'), 'notifyBlockedUser' => '2'));
 		$validate = function () use (&$data)
 		{
@@ -946,7 +949,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testSettingsPageProposesTheLiveSite()
 	{
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$note = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::liveSiteNote();
 		$root = rtrim(\Joomla\CMS\Uri\Uri::root(), '/');
 		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);
@@ -954,11 +957,11 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testWarnsIfUnblockLinksLackTheLiveSite()
 	{
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$app = Factory::getApplication();
 		$warnings = function ($mode, $liveSite) use ($app)
 		{
-			$this->setPluginParams(json_encode(array('notifyBlockedUser' => $mode)));
+			$this->setSettings(json_encode(array('notifyBlockedUser' => $mode)));
 			return $this->withLiveSite($liveSite, function () use ($app)
 			{
 				$app->getMessageQueue(true);
@@ -978,7 +981,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 		}
 	}
 
@@ -1012,7 +1015,7 @@ class ComponentTest extends IntegrationTestCase
 		$original = $app->getIdentity();
 		$input = $app->getInput();
 		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
-		$logFile = \Codeling\Plugin\System\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
+		$logFile = \Codeling\Library\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
 		$clear = function (array $actions) use ($app, $input, $logFile)
 		{
 			file_put_contents($logFile, "#<?php die('Forbidden.'); ?>\n2026-01-01T00:00:00+00:00 INFO an entry\n");
@@ -1106,11 +1109,11 @@ class ComponentTest extends IntegrationTestCase
 		// .htaccess file would turn away the allowed addresses in it
 		$dir = sys_get_temp_dir().'/bfstop-htblock-'.getmypid();
 		mkdir($dir);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		$actions = array('core.manage', 'core.create', 'core.admin');
 		try
 		{
-			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
 			$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.7', 'notes' => ''));
 			$this->insert('#__bfstop_allowlist', array('ipaddress' => '198.51.100.0/24', 'notes' => ''));
 			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '203.0.113.0/24', $actions), 'contains an allowed address');
@@ -1119,7 +1122,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
@@ -1131,10 +1134,10 @@ class ComponentTest extends IntegrationTestCase
 		// can lift it from within the site
 		$dir = sys_get_temp_dir().'/bfstop-htblock-admin-'.getmypid();
 		mkdir($dir);
-		$original = $this->getPluginParams();
+		$original = $this->getSettings();
 		try
 		{
-			$this->setPluginParams(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
 			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create')));
 			$this->assertSame(array(), $this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.admin')),
 				'core.create is still needed');
@@ -1143,7 +1146,7 @@ class ComponentTest extends IntegrationTestCase
 		}
 		finally
 		{
-			$this->setPluginParams($original);
+			$this->setSettings($original);
 			@unlink($dir.'/.htaccess');
 			@rmdir($dir);
 		}
@@ -1258,12 +1261,13 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// the settings are a row of Joomla's extensions table: the tasks the
 		// controller inherits must not lock rows of it for editing - neither
-		// the plugin's nor, by the id a request names, anybody else's
+		// the component's nor, by the id a request names, anybody else's
 		$app = Factory::getApplication();
 		$original = $app->getIdentity();
 		$input = $app->getInput();
 		$other = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE element='com_content'");
-		$plugin = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$settings = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='component' AND element='com_bfstop'");
+		$plugin = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
 		$this->assertGreaterThan(0, $other);
 		$checkedOut = fn ($id) => (int) $this->queryValue('SELECT checked_out FROM #__extensions WHERE extension_id='.$id);
 		$controller = new \Codeling\Component\Bfstop\Administrator\Controller\SettingsController(
@@ -1287,26 +1291,100 @@ class ComponentTest extends IntegrationTestCase
 				$isAdmin = in_array('core.admin', $actions, true);
 				$controller->edit();
 				$this->assertSame(0, $checkedOut($other), 'settings.edit checked out another extension');
-				$this->assertSame(0, $checkedOut($plugin));
+				$this->assertSame(0, $checkedOut($settings));
 				$this->assertSame($isAdmin, $allowEdit->invoke($controller, array('extension_id' => $other), 'extension_id'));
 				$this->assertSame($isAdmin, $allowAdd->invoke($controller, array()));
 			}
 			$model = $this->model(SettingsModel::class);
 			$this->assertTrue($model->checkout($other));
-			$this->assertTrue($model->checkout($plugin));
+			$this->assertTrue($model->checkout($settings));
 			$this->assertSame(0, $checkedOut($other));
-			$this->assertSame(0, $checkedOut($plugin), 'what "Save" does after saving');
-			// a plugin left checked out by an earlier version is released
-			$this->db->setQuery('UPDATE #__extensions SET checked_out=4242 WHERE extension_id IN ('.$plugin.','.$other.')')->execute();
+			$this->assertSame(0, $checkedOut($settings), 'what "Save" does after saving');
+			// the component, and the plugin left checked out by a version
+			// whose settings were its params, are released
+			$this->db->setQuery('UPDATE #__extensions SET checked_out=4242 WHERE extension_id IN ('.$settings.','.$plugin.','.$other.')')->execute();
 			$this->assertTrue($model->checkin($other));
+			$this->assertSame(0, $checkedOut($settings));
 			$this->assertSame(0, $checkedOut($plugin));
-			$this->assertSame(4242, $checkedOut($other), 'only ever the plugin');
+			$this->assertSame(4242, $checkedOut($other), 'only ever the component and the plugin');
 		}
 		finally
 		{
 			$input->set('extension_id', null);
 			$app->loadIdentity($original);
-			$this->db->setQuery('UPDATE #__extensions SET checked_out=0, checked_out_time=NULL WHERE extension_id IN ('.$plugin.','.$other.')')->execute();
+			$this->db->setQuery('UPDATE #__extensions SET checked_out=0, checked_out_time=NULL WHERE extension_id IN ('.$settings.','.$plugin.','.$other.')')->execute();
+		}
+	}
+
+	/**
+	 * The settings are the component's params, so its permissions are part
+	 * of the settings page: Joomla's "Options" page (com_config) would store
+	 * the params with only its own fields, and wipe the settings. The
+	 * component has no config.xml for that page any more.
+	 */
+	public function testPermissionsAreSavedWithTheSettingsNotByTheOptionsPage()
+	{
+		$this->assertFileDoesNotExist(BFSTOP_COMPONENT_ROOT.'/admin/config.xml');
+		$this->assertStringNotContainsString('config.xml', file_get_contents(BFSTOP_COMPONENT_ROOT.'/bfstop.xml'));
+		$fields = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml')->xpath('/form/fieldset/field[@name="rules"]');
+		$this->assertCount(1, $fields, 'the permissions are a field of the settings form, outside its params');
+		$this->assertSame('com_bfstop', (string) $fields[0]['component']);
+
+		$app = Factory::getApplication();
+		$identity = $app->getIdentity();
+		$original = $this->getSettings();
+		$rules = $this->queryValue("SELECT rules FROM #__assets WHERE name='com_bfstop'");
+		$this->assertNotNull($rules, 'the component has an asset');
+		$plugin = $this->queryValue("SELECT params FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
+		try
+		{
+			$app->loadIdentity(self::userWith(array('core.manage', 'core.admin')));
+			$model = $this->model(SettingsModel::class);
+			$this->assertTrue($model->save(array('params' => array('blockNumber' => '12', 'logLevel' => 8),
+				'rules' => array('core.delete' => array('6' => '0')))), implode(', ', $model->getErrors()));
+			$this->assertSame(array('6' => 0), json_decode($this->queryValue("SELECT rules FROM #__assets WHERE name='com_bfstop'"),
+				true)['core.delete'] ?? null);
+			$saved = json_decode($this->getSettings(), true);
+			$this->assertSame('12', $saved['blockNumber'], 'the settings are the component\'s params');
+			$this->assertArrayNotHasKey('rules', $saved);
+			$this->assertSame($plugin, $this->queryValue(
+				"SELECT params FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'"),
+				'the plugin has no settings');
+
+			// who may not change the permissions changes none of them
+			$app->loadIdentity(self::userWith(array('core.manage')));
+			$model = $this->model(SettingsModel::class);
+			$this->assertFalse($model->save(array('params' => array('blockNumber' => '13'),
+				'rules' => array('core.delete' => array('6' => '1')))));
+			$this->assertSame(array('6' => 0), json_decode($this->queryValue("SELECT rules FROM #__assets WHERE name='com_bfstop'"),
+				true)['core.delete'] ?? null);
+			$this->assertSame('12', json_decode($this->getSettings(), true)['blockNumber']);
+		}
+		finally
+		{
+			$app->loadIdentity($identity);
+			$this->db->setQuery('UPDATE #__assets SET rules='.$this->db->quote($rules)." WHERE name='com_bfstop'")->execute();
+			$this->setSettings($original);
+		}
+	}
+
+	/** The library's Settings are the component's params, read without a query. */
+	public function testSettingsAreTheComponentsParams()
+	{
+		$original = $this->getSettings();
+		try
+		{
+			$this->setSettings(json_encode(array('blockNumber' => 21)));
+			$this->assertSame(21, \Codeling\Library\Bfstop\Settings::stored()->get('blockNumber'));
+			$this->assertSame(21, \Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('blockNumber', 10));
+			$this->assertSame('x', \Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('notStored', 'x'));
+			// a copy: changing it changes nothing stored
+			\Codeling\Library\Bfstop\Settings::stored()->set('blockNumber', 99);
+			$this->assertSame(21, \Codeling\Library\Bfstop\Settings::stored()->get('blockNumber'));
+		}
+		finally
+		{
+			$this->setSettings($original);
 		}
 	}
 }

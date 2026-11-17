@@ -7,13 +7,13 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
-use Codeling\Plugin\System\Bfstop\Service\BlockService;
-use Codeling\Plugin\System\Bfstop\Service\LoginService;
-use Codeling\Plugin\System\Bfstop\Service\Maintenance;
+use Codeling\Library\Bfstop\Helper\NotifierHelper;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Service\BlockService;
+use Codeling\Library\Bfstop\Service\LoginService;
+use Codeling\Library\Bfstop\Service\Maintenance;
 use Joomla\Registry\Registry;
 
 /**
@@ -110,7 +110,7 @@ class RepositoriesTest extends IntegrationTestCase
 	/** what the update does to the entries of earlier versions (see the installer script) */
 	private function convertStoredAddresses()
 	{
-		require_once dirname(__DIR__, 2).'/updatescript.php';
+		require_once BFSTOP_PLUGIN_ROOT.'/updatescript.php';
 		return \PlgsystembfstopInstallerScript::canonicalizeAddresses($this->db);
 	}
 
@@ -334,9 +334,9 @@ class RepositoriesTest extends IntegrationTestCase
 	public function testClientNames()
 	{
 		// the origin of a failed login: the client id of the application
-		$this->assertSame('Frontend', Bfstop::originName(0));
-		$this->assertSame('Backend', Bfstop::originName(1));
-		$this->assertSame('API', Bfstop::originName(3));
+		$this->assertSame('Frontend', Origin::name(0));
+		$this->assertSame('Backend', Origin::name(1));
+		$this->assertSame('API', Origin::name(3));
 	}
 
 	public function testPurgeOldEntries()

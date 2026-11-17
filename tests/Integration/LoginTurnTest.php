@@ -8,7 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Factory;
 
 /**
@@ -33,7 +33,7 @@ class LoginTurnTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -42,9 +42,7 @@ class LoginTurnTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
@@ -61,7 +59,7 @@ class LoginTurnTest extends IntegrationTestCase
 
 	private function configure(array $params = array())
 	{
-		$this->setPluginParams(json_encode($params + array(
+		$this->setSettings(json_encode($params + array(
 			'blockMode' => 'full',
 			'blockNumber' => 3,
 			'blockedMessage' => self::BlockedMessage,

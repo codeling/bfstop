@@ -7,11 +7,11 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Service\DailyMaintenance;
-use Codeling\Plugin\System\Bfstop\Service\MaintenanceSchedule;
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\DailyMaintenance;
+use Codeling\Library\Bfstop\Service\MaintenanceSchedule;
 use Joomla\Database\QueryMonitorInterface;
 use Joomla\Registry\Registry;
 

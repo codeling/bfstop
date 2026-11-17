@@ -8,10 +8,11 @@
  * Plugin, component and package are released together, with one version
  * number, which is written in several places. This checks that they agree:
  *
- *   - bfstop.xml (the plugin)
- *   - package/pkg_bfstop.xml (the package)
+ *   - library/bfstop.xml (the library)
+ *   - plugin/bfstop.xml (the system plugin)
  *   - task/bfstop.xml (the task plugin)
- *   - bfstop.xml of the component, if COM_BFSTOP_ROOT is set
+ *   - component/bfstop.xml (the component)
+ *   - package/pkg_bfstop.xml (the package)
  *   - the first entry of CHANGELOG ("2.0.0 (unreleased)" or "2.0.0 (2026-11-06)")
  *
  * A version is X.Y.Z, or X.Y.Z-alphaN, -betaN or -rcN for a test release
@@ -24,7 +25,7 @@
  *   php tests/lint/check-versions.php --release=<tag>  ... and are <tag>; for a
  *                                                       release (not a test release)
  *                                                       the CHANGELOG entry has its date
- *   php tests/lint/check-versions.php --print-version  prints the plugin's version
+ *   php tests/lint/check-versions.php --print-version  prints the version
  *   php tests/lint/check-versions.php --is-prerelease=<version>
  *                                                       exit status 0 if <version> is
  *                                                       a test release, 1 if not
@@ -38,7 +39,7 @@ foreach (array_slice($argv, 1) as $arg)
 {
 	if ($arg === '--print-version')
 	{
-		echo manifestVersion($root.'/bfstop.xml')."\n";
+		echo manifestVersion($root.'/plugin/bfstop.xml')."\n";
 		exit(0);
 	}
 	if (str_starts_with($arg, '--is-prerelease='))
@@ -67,15 +68,12 @@ function fail($message)
 }
 
 $versions = array(
-	'bfstop.xml' => manifestVersion($root.'/bfstop.xml'),
-	'package/pkg_bfstop.xml' => manifestVersion($root.'/package/pkg_bfstop.xml'),
+	'plugin/bfstop.xml' => manifestVersion($root.'/plugin/bfstop.xml'),
+	'library/bfstop.xml' => manifestVersion($root.'/library/bfstop.xml'),
 	'task/bfstop.xml' => manifestVersion($root.'/task/bfstop.xml'),
+	'component/bfstop.xml' => manifestVersion($root.'/component/bfstop.xml'),
+	'package/pkg_bfstop.xml' => manifestVersion($root.'/package/pkg_bfstop.xml'),
 );
-$componentRoot = getenv('COM_BFSTOP_ROOT');
-if ($componentRoot)
-{
-	$versions['com_bfstop bfstop.xml'] = manifestVersion($componentRoot.'/bfstop.xml');
-}
 
 $changelogVersion = null;
 $changelogDate = null;
@@ -95,10 +93,10 @@ foreach (file($root.'/CHANGELOG', FILE_IGNORE_NEW_LINES) as $line)
 }
 
 $errors = 0;
-$expected = $release ?? $versions['bfstop.xml'];
+$expected = $release ?? $versions['plugin/bfstop.xml'];
 if ($expected === null || !preg_match(VersionPattern, $expected, $match))
 {
-	fail(($release !== null ? "the tag" : "bfstop.xml")." has no valid version: '$expected' ".
+	fail(($release !== null ? "the tag" : "plugin/bfstop.xml")." has no valid version: '$expected' ".
 		"(X.Y.Z, or X.Y.Z-alphaN, -betaN, -rcN for a test release)");
 	exit(1);
 }
@@ -114,7 +112,7 @@ foreach ($versions as $where => $version)
 	}
 	elseif ($version !== $expected)
 	{
-		fail("$where has version $version, expected $expected".($release !== null ? ' (the tag)' : ' (as in bfstop.xml)'));
+		fail("$where has version $version, expected $expected".($release !== null ? ' (the tag)' : ' (as in plugin/bfstop.xml)'));
 		++$errors;
 	}
 }

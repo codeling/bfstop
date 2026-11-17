@@ -46,24 +46,14 @@ class DeprecatedApiTest extends TestCase
 	/** the installer scripts, which have to return their InstallerScriptInterface */
 	private function installerScripts()
 	{
-		$scripts = array(dirname(__DIR__, 2).'/updatescript.php', dirname(__DIR__, 2).'/package/script.php');
-		if (getenv('COM_BFSTOP_ROOT'))
-		{
-			$scripts[] = getenv('COM_BFSTOP_ROOT').'/installscript.php';
-		}
-		return $scripts;
+		return array(BFSTOP_PLUGIN_ROOT.'/updatescript.php', dirname(__DIR__, 2).'/task/script.php',
+			BFSTOP_COMPONENT_ROOT.'/installscript.php', dirname(__DIR__, 2).'/package/script.php');
 	}
 
 	private function sources()
 	{
-		$roots = array(dirname(__DIR__, 2).'/src', dirname(__DIR__, 2).'/services');
-		if (getenv('COM_BFSTOP_ROOT'))
-		{
-			foreach (array('admin', 'site') as $dir)
-			{
-				$roots[] = getenv('COM_BFSTOP_ROOT').'/'.$dir;
-			}
-		}
+		$roots = array(BFSTOP_LIBRARY_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/services', dirname(__DIR__, 2).'/task/src',
+			dirname(__DIR__, 2).'/task/services', BFSTOP_COMPONENT_ROOT.'/admin', BFSTOP_COMPONENT_ROOT.'/site');
 		$roots = array_merge($roots, $this->installerScripts());
 		foreach ($roots as $root)
 		{
@@ -106,9 +96,8 @@ class DeprecatedApiTest extends TestCase
 				}
 			}
 		}
-		// the plugin alone has about a dozen files (the unit tests run without
-		// the component), with the component there are over fifty
-		$this->assertGreaterThan(getenv('COM_BFSTOP_ROOT') ? 40 : 8, $files, 'the sources were not found');
+		// plugins and component have over a hundred files
+		$this->assertGreaterThan(100, $files, 'the sources were not found');
 		$this->assertSame(array(), $found, "deprecated API:\n".implode("\n", $found));
 	}
 
@@ -125,8 +114,8 @@ class DeprecatedApiTest extends TestCase
 			$this->assertMatchesRegularExpression('/\nreturn new \w+\(\);\s*$/', file_get_contents($script),
 				basename($script).' has to return its InstallerScriptInterface');
 		}
-		$forms = array_merge(glob(dirname(__DIR__, 2).'/*.xml'),
-			getenv('COM_BFSTOP_ROOT') ? glob(getenv('COM_BFSTOP_ROOT').'/admin/forms/*.xml') : array());
+		$forms = array_merge(glob(BFSTOP_LIBRARY_ROOT.'/*.xml'), glob(BFSTOP_PLUGIN_ROOT.'/*.xml'), glob(dirname(__DIR__, 2).'/task/*.xml'),
+			glob(BFSTOP_COMPONENT_ROOT.'/*.xml'), glob(BFSTOP_COMPONENT_ROOT.'/admin/forms/*.xml'));
 		foreach ($forms as $form)
 		{
 			$this->assertStringNotContainsString('addrulepath', file_get_contents($form), basename($form).': use addruleprefix');

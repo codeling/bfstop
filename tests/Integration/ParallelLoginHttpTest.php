@@ -37,7 +37,7 @@ class ParallelLoginHttpTest extends IntegrationTestCase
 			self::markTestSkipped('the built-in web server has no workers on Windows');
 		}
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -46,16 +46,14 @@ class ParallelLoginHttpTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
 	protected function setUp(): void
 	{
 		parent::setUp();
-		$this->setPluginParams(json_encode(array(
+		$this->setSettings(json_encode(array(
 			'blockMode' => 'full',
 			'blockNumber' => self::Allowed,
 			'checkInterval' => 60,

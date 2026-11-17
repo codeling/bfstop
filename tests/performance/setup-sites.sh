@@ -37,13 +37,18 @@ sql() {
 }
 
 # builds the release zip of a git ref using the deploy.sh of that very ref
+# (in plugin/ since the merge of com_bfstop, at the top before)
 build_package() {
-	local ref="$1" name="$2" tmp
+	local ref="$1" name="$2" tmp dir
 	tmp="$(mktemp -d)"
 	git -C "$repo" fetch --quiet origin "refs/tags/$ref:refs/tags/$ref" 2>/dev/null || true
 	git -C "$repo" archive "$ref" | tar -x -C "$tmp"
-	(cd "$tmp" && ./deploy.sh zip > /dev/null)
-	cp "$tmp"/bfstop-*.zip "$BENCH_DIR/packages/$name.zip"
+	dir="$tmp"
+	if [ -f "$tmp/plugin/deploy.sh" ]; then
+		dir="$tmp/plugin"
+	fi
+	(cd "$dir" && ./deploy.sh zip > /dev/null)
+	cp "$dir"/bfstop-*.zip "$BENCH_DIR/packages/$name.zip"
 	rm -rf "$tmp"
 }
 

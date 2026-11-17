@@ -1,10 +1,13 @@
 # The BFStop package
 
 What users install: one Joomla! package (`pkg_bfstop-<version>.zip`) with the
-plugin and the task plugin (this repository, the latter in `task/`) and the component
-([codeling/com_bfstop](https://github.com/codeling/com_bfstop)) in it. It used
-to have a repository of its own, codeling/pkg_bfstop, with the extension zips
-committed into it by hand.
+library (`library/`), the system plugin (`plugin/`), the task plugin (`task/`)
+and the component (`component/`) of this repository in it. The library comes
+first in `pkg_bfstop.xml`: Joomla installs the extensions of a package in that
+order (and uninstalls them in the reverse one), and the others use it. It used to have a repository of its
+own, codeling/pkg_bfstop, with the extension zips committed into it by hand;
+the component had one too, codeling/com_bfstop, until it was merged into this
+repository (with its history) for 2.0.0.
 
 - `pkg_bfstop.xml`: the package manifest.
 - `script.php`: the package's installer script; refuses Joomla! < 5.4 and
@@ -15,11 +18,13 @@ committed into it by hand.
 
 ## Building
 
-    package/build.sh <com_bfstop checkout> [<output directory>]
+    package/build.sh [<output directory>]
 
-zips the plugin and the component with their own `deploy.sh`, from copies of
-the checkouts, and the task plugin from the directory `task/` (whose manifest has to be
-called `bfstop.xml`: Joomla finds a plugin's namespace in `<element>.xml`), and puts them and the package into `build/` (or the given
+zips the system plugin and the component with their own `deploy.sh`
+(`plugin/deploy.sh zip`, `component/deploy.sh zip`), from a copy of their
+directories, and the library and the task plugin from their directories
+(whose manifests are called `bfstop.xml` too: Joomla finds a plugin's
+namespace in `<element>.xml`), and puts them and the package into `build/` (or the given
 directory), with a `SHA256SUMS-<version>` file. Nothing is committed: CI builds
 the package for every push and pull request and keeps it as an artifact of the
 run ("bfstop-<version>"), installs it in all its Joomla! sites and updates a
@@ -28,7 +33,7 @@ site of the previous release with it (see `tests/README.md`).
 ## Versions
 
 Plugin, component and package are released together, with one version number,
-written in `bfstop.xml` of both repositories, in `task/bfstop.xml`, in `pkg_bfstop.xml` and in the
+written in `library/bfstop.xml`, `plugin/bfstop.xml`, `task/bfstop.xml`, `component/bfstop.xml`, `package/pkg_bfstop.xml` and in the
 first entry of `CHANGELOG` - which says `(unreleased)` until the release, then
 the date. `tests/lint/check-versions.php` checks that they agree (CI runs it,
 and `build.sh` refuses to build otherwise). The `deploy.sh` scripts take the
@@ -46,15 +51,14 @@ is the latest *release*, never a test release.
 
 ## Releasing
 
-1. Set the versions (both repositories) and, for a release, the date of the
-   CHANGELOG entry; merge.
-2. Tag com_bfstop, then this repository, with the version (`2.1.0-rc1`,
-   `2.1.0`) and push the tags.
+1. Set the versions and, for a release, the date of the CHANGELOG entry;
+   merge.
+2. Tag the merge with the version (`2.1.0-rc1`, `2.1.0`) and push the tag.
 3. `.github/workflows/release.yml` runs on the tag: it checks the versions
-   against the tag (`check-versions.php --release`), builds from the two tags,
+   against the tag (`check-versions.php --release`), builds from the tag,
    runs all of CI on that build (every Joomla site installs the package, a site
    of the previous release is updated with it), and creates a **draft** GitHub
-   release with the three zips, the SHA-256 sums and notes from the CHANGELOG
+   release with the zips, the SHA-256 sums and notes from the CHANGELOG
    (`release-notes.php`). A test release is marked as pre-release and says so
    in its notes.
 4. Check the draft and publish it.

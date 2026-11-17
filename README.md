@@ -1,4 +1,4 @@
-# Brute Force Stop: Joomla! system plugin
+# Brute Force Stop for Joomla!
 
 Brute Force Stop (BFStop) protects the login of a Joomla! site against
 brute-force attacks. It records failed logins, slows down and blocks the IP
@@ -6,12 +6,30 @@ addresses (and throttles the accounts) they come from, notifies you about
 failed logins and blocks, and lets users who blocked themselves unblock their
 address through a link sent by email.
 
-This repository contains the **plugin** (`plg_system_bfstop`), which does the
-work on every request: it watches the logins and rejects requests from
-blocked addresses. The plugin has no settings of its own. These, and the
-lists of blocked addresses, failed logins and allowed addresses, are in the
-**component** ([codeling/com_bfstop](https://github.com/codeling/com_bfstop)),
-which also provides the unblock page. Plugin and component only work together.
+This repository contains all of BFStop, which is released as one package:
+
+- `library/`: the **library** (`lib_bfstop`, namespace
+  `Codeling\Library\Bfstop`) which the others use: addresses and networks,
+  when and how a client is blocked (the block policy), the database tables
+  (one repository class each), the `.htaccess` file, the mails, the log and
+  the daily maintenance.
+- `plugin/`: the **system plugin** (`plg_system_bfstop`), which does the work
+  on every request, by the library: it watches the logins and rejects
+  requests from blocked addresses. It has no settings of its own: they are
+  the component's.
+- `component/`: the **component** (`com_bfstop`): the settings, the lists of
+  blocked addresses, failed logins and allowed addresses, the log, username
+  statistics and IP address information in the administrator backend, and the
+  unblock page in the frontend. It used to be the repository
+  [codeling/com_bfstop](https://github.com/codeling/com_bfstop), whose history
+  is part of this one now.
+- `task/`: the **task plugin** (`plg_task_bfstop`), which runs the daily
+  maintenance as a task of Joomla's Task Scheduler.
+- `package/`: the package (`pkg_bfstop`) which contains them, and how it is
+  built and released.
+
+Plugins and component only work together; none of them uses the classes
+of another, only those of the library.
 
 ## Usage
 
@@ -36,21 +54,20 @@ which also provides the unblock page. Plugin and component only work together.
 - Security issues: please don't report them in the bug tracker, see
   [SECURITY.md](SECURITY.md)
 - Update server: `https://bfstop.bfroehler.info/update.xml`
-- Source: [codeling/bfstop](https://github.com/codeling/bfstop) (plugin and
-  package), [codeling/com_bfstop](https://github.com/codeling/com_bfstop)
-  (component)
+- Source: [codeling/bfstop](https://github.com/codeling/bfstop) (plugins,
+  component and package)
 - Contact: info@bfstop.de
 
 ## Development
 
-- Package and releases: the package is built from this repository and
-  com_bfstop by `package/build.sh`; how versions and releases work is
-  described in [package/README.md](package/README.md).
-- Tests: [tests/README.md](tests/README.md). CI tests plugin and component
-  together; for a change spanning both repositories, use the same branch name
-  in both.
-- Contributions are welcome, as pull requests to this repository or to
-  com_bfstop.
+- Package and releases: the package is built by `package/build.sh`; how
+  versions and releases work is described in
+  [package/README.md](package/README.md).
+- Tests: [tests/README.md](tests/README.md), for plugins and component.
+- `update.xml` (at the top) is an empty file for the sites which still have a
+  version of the plugin before 1.1.1, whose update server it was; the update
+  server of the package is `package/update.xml`.
+- Contributions are welcome, as pull requests to this repository.
 
 ### GeoIP reader
 
@@ -58,16 +75,16 @@ The reader is third-party code: keep it up to date!
 
 The optional GeoIP features (country risk score, "Information for IP Address")
 use a copy of the MaxMind DB reader (maxmind-db/reader, Apache-2.0), shipped in
-`src/Helper/Geo`, because a Joomla! extension cannot rely on composer at install
+`library/src/Helper/Geo`, because a Joomla! extension cannot rely on composer at install
 time. It parses a database file with untrusted-format binary data, so it has to
 be updated whenever MaxMind publishes a new release - releases of this plugin
 should never ship an outdated copy.
 
 - **Which version is shipped:** `composer.lock` (package maxmind-db/reader);
-  the header of `src/Helper/Geo/Reader.php` names it too.
+  the header of `library/src/Helper/Geo/Reader.php` names it too.
 - **How it is kept current:** Dependabot and a weekly GitHub Actions job
   (`.github/workflows/dependencies.yml`) report new releases and security
-  advisories; CI fails if `src/Helper/Geo` is not exactly the locked version.
+  advisories; CI fails if `library/src/Helper/Geo` is not exactly the locked version.
 - **How to update:** `composer update maxmind-db/reader && composer vendor-geoip`,
   review the diff, run the tests, release plugin and component.
 - The GeoLite2/GeoIP2 *database* (`.mmdb`) is separate: you download it and

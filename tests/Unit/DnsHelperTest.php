@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\DnsHelper;
+use Codeling\Library\Bfstop\Helper\DnsHelper;
 use PHPUnit\Framework\TestCase;
 
 /**

@@ -28,7 +28,7 @@ class UpdateSqlTest extends TestCase
 	public static function updateFiles(): array
 	{
 		$files = array();
-		foreach (glob(dirname(__DIR__, 2).'/sql/updates/*.sql') as $file)
+		foreach (glob(BFSTOP_PLUGIN_ROOT.'/sql/updates/*.sql') as $file)
 		{
 			if (version_compare(basename($file, '.sql'), '2.0.0', '>='))
 			{

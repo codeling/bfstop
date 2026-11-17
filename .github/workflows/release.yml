@@ -1,7 +1,7 @@
 name: Release
 
-# Pushing a version tag (tag com_bfstop with the same name first) builds the
-# release from the tags and tests it like every change (ci.yml: all Joomla
+# Pushing a version tag builds the
+# release from the tag and tests it like every change (ci.yml: all Joomla
 # sites install the package, and a site of the previous release is updated
 # with it), then creates a *draft* GitHub release with the zips, their SHA-256
 # sums and notes from the CHANGELOG - published by hand once it was checked.
@@ -58,7 +58,7 @@ jobs:
             flags+=(--prerelease)
           fi
           gh release create "$VERSION" "${flags[@]}" \
-            "build/pkg_bfstop-$VERSION.zip" "build/bfstop-$VERSION.zip" \
+            "build/pkg_bfstop-$VERSION.zip" "build/lib_bfstop-$VERSION.zip" "build/bfstop-$VERSION.zip" \
             "build/plg_task_bfstop-$VERSION.zip" \
             "build/com_bfstop-$VERSION.zip" "build/SHA256SUMS-$VERSION"
           echo "Draft release created: check it, then publish it on GitHub" >> "$GITHUB_STEP_SUMMARY"

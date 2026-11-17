@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 
 class LoggerHelperTest extends IntegrationTestCase

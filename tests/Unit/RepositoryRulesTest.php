@@ -22,7 +22,7 @@ class RepositoryRulesTest extends TestCase
 	public static function repositoryFiles()
 	{
 		$files = array();
-		foreach (glob(dirname(__DIR__, 2).'/src/Repository/*.php') as $file)
+		foreach (glob(BFSTOP_LIBRARY_ROOT.'/src/Repository/*.php') as $file)
 		{
 			$files[basename($file)] = array($file);
 		}
@@ -53,8 +53,9 @@ class RepositoryRulesTest extends TestCase
 			$this->assertStringContainsString('->db->setQuery(', file_get_contents($file), 'the base class runs them');
 			return;
 		}
-		$this->assertDoesNotMatchRegularExpression('/->db->(setQuery|execute|load[A-Za-z]+)\(/', file_get_contents($file),
-			'run the query with execute(), scalar(), count(), column(), row() or objects() of Repository');
+		$this->assertDoesNotMatchRegularExpression('/->db->(setQuery|execute|load[A-Za-z]+|insertObject|updateObject)\(/',
+			file_get_contents($file),
+			'run the query with execute(), scalar(), count(), column(), row(), objects() or insert() of Repository');
 	}
 
 	#[DataProvider('repositoryFiles')]

@@ -16,8 +16,6 @@
  *  - a language file referenced in the manifest which does not exist
  * Warnings (reported, but exit code 0):
  *  - keys present in en-GB but missing in a translation, or vice versa
- *
- * NOTE: this file is kept identical in the bfstop and com_bfstop repositories.
 **/
 
 if ($argc < 2)

@@ -7,10 +7,11 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
-use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Origin;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Settings;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 
 /**
@@ -32,7 +33,7 @@ class FailedLoginTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -41,9 +42,7 @@ class FailedLoginTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 		}
 	}
 
@@ -66,7 +65,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	private function configure(array $params = array())
 	{
-		$this->setPluginParams(json_encode($params + array(
+		$this->setSettings(json_encode($params + array(
 			'blockMode' => 'full',
 			'blockNumber' => 15,
 			'riskMinBlockNumber' => 1,
@@ -179,7 +178,7 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testApiLoginsAreOnlyCountedIfSwitchedOn()
 	{
-		$this->configure(array('enabledForOrigin' => Bfstop::OriginFrontend | Bfstop::OriginBackend));
+		$this->configure(array('enabledForOrigin' => Origin::Frontend | Origin::Backend));
 		$this->failedApiLogin(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw=='));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
 		$this->failedLogin('bob');
@@ -216,27 +215,41 @@ class FailedLoginTest extends IntegrationTestCase
 		}
 	}
 
-	public function testNetworkWithAllowedAddressesIsNotBlockedThroughHtaccess()
+	/**
+	 * An IPv6 client is counted and blocked by its /56 (a client controls
+	 * all of it), but the web server only turns away its /64: other
+	 * customers of a provider may have the other /64s of the /56, and the
+	 * web server knows nothing of the allow list. Within the /64, an
+	 * allowed address keeps it out of the file.
+	 */
+	public function testIpv6ClientIsBlockedThroughHtaccessByItsOwnNetwork()
 	{
-		// an IPv6 client is blocked by its /56: in .htaccess, that would turn
-		// away the allowed hosts of the network too - the web server knows
-		// nothing of the allow list
 		$dir = sys_get_temp_dir().'/bfstop-allow-htaccess-'.getmypid();
 		mkdir($dir);
 		try
 		{
+			// an allowed host in another /64 of the same /56
 			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
 			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir));
 			$this->failedLogin('Admin', '2001:db8:1:2a::5');
 			$this->failedLogin('Admin', '2001:db8:1:2a::5');
 			$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'),
-				'blocked in the database');
-			$this->assertStringNotContainsString('2001:db8:1::/56', (string) @file_get_contents($dir.'/.htaccess'));
+				'blocked in the database by the /56');
+			$file = (string) file_get_contents($dir.'/.htaccess');
+			$this->assertStringContainsString("-R '2001:db8:1:2a::/64'", $file, 'the web server turns away the /64');
+			$this->assertStringNotContainsString('/56', $file);
 
-			// a network without allowed addresses is blocked in .htaccess
+			// an allowed address within the client's /64: only the database blocks
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:2:2a::9', 'notes' => ''));
 			$this->failedLogin('Admin', '2001:db8:2:2a::5');
 			$this->failedLogin('Admin', '2001:db8:2:2a::5');
-			$this->assertStringContainsString("-R '2001:db8:2::/56'", (string) file_get_contents($dir.'/.htaccess'));
+			$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress='2001:db8:2::/56'"));
+			$this->assertStringNotContainsString('2001:db8:2:', (string) file_get_contents($dir.'/.htaccess'));
+
+			// IPv4 addresses are what they are tracked as
+			$this->failedLogin('Admin', '203.0.113.88');
+			$this->failedLogin('Admin', '203.0.113.88');
+			$this->assertStringContainsString("-R '203.0.113.88'", (string) file_get_contents($dir.'/.htaccess'));
 		}
 		finally
 		{
@@ -340,9 +353,9 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testRiskScoreAddsNoDelayByDefault()
 	{
-		$this->assertSame(0, Bfstop::DefaultSettings['riskDelaySecondsPerPoint']);
+		$this->assertSame(0, Settings::Defaults['riskDelaySecondsPerPoint']);
 		// "admin" is a common username, and there is no User-Agent: 4 points
-		$this->setPluginParams(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
+		$this->setSettings(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
 		$start = microtime(true);
 		$this->failedLogin('admin', self::Ip, array('--server=HTTP_USER_AGENT='));
 		$this->assertLessThan(3.0, microtime(true) - $start);

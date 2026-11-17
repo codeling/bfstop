@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
+use Codeling\Library\Bfstop\Helper\TokenHelper;
 
 // (only needs Joomla's Log class, but that requires a Joomla installation)
 class TokenHelperTest extends IntegrationTestCase

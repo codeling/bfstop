@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\PluginHelper;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,7 +27,7 @@ class IpHelperAddressTest extends IntegrationTestCase
 	{
 		parent::setUpBeforeClass();
 		$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-		$db->setQuery("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$db->setQuery("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		self::$originalParams = $db->loadResult();
 	}
 
@@ -36,9 +36,7 @@ class IpHelperAddressTest extends IntegrationTestCase
 		if (self::$originalParams !== null)
 		{
 			$db = \Joomla\CMS\Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
-			$db->setQuery('UPDATE #__extensions SET params='.$db->quote(self::$originalParams).
-				" WHERE type='plugin' AND element='bfstop'");
-			$db->execute();
+			self::storeSettings($db, self::$originalParams);
 			self::forgetPlugins();
 		}
 	}
@@ -66,7 +64,7 @@ class IpHelperAddressTest extends IntegrationTestCase
 
 	private function configure(array $params)
 	{
-		$this->setPluginParams(json_encode($params));
+		$this->setSettings(json_encode($params));
 		self::forgetPlugins();
 	}
 

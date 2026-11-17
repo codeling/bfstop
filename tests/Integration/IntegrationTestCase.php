@@ -7,10 +7,10 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
-use Codeling\Plugin\System\Bfstop\Service\MaintenanceSchedule;
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Service\MaintenanceSchedule;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 use PHPUnit\Framework\TestCase;
@@ -144,15 +144,40 @@ abstract class IntegrationTestCase extends TestCase
 		return $this->db->loadResult();
 	}
 
-	protected function getPluginParams()
+	/**
+	 * The settings as they are stored: the component's params (see the
+	 * library's Settings).
+	 */
+	protected function getSettings()
 	{
-		return $this->queryValue("SELECT params FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		return $this->queryValue("SELECT params FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 	}
 
-	protected function setPluginParams($params)
+	/**
+	 * Stores the settings $params (JSON), and enables the plugin.
+	 */
+	protected function setSettings($params)
 	{
-		$this->db->setQuery('UPDATE #__extensions SET params='.$this->db->quote($params).
-			", enabled=1 WHERE type='plugin' AND element='bfstop'");
+		self::storeSettings($this->db, $params);
+		$this->db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND folder='system' AND element='bfstop'");
 		$this->db->execute();
+	}
+
+	/**
+	 * Stores the settings $params (JSON), and makes this process read them
+	 * again: Joomla keeps the params of the components it loaded.
+	 */
+	protected static function storeSettings($db, $params)
+	{
+		$db->setQuery('UPDATE #__extensions SET params='.$db->quote($params).
+			" WHERE type='component' AND element='com_bfstop'");
+		$db->execute();
+		self::forgetLoadedSettings();
+	}
+
+	/** Makes this process read the settings from the database again, see storeSettings(). */
+	protected static function forgetLoadedSettings()
+	{
+		(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
 	}
 }

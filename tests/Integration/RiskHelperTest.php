@@ -8,11 +8,11 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Repository\DnsCacheRepository;
-use Codeling\Plugin\System\Bfstop\Repository\KnownIpRepository;
-use Codeling\Plugin\System\Bfstop\Repository\Repositories;
-use Codeling\Plugin\System\Bfstop\Service\LoginService;
-use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
+use Codeling\Library\Bfstop\Repository\DnsCacheRepository;
+use Codeling\Library\Bfstop\Repository\KnownIpRepository;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\LoginService;
+use Codeling\Library\Bfstop\Helper\RiskHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\Registry\Registry;
 
@@ -164,7 +164,7 @@ class RiskHelperTest extends IntegrationTestCase
 		// a documentation address has no PTR record: whether the name
 		// servers of /etc/resolv.conf say so or can't be reached, the result
 		// is "no record", within DnsHelper::TimeoutSeconds, and is cached
-		if (\Codeling\Plugin\System\Bfstop\Helper\DnsHelper::nameservers() === array())
+		if (\Codeling\Library\Bfstop\Helper\DnsHelper::nameservers() === array())
 		{
 			$this->markTestSkipped('no name server in /etc/resolv.conf');
 		}
@@ -175,7 +175,7 @@ class RiskHelperTest extends IntegrationTestCase
 		$db = $this->repos(null, $dns);
 		$start = microtime(true);
 		$this->assertSame(2, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'jdoe', '2001:db8:1::/56'));
-		$this->assertLessThan(\Codeling\Plugin\System\Bfstop\Helper\DnsHelper::TimeoutSeconds + 0.5, microtime(true) - $start);
+		$this->assertLessThan(\Codeling\Library\Bfstop\Helper\DnsHelper::TimeoutSeconds + 0.5, microtime(true) - $start);
 	}
 
 	public function testReverseDnsFailureFailsSafe()

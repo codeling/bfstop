@@ -20,10 +20,10 @@
 // by QueryCountTest). Used by PluginEventsTest; needs the same environment as
 // the tests.
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
+use Codeling\Library\Bfstop\Settings;
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
-use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Application\AdministratorApplication;
 use Joomla\CMS\Application\ApiApplication;
 use Joomla\CMS\Event\User\LoginEvent;
@@ -99,7 +99,7 @@ foreach (array_slice($argv, 3) as $option)
 	$loginTurn = function () use ($argv)
 	{
 		$handle = LockHelper::acquire(LoginTurn::file(
-			IpHelper::trackedAddress($argv[1], Bfstop::DefaultSettings['ipv6PrefixLength'])), 0);
+			IpHelper::trackedAddress($argv[1], Settings::Defaults['ipv6PrefixLength'])), 0);
 		LockHelper::release($handle);
 		return 'LOGIN TURN '.($handle === null ? 'HELD' : 'FREE')."\n";
 	};

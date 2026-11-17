@@ -8,7 +8,7 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Helper\GeoHelper;
+use Codeling\Library\Bfstop\Helper\GeoHelper;
 use Joomla\CMS\Log\Log;
 
 class GeoHelperTest extends IntegrationTestCase

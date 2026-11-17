@@ -7,18 +7,18 @@
 **/
 // Adds the IP address given as second argument to the .htaccess file in the
 // directory given as first argument, like the plugin does when it blocks an
-// address. Needs only the plugin's own classes, not Joomla.
+// address. Needs only the library's own classes, not Joomla.
 // Used by HtaccessHelperTest.
 
 define('_JEXEC', 1);
 spl_autoload_register(function ($class)
 {
-	$prefix = 'Codeling\\Plugin\\System\\Bfstop\\';
+	$prefix = 'Codeling\\Library\\Bfstop\\';
 	if (strncmp($class, $prefix, strlen($prefix)) === 0)
 	{
-		require dirname(__DIR__, 3).'/src/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+		require dirname(__DIR__, 3).'/library/src/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
 	}
 });
 
-$result = (new Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper($argv[1], null))->denyIP($argv[2]);
+$result = (new Codeling\Library\Bfstop\Helper\HtaccessHelper($argv[1], null))->denyIP($argv[2]);
 exit($result === false ? 1 : 0);

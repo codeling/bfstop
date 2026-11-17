@@ -7,7 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Unit;
 
-use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use PHPUnit\Framework\TestCase;
 
 class SingleLineTest extends TestCase
