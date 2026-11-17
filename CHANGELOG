@@ -77,6 +77,15 @@
     and one's login says nothing about another's. Logins remembered for a
     larger network by earlier versions no longer count; the users get the
     bonus and the link again after their next login
+  - IPv6, blocking through .htaccess: the web server turns away the /64 of
+    the client which got blocked, no longer the whole network of the block
+    (a /56 by default), where other customers of the same provider may
+    have their /64s. The block itself, which Joomla goes by, stays the
+    network's. The allow list and the trusted proxies only keep a block out
+    of the file if they are within that /64. Lifting or ending the block of
+    a network takes the /64s of its clients out of the file as well (and
+    the entries of earlier versions, which are the networks), unless
+    another active block covers them
   - Fewer queries on a request which sends no mail: the notification
     addresses (a lookup of the user and, for a group, of its members) are
     only worked out when a mail is sent, and the proxy settings are parsed

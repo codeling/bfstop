@@ -215,27 +215,41 @@ class FailedLoginTest extends IntegrationTestCase
 		}
 	}
 
-	public function testNetworkWithAllowedAddressesIsNotBlockedThroughHtaccess()
+	/**
+	 * An IPv6 client is counted and blocked by its /56 (a client controls
+	 * all of it), but the web server only turns away its /64: other
+	 * customers of a provider may have the other /64s of the /56, and the
+	 * web server knows nothing of the allow list. Within the /64, an
+	 * allowed address keeps it out of the file.
+	 */
+	public function testIpv6ClientIsBlockedThroughHtaccessByItsOwnNetwork()
 	{
-		// an IPv6 client is blocked by its /56: in .htaccess, that would turn
-		// away the allowed hosts of the network too - the web server knows
-		// nothing of the allow list
 		$dir = sys_get_temp_dir().'/bfstop-allow-htaccess-'.getmypid();
 		mkdir($dir);
 		try
 		{
+			// an allowed host in another /64 of the same /56
 			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
 			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir));
 			$this->failedLogin('Admin', '2001:db8:1:2a::5');
 			$this->failedLogin('Admin', '2001:db8:1:2a::5');
 			$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'),
-				'blocked in the database');
-			$this->assertStringNotContainsString('2001:db8:1::/56', (string) @file_get_contents($dir.'/.htaccess'));
+				'blocked in the database by the /56');
+			$file = (string) file_get_contents($dir.'/.htaccess');
+			$this->assertStringContainsString("-R '2001:db8:1:2a::/64'", $file, 'the web server turns away the /64');
+			$this->assertStringNotContainsString('/56', $file);
 
-			// a network without allowed addresses is blocked in .htaccess
+			// an allowed address within the client's /64: only the database blocks
+			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:2:2a::9', 'notes' => ''));
 			$this->failedLogin('Admin', '2001:db8:2:2a::5');
 			$this->failedLogin('Admin', '2001:db8:2:2a::5');
-			$this->assertStringContainsString("-R '2001:db8:2::/56'", (string) file_get_contents($dir.'/.htaccess'));
+			$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress='2001:db8:2::/56'"));
+			$this->assertStringNotContainsString('2001:db8:2:', (string) file_get_contents($dir.'/.htaccess'));
+
+			// IPv4 addresses are what they are tracked as
+			$this->failedLogin('Admin', '203.0.113.88');
+			$this->failedLogin('Admin', '203.0.113.88');
+			$this->assertStringContainsString("-R '203.0.113.88'", (string) file_get_contents($dir.'/.htaccess'));
 		}
 		finally
 		{

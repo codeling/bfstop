@@ -458,6 +458,19 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertSame(TokenunblockModel::ResultUnblocked,
 				$this->model(TokenunblockModel::class)->process('valid', true, '203.0.113.62', $this->logger));
 			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
+
+			// an IPv6 client is blocked by its /56, the file has its /64 (see
+			// HtaccessHelper::entryFor()): unblocking the /56 takes that out
+			$byBackend = $block('2001:db8:5::/56');
+			$byToken = $block('2001:db8:6::/56');
+			$this->insert('#__bfstop_unblock_token', array('token' => 'valid6', 'block_id' => $byToken, 'crdate' => self::minutesAgo(1)));
+			$htaccess->denyIP('2001:db8:5:1::/64');
+			$htaccess->denyIP('2001:db8:6:9::/64');
+			$this->model(BlocklistModel::class)->unblock(array($byBackend), $this->logger);
+			$this->assertSame(array('203.0.113.61', '203.0.113.63', '2001:db8:6:9::/64'), $htaccess->getDeniedIPs());
+			$this->assertSame(TokenunblockModel::ResultUnblocked,
+				$this->model(TokenunblockModel::class)->process('valid6', true, '2001:db8:6:9::1', $this->logger));
+			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
 		}
 		finally
 		{

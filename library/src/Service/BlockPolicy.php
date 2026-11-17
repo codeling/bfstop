@@ -147,6 +147,8 @@ class BlockPolicy
 	 *                    - duration: of the block, in minutes (0: permanent)
 	 *                    - throughFile: whether blocks go into .htaccess
 	 *                    - htaccess: whether this one does (see htaccessAllowed())
+	 *                    - htaccessEntry: what the file gets for it (see
+	 *                      HtaccessHelper::entryFor())
 	 *                    - htaccessPath: the directory of the file
 	 *                    - targetedOtherAccounts: whether the failed logins
 	 *                      which led to it also went against other accounts
@@ -161,10 +163,14 @@ class BlockPolicy
 			return null;
 		}
 		$throughFile = $this->mode() === 'htaccess';
+		$htaccessEntry = HtaccessHelper::entryFor($logEntry->ipaddress, $clientAddress);
 		return array(
 			'duration' => $this->escalatedDuration($logEntry->ipaddress, $this->blockDuration()),
 			'throughFile' => $throughFile,
-			'htaccess' => $throughFile && $this->htaccessAllowed($logEntry->ipaddress),
+			// what the web server turns away is the entry, not all of the
+			// block: the allow list and the proxies matter within the entry
+			'htaccess' => $throughFile && $this->htaccessAllowed($htaccessEntry),
+			'htaccessEntry' => $htaccessEntry,
 			'htaccessPath' => $this->htaccessPath(),
 			// has to be found out before blocking, which marks these failed
 			// logins as handled
@@ -226,7 +232,7 @@ class BlockPolicy
 			return false;
 		}
 		// the web server knows nothing of the allow list: a network block
-		// (an IPv6 client is blocked by its /56, see trackedAddress())
+		// (an IPv6 client gets its /64, see HtaccessHelper::entryFor())
 		// would turn away the allowed addresses in it before Joomla runs
 		$allowed = $this->repositories->allowList()->entriesOverlapping($address);
 		if ($allowed === null || count($allowed) > 0)

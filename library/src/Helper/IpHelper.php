@@ -273,6 +273,33 @@ class IpHelper
 	}
 
 	/**
+	 * The prefix length of an address or network: 32 or 128 for an address,
+	 * null if $value is neither.
+	 */
+	public static function prefixLength($value)
+	{
+		$network = self::network($value);
+		return $network === null ? null : $network[1];
+	}
+
+	/**
+	 * Whether the address or network $inner is within the network $outer
+	 * (or is $outer). Malformed entries contain nothing and are in nothing.
+	 */
+	public static function contains($outer, $inner)
+	{
+		$outerNetwork = self::network($outer);
+		$innerNetwork = self::network($inner);
+		if ($outerNetwork === null || $innerNetwork === null ||
+			strlen($outerNetwork[0]) !== strlen($innerNetwork[0]) || $innerNetwork[1] < $outerNetwork[1])
+		{
+			return false;
+		}
+		$mask = self::prefixMask($outerNetwork[1], strlen($outerNetwork[0]));
+		return ($outerNetwork[0] & $mask) === ($innerNetwork[0] & $mask);
+	}
+
+	/**
 	 * The entries of $list (addresses or networks) which overlap the address
 	 * or network $entry: contain it, are contained in it, or are the same.
 	 * Malformed entries never overlap.

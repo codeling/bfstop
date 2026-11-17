@@ -230,6 +230,55 @@ class HtaccessHelper
 	}
 
 	/**
+	 * The prefix length of the entry an IPv6 client gets in the file, if it
+	 * is tracked by a larger network (see entryFor()).
+	 */
+	public const ClientPrefixLength = IpHelper::TrustPrefixLength;
+
+	/**
+	 * What the file is to hold for a block of $tracked - the key the failed
+	 * logins of a client are counted under (see IpHelper::trackedAddress()) -
+	 * whose client was at $client: an IPv6 client is counted by its /56 (by
+	 * default), because it controls all of it, but many providers give their
+	 * customers a /64 or less of a shared /56. Joomla blocks the /56, but the
+	 * web server, which turns away whatever the entry covers before Joomla
+	 * (and the allow list) get a say, only the client's /64. IPv4 addresses,
+	 * networks of /64 or less, and addresses which IpHelper::trackedAddress()
+	 * doesn't aggregate stay what they are tracked as; so does $tracked if
+	 * the client isn't known or not in it.
+	 *
+	 * @param string      $tracked the address of the block
+	 * @param string|null $client  the client's actual address
+	 */
+	public static function entryFor($tracked, $client)
+	{
+		if ($client === null || (IpHelper::prefixLength($tracked) ?? 128) >= self::ClientPrefixLength)
+		{
+			return $tracked;
+		}
+		$entry = IpHelper::trackedAddress($client, self::ClientPrefixLength);
+		return IpHelper::prefixLength($entry) === self::ClientPrefixLength && strpos($entry, ':') !== false &&
+			IpHelper::contains($tracked, $entry) ? $entry : $tracked;
+	}
+
+	/**
+	 * Whether the entry $entry of the file is one a block of $address put
+	 * there: $address itself, or the /64 of a client within it (see
+	 * entryFor()).
+	 */
+	public static function isEntryOf($entry, $address)
+	{
+		$entry = (string) $entry;
+		$address = (string) $address;
+		if ($entry === $address)
+		{
+			return true;
+		}
+		return strpos($entry, ':') !== false && IpHelper::prefixLength($entry) === self::ClientPrefixLength &&
+			(IpHelper::prefixLength($address) ?? 128) < self::ClientPrefixLength && IpHelper::contains($address, $entry);
+	}
+
+	/**
 	 * Return array of denied IP addresses from .htaccess.
 	 *
 	 * @return array
@@ -365,7 +414,16 @@ class HtaccessHelper
 	 */
 	public function removeLiftedBlocks(BlockRepository $blocks)
 	{
-		$removed = $this->removeAddresses($blocks->addressesWithoutActiveBlock(), 'the block is over');
+		$lifted = $blocks->addressesWithoutActiveBlock();
+		// the /64 of a client in a network whose block is over (see
+		// entryFor()) may have another active block, say one made by hand:
+		// looked up only if there is such an entry
+		$active = function () use ($blocks, $lifted)
+		{
+			$all = $blocks->allAddresses();
+			return $all === null ? null : array_values(array_diff($all, $lifted));
+		};
+		$removed = $this->removeAddresses($lifted, 'the block is over', $active);
 		return $removed === false ? 0 : $removed;
 	}
 
@@ -410,29 +468,64 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Takes $addresses out of the block section, in one change of the file.
+	 * Takes the entries of $addresses out of the block section (see
+	 * isEntryOf(): the addresses, and the /64 of a client within them), in
+	 * one change of the file.
 	 *
-	 * @param string[] $addresses
-	 * @param string   $reason    for the log
+	 * @param string[]      $addresses
+	 * @param string        $reason    for the log
+	 * @param callable|null $active    gives the addresses which are still
+	 *                                 blocked (null if that is unknown), whose
+	 *                                 entries stay; only asked if an entry is
+	 *                                 a /64 within one of $addresses
 	 * @return int|false the number of entries removed; false if the file
 	 *                   couldn't be written
 	 */
-	public function removeAddresses(array $addresses, $reason = '')
+	public function removeAddresses(array $addresses, $reason = '', ?callable $active = null)
 	{
 		$addresses = array_values(array_unique(array_map('strval', $addresses)));
 		if (count($addresses) === 0 || !file_exists($this->path))
 		{
 			return 0;
 		}
-		return $this->locked(function () use ($addresses, $reason)
+		return $this->locked(function () use ($addresses, $reason, $active)
 		{
 			$section = $this->parseSection();
 			$removed = array_values(array_intersect($section['addresses'], $addresses));
+			$within = array();
+			foreach (array_diff($section['addresses'], $removed) as $entry)
+			{
+				foreach ($addresses as $address)
+				{
+					if (self::isEntryOf($entry, $address))
+					{
+						$within[] = $entry;
+						break;
+					}
+				}
+			}
+			if (count($within) > 0 && $active !== null)
+			{
+				$stillBlocked = $active();
+				$within = $stillBlocked === null ? array() : array_values(array_filter($within,
+					function ($entry) use ($stillBlocked)
+					{
+						foreach ($stillBlocked as $address)
+						{
+							if (IpHelper::contains($address, $entry))
+							{
+								return false;
+							}
+						}
+						return true;
+					}));
+			}
+			$removed = array_merge($removed, $within);
 			if (count($removed) === 0)
 			{
 				return 0;
 			}
-			$section['addresses'] = array_values(array_diff($section['addresses'], $addresses));
+			$section['addresses'] = array_values(array_diff($section['addresses'], $removed));
 			if (!$this->insert(self::renderSection($section)))
 			{
 				return false;

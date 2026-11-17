@@ -82,7 +82,8 @@ class BlockService
 			// the file only holds what is still blocked
 			(new HtaccessHelper($decision['htaccessPath'], $logger))->removeLiftedBlocks($this->repositories->blocks());
 		}
-		$id = $this->block($logEntry, $decision['duration'], $decision['htaccess'], $decision['htaccessPath']);
+		$id = $this->block($logEntry, $decision['duration'], $decision['htaccess'], $decision['htaccessPath'],
+			$decision['htaccessEntry']);
 		if ($id < 1)
 		{
 			// nothing is blocked: neither tell the administrators that
@@ -101,10 +102,13 @@ class BlockService
 	 * logins of the address stop counting, and - with blocking through
 	 * .htaccess - writes the address into the file.
 	 *
-	 * @param object $logEntry the failed login which led to the block
+	 * @param object      $logEntry      the failed login which led to the block
+	 * @param string|null $htaccessEntry what the file gets (see
+	 *                                   HtaccessHelper::entryFor()), by
+	 *                                   default the address of the block
 	 * @return int the id of the block, -1 if it could not be added
 	 */
-	public function block($logEntry, $duration, $usehtaccess, $htaccessPath)
+	public function block($logEntry, $duration, $usehtaccess, $htaccessPath, $htaccessEntry = null)
 	{
 		$logger = $this->repositories->logger();
 		$id = $this->repositories->blocks()->add($logEntry->ipaddress, $duration);
@@ -118,8 +122,10 @@ class BlockService
 			if ($usehtaccess)
 			{
 				$htaccess = new HtaccessHelper($htaccessPath, $logger);
-				$logger->log('Blocking '.$logEntry->ipaddress.' through '.$htaccess->getFileName(), Log::INFO);
-				$htaccess->denyIP($logEntry->ipaddress);
+				$htaccessEntry = $htaccessEntry ?? $logEntry->ipaddress;
+				$logger->log('Blocking '.$htaccessEntry.' through '.$htaccess->getFileName().
+					($htaccessEntry !== $logEntry->ipaddress ? ' (the block is '.$logEntry->ipaddress.')' : ''), Log::INFO);
+				$htaccess->denyIP($htaccessEntry);
 			}
 			return $id;
 		}
