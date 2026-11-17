@@ -629,7 +629,10 @@ class HtaccessHelper
 
 	/**
 	 * The directory of the .htaccess file: the configured one, the Joomla
-	 * root if none is configured (the one place which knows this default).
+	 * root if none is configured. The one place which knows this default -
+	 * but for the installer script (plugin/updatescript.php), which keeps a
+	 * copy, as it runs while the classes of the version before may still be
+	 * loaded.
 	 */
 	public static function resolvePath($configured): string
 	{
