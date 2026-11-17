@@ -37,7 +37,7 @@ use Joomla\Event\SubscriberInterface;
  * about a failed login, what the client is told and the maintenance are the
  * classes of the Service namespace: RequestClassifier, BlockPolicy (with
  * BlockService and LoginService doing what it decides), Responder, LoginTurn
- * and Maintenance.
+ * and DailyMaintenance.
  */
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {

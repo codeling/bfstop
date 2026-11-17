@@ -51,8 +51,8 @@
     password recovery), BlockPolicy (when, for how long and how a client is
     blocked, the unblock mail, the delays), Responder (the block page, the
     messages, the delayed response), LoginTurn (logins of one address one
-    after the other) and Maintenance (the daily maintenance and the
-    conversion of the stored addresses). RequestClassifier works out what
+    after the other) and DailyMaintenance (see the Task Scheduler entry).
+    RequestClassifier works out what
     Joomla will run the way Joomla's own code does, which is no API: a new
     test, RequestClassifierTest, compares it with what the Joomla version
     under test runs - its findOption(), the dispatcher of each component
