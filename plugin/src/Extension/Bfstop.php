@@ -231,16 +231,19 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$riskScore = RiskHelper::computeScore($this->repositories, $this->logger, $this->params, $ipAddress, $username,
 			$logEntry->ipaddress);
 
-		// remaining attempts notification only makes sense if we actually
-		// block (and the count needs a query, which is saved otherwise)
-		if (!$this->policy->isOff() && $this->responder->showsRemainingAttempts())
+		// counted once (a query) for the message of the remaining attempts and
+		// the decision to block; neither is made without blocking
+		if (!$this->policy->isOff())
 		{
-			$this->responder->showRemainingAttempts($this->policy->attemptsLeft($logEntry, $riskScore));
-		}
-
-		if ($this->policy->isTooManyAttempts($logEntry, $riskScore))
-		{
-			$this->block($logEntry);
+			$attemptsLeft = $this->policy->attemptsLeft($logEntry, $riskScore);
+			if ($this->responder->showsRemainingAttempts())
+			{
+				$this->responder->showRemainingAttempts($attemptsLeft);
+			}
+			if ($attemptsLeft <= 0)
+			{
+				$this->block($logEntry);
+			}
 		}
 		// counted, and blocked if that was one too many: the next login of
 		// this address may be handled (see LoginTurn). The mail below and the

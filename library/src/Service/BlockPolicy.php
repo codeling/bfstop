@@ -120,7 +120,9 @@ class BlockPolicy
 
 	/**
 	 * How many more failed logins the client of $logEntry (which is counted
-	 * already) has before it is blocked.
+	 * already) has before it is blocked: none (0 or less) means it is to be
+	 * blocked now. One query; the plugin asks once per failed login, for the
+	 * message of the remaining attempts and the decision.
 	 */
 	public function attemptsLeft($logEntry, $riskScore): int
 	{
@@ -128,12 +130,6 @@ class BlockPolicy
 		$counted = $this->countedFailedLogins($logEntry);
 		$this->logger->log("Failed logins: $counted; allowed: $allowed", Log::DEBUG);
 		return $allowed - $counted;
-	}
-
-	/** Whether the client of $logEntry is to be blocked now. */
-	public function isTooManyAttempts($logEntry, $riskScore): bool
-	{
-		return !$this->isOff() && $this->countedFailedLogins($logEntry) >= $this->effectiveBlockNumber($riskScore);
 	}
 
 	/**

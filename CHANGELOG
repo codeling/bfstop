@@ -31,6 +31,9 @@
     links have a lower case column of the user name, computed by the
     database and indexed, for their case-insensitive lookups - the check of
     an IPv6 client read the whole table of known addresses
+  - A failed login counts the failed logins of its address once: the
+    message of the remaining attempts (shown by default) and the decision
+    to block counted them in a query each
   - tests/Integration/QueryCountTest.php limits the number of queries a page
     view, a request of a blocked address and a failed login cause, and
     tests/performance fills the accounts and known addresses as well, so the

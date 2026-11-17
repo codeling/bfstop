@@ -30,9 +30,9 @@ class QueryCountTest extends IntegrationTestCase
 	private const Limits = array(
 		'page view' => 2,
 		'blocked request' => 3,
-		'failed login, unknown user' => 7,
-		'failed login, account' => 7,
-		'failed login which blocks' => 17,
+		'failed login, unknown user' => 6,
+		'failed login, account' => 6,
+		'failed login which blocks' => 16,
 	);
 
 	private static $originalParams;
@@ -222,5 +222,24 @@ class QueryCountTest extends IntegrationTestCase
 			return $this->onUsers($sql) && stripos($sql, 'SELECT 1 FROM') === 0;
 		});
 		$this->assertLessThanOrEqual(2, count($lookups), implode("\n", $lookups));
+	}
+
+	public function testTheFailedLoginsOfTheAddressAreCountedOnce()
+	{
+		// for the message of the remaining attempts (shown by default, see
+		// notifyUsePasswordReminder) and for the decision to block: one count
+		foreach ($this->allKinds() as $kind => $queries)
+		{
+			if (strpos($kind, 'failed login') !== 0)
+			{
+				continue;
+			}
+			$counts = array_filter($queries, function ($sql)
+			{
+				return stripos($sql, 'SELECT COUNT(') === 0 && strpos($sql, $this->db->getPrefix().'bfstop_failedlogin') !== false &&
+					preg_match('/[`"]ipaddress[`"]\s*=/', $sql);
+			});
+			$this->assertCount(1, $counts, $kind.":\n".implode("\n", $counts));
+		}
 	}
 }
