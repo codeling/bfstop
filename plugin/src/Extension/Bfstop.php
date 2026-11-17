@@ -52,15 +52,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	protected $autoloadLanguage = false;
 	private bool $languageLoaded = false;
 
-	/**
-	 * Values the plugin keeps among its settings for itself, which saving the
-	 * settings page must keep: none any more - its bookkeeping is the table
-	 * #__bfstop_state, which that page can't overwrite. com_bfstop's
-	 * SettingsModel::keepInternalSettings() went through this until it was
-	 * removed there; then so can this.
-	 */
-	public const InternalSettings = array();
-
 	private LoggerHelper $logger;
 	// created on first use (see notifier()): its constructor queries the
 	// database, which most requests - none of them sends a mail - needn't pay for
