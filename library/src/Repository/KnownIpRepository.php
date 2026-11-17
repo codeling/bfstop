@@ -57,12 +57,8 @@ class KnownIpRepository extends Repository
 			}
 			else
 			{
-				$entry = new \stdClass();
-				$entry->ipaddress = $key;
-				$entry->username = $username;
-				$entry->first_success = $now;
-				$entry->last_success = $now;
-				$this->db->insertObject(self::Table, $entry, 'id');
+				$this->insert(self::Table, array('ipaddress' => $key, 'username' => $username,
+					'first_success' => $now, 'last_success' => $now));
 			}
 		}, null);
 	}

@@ -53,8 +53,9 @@ class RepositoryRulesTest extends TestCase
 			$this->assertStringContainsString('->db->setQuery(', file_get_contents($file), 'the base class runs them');
 			return;
 		}
-		$this->assertDoesNotMatchRegularExpression('/->db->(setQuery|execute|load[A-Za-z]+)\(/', file_get_contents($file),
-			'run the query with execute(), scalar(), count(), column(), row() or objects() of Repository');
+		$this->assertDoesNotMatchRegularExpression('/->db->(setQuery|execute|load[A-Za-z]+|insertObject|updateObject)\(/',
+			file_get_contents($file),
+			'run the query with execute(), scalar(), count(), column(), row(), objects() or insert() of Repository');
 	}
 
 	#[DataProvider('repositoryFiles')]

@@ -34,6 +34,11 @@
   - A failed login counts the failed logins of its address once: the
     message of the remaining attempts (shown by default) and the decision
     to block counted them in a query each
+  - One or two queries less for each failed login, block and successful
+    login: the rows were added with the database's insertObject(), which
+    has Joomla look up the columns of the table first (one query on MySQL
+    and MariaDB, two on PostgreSQL, for each table in a request); the
+    repositories insert with a query of their own, with the values bound
   - tests/Integration/QueryCountTest.php limits the number of queries a page
     view, a request of a blocked address and a failed login cause, and
     tests/performance fills the accounts and known addresses as well, so the

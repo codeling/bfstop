@@ -120,13 +120,7 @@ class QueryCountTest extends IntegrationTestCase
 				continue;
 			}
 			++$counted;
-			// insertObject() has Joomla look up the columns of its table first, once for
-			// each table in a request: one query on MySQL and MariaDB, two on
-			// PostgreSQL. The driver's business, which differs between databases.
-			if (!preg_match('/^SHOW FULL COLUMNS|current_schemas\(|pg_catalog\.pg_attribute/', substr($line, 7)))
-			{
-				$queries[] = substr($line, 7);
-			}
+			$queries[] = substr($line, 7);
 		}
 		$this->assertMatchesRegularExpression('/^QUERIES: '.$counted.'$/m', $output);
 		return $queries;
@@ -240,6 +234,21 @@ class QueryCountTest extends IntegrationTestCase
 					preg_match('/[`"]ipaddress[`"]\s*=/', $sql);
 			});
 			$this->assertCount(1, $counts, $kind.":\n".implode("\n", $counts));
+		}
+	}
+
+	public function testNoQueryLooksUpTheColumnsOfATable()
+	{
+		// the database's insertObject() does that before every first insert into
+		// a table in a request: one query on MySQL and MariaDB, two on
+		// PostgreSQL. The repositories insert with Repository::insert()
+		foreach ($this->allKinds() as $kind => $queries)
+		{
+			foreach ($queries as $sql)
+			{
+				$this->assertDoesNotMatchRegularExpression('/^SHOW FULL COLUMNS|current_schemas\(|pg_catalog\.pg_attribute/', $sql,
+					$kind.': a query of the columns of a table');
+			}
 		}
 	}
 }

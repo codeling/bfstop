@@ -25,8 +25,12 @@ class FailedLoginRepository extends Repository
 	// add one for every request, from as many addresses as they like
 	public const MaxRows = 200000;
 
+	/** the columns a failed login is added with (see add()) */
+	private const Columns = array('ipaddress', 'logtime', 'username', 'origin', 'handled');
+
 	/**
-	 * Adds a failed login (an object with the columns of the table).
+	 * Adds a failed login (an object with the columns of the table); gives it
+	 * its id.
 	 *
 	 * Fail-open: a failed login which can't be stored isn't counted - better
 	 * than answering the visitor's request with an error. The failure is
@@ -36,7 +40,8 @@ class FailedLoginRepository extends Repository
 	{
 		$this->failOpen('add', function () use ($logEntry)
 		{
-			$this->db->insertObject(self::Table, $logEntry, 'id');
+			$logEntry->id = $this->insert(self::Table,
+				array_intersect_key(get_object_vars($logEntry), array_flip(self::Columns)), 'id');
 		}, null);
 	}
 

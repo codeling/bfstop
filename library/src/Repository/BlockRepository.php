@@ -147,16 +147,9 @@ class BlockRepository extends AddressTableRepository
 	{
 		return $this->failOpen('add', function () use ($ipaddress, $duration)
 		{
-			$entry = new \stdClass();
-			$entry->ipaddress = IpHelper::canonicalEntry($ipaddress) ?? $ipaddress;
-			$entry->crdate = self::now();
-			$entry->duration = $duration;
-			if (!$this->db->insertObject(self::Table, $entry, 'id'))
-			{
-				$this->logger->log('Insert block entry failed!', \Joomla\CMS\Log\Log::ERROR);
-				return -1;
-			}
-			return $entry->id;
+			// a failed insert throws: fail-open, see above
+			return $this->insert(self::Table, array('ipaddress' => IpHelper::canonicalEntry($ipaddress) ?? $ipaddress,
+				'crdate' => self::now(), 'duration' => (int) $duration), 'id');
 		}, -1);
 	}
 

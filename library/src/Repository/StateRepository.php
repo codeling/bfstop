@@ -70,11 +70,7 @@ class StateRepository extends Repository
 			{
 				return;
 			}
-			$row = new \stdClass();
-			$row->name = (string) $name;
-			$row->value = (string) $value;
-			$row->changed = $now;
-			$this->db->insertObject(self::Table, $row);
+			$this->insert(self::Table, array('name' => (string) $name, 'value' => (string) $value, 'changed' => $now));
 		}, null);
 	}
 }

@@ -50,16 +50,9 @@ class UnblockTokenRepository extends Repository
 	{
 		return $this->failOpen('add', function () use ($blockId, $token, $username)
 		{
-			$entry = new \stdClass();
-			$entry->token = self::hash($token);
-			$entry->block_id = $blockId;
-			$entry->crdate = self::now();
-			$entry->username = $username;
-			if (!$this->db->insertObject(self::Table, $entry))
-			{
-				$this->logger->log('Insert unblock token failed!', \Joomla\CMS\Log\Log::ERROR);
-				return null;
-			}
+			// a failed insert throws: fail-open, see above
+			$this->insert(self::Table, array('token' => self::hash($token), 'block_id' => (int) $blockId,
+				'crdate' => self::now(), 'username' => $username));
 			return $token;
 		}, null);
 	}

@@ -92,11 +92,8 @@ class DnsCacheRepository extends Repository
 			}
 			else
 			{
-				$entry = new \stdClass();
-				$entry->ipaddress = $ipaddress;
-				$entry->hostname = $hostname;
-				$entry->checked_at = $now;
-				$this->db->insertObject(self::Table, $entry);
+				$this->insert(self::Table, array('ipaddress' => (string) $ipaddress, 'hostname' => $hostname,
+					'checked_at' => $now));
 			}
 		}, null);
 	}

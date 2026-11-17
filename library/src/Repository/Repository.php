@@ -120,6 +120,51 @@ abstract class Repository
 		return $this->db->loadObjectList();
 	}
 
+	/**
+	 * Inserts the row $row (column => value; null values are left out, so
+	 * the column gets its default) into $table, with every value bound.
+	 * Instead of the database's insertObject(), which looks up the columns
+	 * of the table first - a query per table and request on MySQL and
+	 * MariaDB, two on PostgreSQL, so 1-2 more for each failed login - and
+	 * quotes the values into the SQL.
+	 *
+	 * @param string|null $key the column of the generated id
+	 * @return int|null the id of the new row, if $key is given
+	 */
+	protected function insert($table, array $row, $key = null)
+	{
+		$columns = array();
+		$placeholders = array();
+		$values = array();
+		foreach ($row as $column => $value)
+		{
+			if ($value === null)
+			{
+				continue;
+			}
+			$name = 'c'.count($values);
+			$columns[] = $this->db->quoteName($column);
+			$placeholders[] = ':'.$name;
+			$values[$name] = is_int($value) ? $value : (is_bool($value) ? (int) $value : (string) $value);
+		}
+		$query = $this->db->createQuery()
+			->insert($this->db->quoteName($table))
+			->columns($columns)
+			->values(implode(',', $placeholders));
+		if ($key === null)
+		{
+			$this->execute($query, $values);
+			return null;
+		}
+		if ($this->db->getServerType() === 'postgresql')
+		{
+			$query->returning($this->db->quoteName($key));
+			return (int) $this->scalar($query, $values);
+		}
+		$this->execute($query, $values);
+		return (int) $this->db->insertid();
+	}
+
 	/** Deletes the rows of $table whose $column is before $date. */
 	protected function deleteBefore($table, $column, $date)
 	{
