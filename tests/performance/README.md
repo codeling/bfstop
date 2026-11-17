@@ -31,8 +31,9 @@ web server (OPcache on), a request at a time.
     itself
   
   Each is repeated with database tables of different sizes (`--sizes`): that
-  many failed logins and a tenth of that many blocks, to show how the lookups
-  scale (neither version indexes the address columns).
+  many failed logins, known addresses and accounts (in every site, also the one
+  without bfstop) and a tenth of that many blocks, to show how the lookups
+  scale.
 - **Throughput**: the same requests with several clients at the same time and
   several PHP workers (requests/second, latency percentiles).
 - **Database growth**: bytes stored per failed login, including the tables

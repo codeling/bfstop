@@ -109,7 +109,7 @@ class UnblockTokenRepository extends Repository
 			$query = $this->db->createQuery()
 				->select('COUNT(*)')
 				->from($this->db->quoteName(self::Table))
-				->where($this->equalsIgnoringCase('username', 'username'))
+				->where($this->usernameMatches('username'))
 				->where($this->db->quoteName('crdate').' >= :since');
 			$values = array('username' => (string) $username, 'since' => self::validSince());
 			return $this->count($query, $values) > 0;

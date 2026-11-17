@@ -16,7 +16,9 @@
 // of that user fail or succeed afterwards, and prints before and after it
 // whether the request holds the lock for the logins of its address ("LOGIN
 // TURN HELD" or "FREE", see Bfstop::awaitLoginTurn()).
-// Used by PluginEventsTest; needs the same environment as the tests.
+// --count-queries prints the queries the plugin sends (see QueryCounter, used
+// by QueryCountTest). Used by PluginEventsTest; needs the same environment as
+// the tests.
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
@@ -74,6 +76,8 @@ register_shutdown_function(function ()
 	echo "\nSTATUS: ".http_response_code()."\n";
 });
 PluginHelper::importPlugin('system', 'bfstop', true, $app->getDispatcher());
+require __DIR__.'/QueryCounter.php';
+QueryCounter::startIfAsked($argv);
 $app->getDispatcher()->dispatch('onAfterInitialise', new Event('onAfterInitialise', array()));
 // blocking is enforced after routing (SEF URLs only yield option/view then)
 // (the API has an event of its own for that)

@@ -46,13 +46,17 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_unblock" (
 
 
 -- username: the user the unblock link was sent to, to limit the links per user
+-- username_lc: the same in lower case, for the lookups which must not tell
+-- "Bob" from "bob" - computed by the database
 CREATE TABLE IF NOT EXISTS "#__bfstop_unblock_token" (
   "token" varchar(40) NOT NULL,
   "block_id" integer NOT NULL,
   "crdate" timestamp without time zone NOT NULL,
   "username" varchar(150) NULL DEFAULT NULL,
+  "username_lc" varchar(150) GENERATED ALWAYS AS (lower("username")) STORED,
   PRIMARY KEY ("token")
 );
+CREATE INDEX IF NOT EXISTS "#__bfstop_unblock_token_username_lc" ON "#__bfstop_unblock_token" ("username_lc");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_allowlist" (
@@ -70,9 +74,11 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_knownip" (
   "username" varchar(150) NOT NULL,
   "first_success" timestamp without time zone NOT NULL,
   "last_success" timestamp without time zone NOT NULL,
+  "username_lc" varchar(150) GENERATED ALWAYS AS (lower("username")) STORED,
   PRIMARY KEY ("id"),
   CONSTRAINT "#__bfstop_knownip_ip_username" UNIQUE ("ipaddress", "username")
 );
+CREATE INDEX IF NOT EXISTS "#__bfstop_knownip_username_lc" ON "#__bfstop_knownip" ("username_lc");
 
 
 CREATE TABLE IF NOT EXISTS "#__bfstop_dnscache" (

@@ -1,4 +1,19 @@
 2.0.0 (unreleased)
+  - Faster failed logins on sites with many accounts and known addresses.
+    Every failed login looked the user name up among the site's accounts
+    with LOWER(username), which reads the whole table of accounts; MySQL and
+    MariaDB now compare the names case-insensitively by their index, as they
+    do at Joomla's own login (PostgreSQL still lowers both sides). Finding
+    out whether the failed logins of an address were against any account is
+    one query, not one for each user name, and a failed login asks only once
+    whether its user name is an account. The known addresses and the unblock
+    links have a lower case column of the user name, computed by the
+    database and indexed, for their case-insensitive lookups - the check of
+    an IPv6 client read the whole table of known addresses
+  - tests/Integration/QueryCountTest.php limits the number of queries a page
+    view, a request of a blocked address and a failed login cause, and
+    tests/performance fills the accounts and known addresses as well, so the
+    cost of the lookups shows
   - Internal: the database access of the plugin is split into one small
     class per table (src/Repository), which take values - an address, a
     username, a time - instead of the SQL fragments, table and column names

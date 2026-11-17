@@ -71,6 +71,9 @@ class UserRepository extends Repository
 		}, array());
 	}
 
+	// how many logins one query looks up (see anyAccountExists())
+	private const LookupChunk = 500;
+
 	/**
 	 * Whether $login is the username or the email address of an existing
 	 * account (Joomla! can be set up to accept either at the login).
@@ -80,17 +83,70 @@ class UserRepository extends Repository
 	 */
 	public function accountExists($login)
 	{
-		return $this->failOpen('accountExists', function () use ($login)
+		return $this->anyAccountExists(array($login));
+	}
+
+	/**
+	 * Whether any of $logins is the username or the email address of an
+	 * existing account: one query for up to LookupChunk of them.
+	 *
+	 * Fail-open: no, as for accountExists().
+	 *
+	 * @param string[] $logins
+	 */
+	public function anyAccountExists(array $logins)
+	{
+		$logins = array_values(array_unique(array_map('strval', $logins)));
+		if (count($logins) === 0)
 		{
-			// LOWER: Joomla treats usernames case-insensitively on login
-			// (MySQL's default collations do, PostgreSQL's don't)
-			$query = $this->db->createQuery()
-				->select('COUNT(*)')
-				->from($this->db->quoteName('#__users'))
-				->where('(LOWER('.$this->db->quoteName('username').') = LOWER(:login1)'.
-					' OR LOWER('.$this->db->quoteName('email').') = LOWER(:login2))');
-			$values = array('login1' => (string) $login, 'login2' => (string) $login);
-			return $this->count($query, $values) > 0;
+			return false;
+		}
+		return $this->failOpen('anyAccountExists', function () use ($logins)
+		{
+			foreach (array_chunk($logins, self::LookupChunk) as $chunk)
+			{
+				if ($this->accountAmong($chunk))
+				{
+					return true;
+				}
+			}
+			return false;
 		}, false);
+	}
+
+	/**
+	 * Whether one of $logins (at most LookupChunk) is the username or email
+	 * address of an account, by the indexes of both columns.
+	 *
+	 * Joomla looks an account up case-insensitively on login. MySQL and
+	 * MariaDB compare the columns that way themselves (their collation,
+	 * utf8mb4_unicode_ci, is the one Joomla creates them with), and, unlike
+	 * LOWER(), by index: with LOWER() every failed login read the whole table
+	 * of accounts. PostgreSQL compares exactly, so there both sides are lowered
+	 * (Joomla has no index on the lowered columns there).
+	 */
+	private function accountAmong(array $logins): bool
+	{
+		$lower = $this->db->getServerType() === 'postgresql';
+		$values = array();
+		$usernames = array();
+		$emails = array();
+		foreach ($logins as $i => $login)
+		{
+			$values['u'.$i] = $login;
+			$values['e'.$i] = $login;
+			$usernames[] = $lower ? 'LOWER(:u'.$i.')' : ':u'.$i;
+			$emails[] = $lower ? 'LOWER(:e'.$i.')' : ':e'.$i;
+		}
+		$username = $this->db->quoteName('username');
+		$email = $this->db->quoteName('email');
+		$condition = $lower
+			? 'LOWER('.$username.') IN ('.implode(', ', $usernames).') OR LOWER('.$email.') IN ('.implode(', ', $emails).')'
+			: $username.' IN ('.implode(', ', $usernames).') OR '.$email.' IN ('.implode(', ', $emails).')';
+		$query = $this->db->createQuery()
+			->select('1')
+			->from($this->db->quoteName('#__users'))
+			->where('('.$condition.')');
+		return $this->scalar($query, $values, 0, 1) !== null;
 	}
 }
