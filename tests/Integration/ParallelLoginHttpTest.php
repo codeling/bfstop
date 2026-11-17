@@ -13,7 +13,7 @@ use Joomla\CMS\Factory;
  * Logins with a wrong password sent all at once, as real HTTP requests to
  * PHP's built-in web server running the Joomla site with several workers:
  * no more of them may get their password checked than attempts are allowed
- * (see Bfstop::awaitLoginTurn()). Like UnblockPageHttpTest, this runs the
+ * (see LoginTurn::await()). Like UnblockPageHttpTest, this runs the
  * plugin as installed in the Joomla site, not the source checkout.
  */
 class ParallelLoginHttpTest extends IntegrationTestCase

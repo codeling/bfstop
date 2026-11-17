@@ -11,29 +11,34 @@ namespace Codeling\Plugin\System\Bfstop\Extension;
 defined('_JEXEC') or die;
 
 use Codeling\Plugin\System\Bfstop\Helper\ApiHelper;
-use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
 use Codeling\Plugin\System\Bfstop\Helper\IpHelper;
-use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Codeling\Plugin\System\Bfstop\Helper\LoggerHelper;
 use Codeling\Plugin\System\Bfstop\Helper\NotifierHelper;
 use Codeling\Plugin\System\Bfstop\Helper\RiskHelper;
 use Codeling\Plugin\System\Bfstop\Helper\TokenHelper;
 use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
-use Codeling\Plugin\System\Bfstop\Repository\BlockRepository;
 use Codeling\Plugin\System\Bfstop\Repository\Repositories;
+use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
 use Codeling\Plugin\System\Bfstop\Service\BlockService;
 use Codeling\Plugin\System\Bfstop\Service\LoginService;
+use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
 use Codeling\Plugin\System\Bfstop\Service\Maintenance;
+use Codeling\Plugin\System\Bfstop\Service\RequestClassifier;
+use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
-use Joomla\CMS\Factory;
-use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\CMSPlugin;
-use Joomla\CMS\Router\Route;
 use Joomla\CMS\Uri\Uri;
 use Joomla\Event\SubscriberInterface;
 
+/**
+ * The plugin: what it does on Joomla's events. What a request is, what to do
+ * about a failed login, what the client is told and the maintenance are the
+ * classes of the Service namespace: RequestClassifier, BlockPolicy (with
+ * BlockService and LoginService doing what it decides), Responder, LoginTurn
+ * and Maintenance.
+ */
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {
 	// the language is loaded by init(), when the plugin handles an event (as
@@ -43,11 +48,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	protected $autoloadLanguage = false;
 	private bool $languageLoaded = false;
 
-	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
-	// users who logged in from the blocked address before, 2 for any address
-	// - which needs the site's $live_site, see effectiveNotifyBlockedUser()
-	public const NotifyBlockedKnownAddress = 1;
-	public const NotifyBlockedAnyAddress = 2;
+	// see BlockPolicy
+	public const NotifyBlockedKnownAddress = BlockPolicy::NotifyBlockedKnownAddress;
+	public const NotifyBlockedAnyAddress = BlockPolicy::NotifyBlockedAnyAddress;
 
 	// the bits of the "enabledForOrigin" setting: the parts of Joomla the
 	// plugin is active for. Joomla's other applications - the installation
@@ -63,18 +66,18 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	);
 
 	/**
-	 * What the settings are while they have not been saved: the same as the
-	 * settings page shows for them (com_bfstop's forms/settings.xml - a test
-	 * compares them). The plugin is enabled by the installation, so it runs
-	 * with these until an administrator opens the settings.
-	 */
-	/**
 	 * Values the plugin keeps among its settings for itself: they are not on
 	 * the settings page, so saving that page must keep them (see com_bfstop's
 	 * SettingsModel).
 	 */
 	public const InternalSettings = array('addressesCanonical', 'lastPurge');
 
+	/**
+	 * What the settings are while they have not been saved: the same as the
+	 * settings page shows for them (com_bfstop's forms/settings.xml - a test
+	 * compares them). The plugin is enabled by the installation, so it runs
+	 * with these until an administrator opens the settings.
+	 */
 	public const DefaultSettings = array(
 		'blockNumber' => 10,
 		'checkInterval' => 10080,
@@ -92,8 +95,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		'riskCommonUsernames' => "admin\nadministrator\nroot\ntest\nwebmaster",
 		// frontend, backend and the Web Services API
 		'enabledForOrigin' => self::OriginFrontend | self::OriginBackend | self::OriginApi,
-		// a delay ties up a PHP worker for its whole length, see delayResponse():
-		// the risk score adds none unless the administrator asks for it
+		// a delay ties up a PHP worker for its whole length, see
+		// Responder::delay(): the risk score adds none unless the
+		// administrator asks for it
 		'riskDelaySecondsPerPoint' => 0,
 		// what an IPv6 client is tracked by, see IpHelper::trackedAddress():
 		// a connection usually gets a /56 (or more), not just a /64, so a /64
@@ -113,12 +117,15 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private LoginService $logins;
 	private BlockService $blocker;
 	private Maintenance $maintenance;
+	private RequestClassifier $request;
+	private BlockPolicy $policy;
+	private Responder $responder;
+	// kept for the whole request, unlike the others: the turn of a login
+	// lasts from its routing to its login event
+	private ?LoginTurn $loginTurn = null;
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
-	// the lock which makes this request the only login of its address being
-	// handled right now, see awaitLoginTurn()
-	private $loginTurn = null;
 
 	public static function getSubscribedEvents(): array
 	{
@@ -131,450 +138,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		);
 	}
 
-	private function getBoolParam($paramName, $default)
-	{
-		return (bool) $this->params->get($paramName, $default);
-	}
-
-	private function getIntParam($paramName, $default)
+	private function intParam($paramName, $default)
 	{
 		return (int) $this->params->get($paramName, $default);
-	}
-
-	private function getStringParam($paramName, $default)
-	{
-		return $this->params->get($paramName, $default);
-	}
-
-	/**
-	 * A request parameter as a string: "option[]=x" and the like give arrays,
-	 * which strcmp() and friends don't take (a TypeError on PHP 8, i.e. an
-	 * error page instead of the intended answer). Such a value is returned as
-	 * a NUL character: not empty - so it doesn't pass for "parameter not
-	 * given" - and not equal to anything the parameter can legitimately be.
-	 */
-	private function requestString($name, $filter = 'cmd')
-	{
-		$value = $this->getApplication()->getInput()->get($name, '', $filter);
-		return is_string($value) ? $value : "\0";
-	}
-
-	private function getUnblockLink($id, $username)
-	{
-		$token = $this->repositories->unblockTokens()->add($id,
-			TokenHelper::getToken($this->logger), $username);
-		return self::unblockLink($token);
-	}
-
-	/**
-	 * The link to the unblock page, which is a page of the site: Uri::root()
-	 * is the site's address in every application (Uri::base() is the
-	 * backend's in the backend, and the API's in the API). Like any address
-	 * Joomla builds, it has the host the request was sent to unless the
-	 * site's $live_site is set.
-	 */
-	public static function unblockLink($token)
-	{
-		return Uri::root().'index.php?option=com_bfstop&view=tokenunblock&token='.rawurlencode((string) $token);
-	}
-
-	private function getPasswordResetLink()
-	{
-		return Route::_('index.php?option=com_users&view=reset');
-	}
-
-	/**
-	 * Blocks the client of $logEntry, if it isn't yet; the decision and the
-	 * new block happen under a lock per tracked address (see blockLocked()),
-	 * the mails after it.
-	 */
-	private function block($logEntry, $duration)
-	{
-		if ($this->getStringParam('blockMode', 'full') === 'off')
-		{
-			return;
-		}
-		$block = $this->withBlockLock($logEntry->ipaddress, function () use ($logEntry, $duration)
-		{
-			return $this->blockLocked($logEntry, $duration);
-		});
-		// the next login of this address sees the block (or the failed logins
-		// counted) now: it needn't wait for the mails, see awaitLoginTurn()
-		$this->endLoginTurn();
-		if ($block !== null)
-		{
-			$this->notifyOfBlock($logEntry, $block['id'], $block['duration'], $block['targetedOtherAccounts']);
-		}
-	}
-
-	// lock files for the block decision, see withBlockLock(): the tracked
-	// addresses are spread over this many, so there is no file per address
-	private const BlockLockStripes = 64;
-
-	/**
-	 * Runs $decision while holding the lock for the tracked address $key.
-	 * Parallel failed logins of one client which all reach the threshold
-	 * would otherwise all find it not blocked yet and each block it: several
-	 * blocks at once - each counted as an earlier offence, so a single burst
-	 * could make the block permanent (maxBlocksBefore), or multiply its
-	 * duration - and a mail for each. If no lock can be taken (no writable
-	 * temporary directory), it runs without one, as before.
-	 */
-	private function withBlockLock($key, callable $decision)
-	{
-		$stripe = hexdec(substr(md5((string) $key), 0, 4)) % self::BlockLockStripes;
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-block-'.
-			LockHelper::siteHash().'-'.$stripe.'.lock';
-		// not for ever: see LockHelper
-		$handle = LockHelper::acquire($lockFile, HtaccessHelper::LockWaitSeconds);
-		if (!$handle)
-		{
-			$this->logger->log('Could not lock '.$lockFile.
-				($handle === null ? ' within '.HtaccessHelper::LockWaitSeconds.' seconds' : '').
-				', blocking without it', Log::WARNING);
-			return $decision();
-		}
-		try
-		{
-			return $decision();
-		}
-		finally
-		{
-			LockHelper::release($handle);
-		}
-	}
-
-	/**
-	 * The part of block() under the lock: whether, how long and how to
-	 * block, and the block itself.
-	 *
-	 * @return array|null id, duration and targetedOtherAccounts of the new
-	 *                    block; null if nothing was blocked
-	 */
-	private function blockLocked($logEntry, $duration)
-	{
-		// a parallel request of the same client may have blocked it while
-		// this one waited for the lock
-		if ($this->repositories->blocks()->isBlocked($this->clientAddress ?? $logEntry->ipaddress))
-		{
-			$this->logger->log('IP '.$logEntry->ipaddress.
-				' is already blocked', Log::INFO);
-			return null;
-		}
-		$maxBlocksBefore = $this->getIntParam('maxBlocksBefore', self::DefaultSettings['maxBlocksBefore']);
-		$progressiveEnabled = $this->getBoolParam('progressiveBlockDuration', false);
-		if ($maxBlocksBefore > 0 || $progressiveEnabled)
-		{
-			$numberOfPrevBlocks = $this->repositories->blocks()->
-				countPrevious($logEntry->ipaddress);
-			$this->logger->log('Number of previous blocks for IP='.
-				$logEntry->ipaddress.': '.$numberOfPrevBlocks,
-				Log::DEBUG);
-			if ($maxBlocksBefore > 0 && $numberOfPrevBlocks >= $maxBlocksBefore)
-			{
-				$this->logger->log('Number of previous blocks '.
-					'exceeds configured maximum, blocking '.
-					'permanently!', Log::INFO);
-				$duration = 0;
-			}
-			elseif ($progressiveEnabled && $duration > 0 && $numberOfPrevBlocks > 0)
-			{
-				// doubles the block duration per repeat offense, capped at
-				// 2^6=64x, mirroring OWASP's doubling-lockout-duration
-				// recommendation
-				$multiplier = 2 ** min($numberOfPrevBlocks, 6);
-				$newDuration = $duration * $multiplier;
-				$this->logger->log('Progressive block duration: '.
-					$numberOfPrevBlocks.' previous block(s), scaling '.
-					'duration '.$duration.' by '.$multiplier.'x to '.
-					$newDuration, Log::INFO);
-				$duration = $newDuration;
-			}
-		}
-		$usehtaccess = $this->getStringParam('blockMode', 'full') === 'htaccess';
-		$htaccessPath = $this->getHtaccessPath();
-		if ($usehtaccess)
-		{
-			// the file only holds what is still blocked
-			$this->removeLiftedHtaccessBlocks();
-		}
-		if ($usehtaccess && IpHelper::overlapsTrustedProxy($logEntry->ipaddress, IpHelper::trustedProxies()))
-		{
-			// the failed logins came through a trusted proxy without a
-			// forwarding header which tells the client (see getAddress()):
-			// in the .htaccess file, this would turn away everybody coming
-			// through the proxy, so it is only blocked in the database
-			$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it is (or contains) a '.
-				'trusted proxy - check that the proxy sends the configured header', Log::ERROR);
-			$usehtaccess = false;
-		}
-		if ($usehtaccess)
-		{
-			// the web server knows nothing of the allow list: a network block
-			// (an IPv6 client is blocked by its /56, see trackedAddress())
-			// would turn away the allowed addresses in it before Joomla runs
-			$allowed = $this->repositories->allowList()->entriesOverlapping($logEntry->ipaddress);
-			if ($allowed === null || count($allowed) > 0)
-			{
-				$this->logger->log('Not blocking '.$logEntry->ipaddress.' through .htaccess: it contains '.
-					($allowed === null ? 'addresses of the allow list (which could not be read)'
-						: 'allowed address(es) '.implode(', ', $allowed)).' - it is only blocked in the database',
-					Log::WARNING);
-				$usehtaccess = false;
-			}
-		}
-		// has to be found out before blocking, which marks these failed logins
-		// as handled
-		$targetedOtherAccounts = $this->getBoolParam('notifyBlockedUser', false) &&
-			$this->logins->hasFailedLoginsForOtherAccounts(
-				$this->getRealDurationFromDBDuration($this->getIntParam('checkInterval', self::DefaultSettings['checkInterval'])),
-				$logEntry->ipaddress, $logEntry->username, $logEntry->logtime);
-		$id = $this->blocker->block($logEntry, $duration, $usehtaccess, $htaccessPath);
-		if ($id < 1)
-		{
-			// nothing is blocked: neither tell the administrators that
-			// something was, nor mail an unblock link for a block which
-			// doesn't exist
-			$this->logger->log('Could not block IP address '.$logEntry->ipaddress.
-				', see the previous errors', Log::ERROR);
-			return null;
-		}
-
-		$this->logger->log('Inserted IP address '.$logEntry->ipaddress.
-			' into block list', Log::INFO);
-		return array('id' => $id, 'duration' => $duration, 'targetedOtherAccounts' => $targetedOtherAccounts);
-	}
-
-	/**
-	 * The mails about the new block $id (after the lock: sending may take a
-	 * while).
-	 */
-	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
-	{
-		// send email notification to admin
-		$this->notifier()->blockedNotifyAdmin($logEntry,
-			$this->getRealDurationFromDBDuration($duration),
-			$this->getIntParam('notifyBlockedNumber', 5));
-		if ($this->getBoolParam('notifyBlockedUser', false))
-		{
-			$userEmail = $this->repositories->users()->emailByUsername($logEntry->username);
-			if ($userEmail != null && $targetedOtherAccounts)
-			{
-				// The link unblocks this IP address, and it goes to the owner
-				// of the account of the last failed login. If the attempts
-				// which got the address blocked also went against other
-				// accounts, whoever caused that could just as well own this
-				// account - and would get to continue with the other
-				// accounts by following the link.
-				$this->logger->log("Existing user '".
-					$logEntry->username."' was blocked, but the failed ".
-					"logins from this address also targeted other accounts - ".
-					"not sending unblock instructions",
-					Log::INFO);
-			}
-			elseif ($userEmail != null && ($withheld = $this->whyNoUnblockMail($logEntry)) !== null)
-			{
-				$this->logger->log("Existing user '".$logEntry->username.
-					"' was blocked, but ".$withheld." - not sending unblock instructions",
-					Log::INFO);
-			}
-			elseif ($userEmail != null)
-			{
-				$this->logger->log("Existing user '".
-					$logEntry->username.
-					"' was blocked, sending unblock ".
-					"instructions",
-					Log::INFO);
-				$this->notifier()->sendUnblockMail($userEmail,
-					$this->getUnblockLink($id, $logEntry->username));
-			}
-			else
-			{
-				$this->logger->log('Unknown user ('.
-					$logEntry->username.
-					') blocked, not sending any '.
-					'notifications', Log::DEBUG);
-			}
-		}
-	}
-
-	/**
-	 * Anybody can make the plugin send an unblock email to a user: by failing
-	 * to log in with that username from an IP address until it is blocked.
-	 * No email is sent without the site's address, see
-	 * effectiveNotifyBlockedUser(). To keep it from being used to flood
-	 * somebody's inbox:
-	 *
-	 * - by default (mode 1) the email is only sent if the user has logged in
-	 *   from the blocked IP address before - which is where somebody
-	 *   locking themselves out comes from, but never an attacker's address;
-	 * - if it is to go to any address (mode 2), at most one email which can
-	 *   still be used is out for a user at any time.
-	 *
-	 * @return string|null why no email is sent, null if it may be
-	 */
-	private function whyNoUnblockMail($logEntry)
-	{
-		$setting = $this->getIntParam('notifyBlockedUser', 0);
-		$mode = self::effectiveNotifyBlockedUser($setting, self::hasLiveSite());
-		if ($mode === 0)
-		{
-			$this->logger->log('Unblock links need the site\'s address ($live_site in configuration.php): '.
-				'without it, the link would have the host the request of the failed login named', Log::WARNING);
-			return 'the site\'s address ($live_site) is not set';
-		}
-		if ($mode === self::NotifyBlockedAnyAddress)
-		{
-			return $this->repositories->unblockTokens()->hasCurrentFor($logEntry->username)
-				? 'there already is an unblock link for this user which can be used'
-				: null;
-		}
-		return $this->repositories->knownIps()->hasLoggedInFrom($this->clientAddress ?? $logEntry->ipaddress,
-			$logEntry->username, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))
-			? null
-			: 'the user has never logged in from this IP address';
-	}
-
-	/**
-	 * Whether the site's address is configured ($live_site in
-	 * configuration.php). Without it, Joomla builds every address it links to
-	 * - also Uri::root(), and so the unblock link - from the host the request
-	 * names, which is whatever the client sent.
-	 */
-	public static function hasLiveSite()
-	{
-		return trim((string) Factory::getApplication()->get('live_site', '')) !== '';
-	}
-
-	/**
-	 * The "notifyBlockedUser" setting as it is applied. The unblock email is
-	 * prepared in the request of the failed login which got the address
-	 * blocked, so the link in it has the host that request named, unless
-	 * $live_site is set - and whoever sends that request picks the host. Mode
-	 * 1 doesn't make that request trustworthy: it only says that the user has
-	 * logged in from the address before, and clients are tracked by their
-	 * network (an IPv6 /56, see IpHelper::trackedAddress()) behind which there
-	 * may be many other people (a NAT, an office, a campus). Any of them could
-	 * get a real mail of the site sent to the user with a link to their own
-	 * server (phishing; and mail scanners open every link, handing them the
-	 * token). So without $live_site, no unblock link is sent at all. The
-	 * settings page doesn't take modes 1 and 2 without $live_site; this covers
-	 * a setting saved before, or $live_site removed later.
-	 */
-	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
-	{
-		$setting = (int) $setting;
-		return $hasLiveSite ? $setting : 0;
-	}
-
-	private function getHtaccessPath()
-	{
-		return HtaccessHelper::resolvePath($this->getStringParam('htaccessPath', ''));
-	}
-
-	/**
-	 * With blocking through .htaccess the web server holds back a blocked
-	 * address; it doesn't know that a block has run out or was lifted, see
-	 * HtaccessHelper::removeLiftedBlocks().
-	 */
-	private function removeLiftedHtaccessBlocks()
-	{
-		(new HtaccessHelper($this->getHtaccessPath(), $this->logger))->removeLiftedBlocks($this->repositories->blocks());
-	}
-
-	private function getRealDurationFromDBDuration($duration)
-	{
-		return ($duration <= 0)
-			? BlockRepository::UnlimitedDuration
-			: $duration;
-	}
-
-	/**
-	 * The number of failed attempts allowed from a single IP before it gets
-	 * blocked, adjusted by the per-attempt risk score (issue #76): a
-	 * trusted-looking attempt (negative score) gets a higher threshold, a
-	 * suspicious-looking one (positive score) a lower one. Floored at
-	 * riskMinBlockNumber so an extreme score can never reduce this to
-	 * 0-or-below and effectively instant-block a legitimate user.
-	 */
-	private function determineEffectiveBlockNumber($riskScore)
-	{
-		$blockNumber = $this->getIntParam('blockNumber', self::DefaultSettings['blockNumber']);
-		$reductionPerPoint = $this->getIntParam('riskBlockNumberReductionPerPoint', 1);
-		$minBlockNumber = $this->getIntParam('riskMinBlockNumber', 2);
-		$effective = (int) round($blockNumber - $riskScore * $reductionPerPoint);
-		return max($minBlockNumber, $effective);
-	}
-
-	private function blockIfTooManyAttempts($logEntry, $riskScore = 0)
-	{
-		$blockInterval = $this->getIntParam('blockDuration', NotifierHelper::$ONE_DAY);
-		$maxNumber = $this->determineEffectiveBlockNumber($riskScore);
-		$checkInterval = $this->getRealDurationFromDBDuration(
-			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
-		if ($this->repositories->failedLogins()->countUnhandledFromAddress(
-			$checkInterval,
-			$logEntry->ipaddress,
-			$logEntry->logtime) < $maxNumber)
-		{
-			return;
-		}
-		$this->block($logEntry, $blockInterval);
-	}
-
-	/**
-	 * Account-level throttle: once a username has accumulated enough failed
-	 * attempts *from any source IP combined* within the configured window,
-	 * every further failed attempt for that username gets an extra forced
-	 * delay. Unlike blockIfTooManyAttempts() (which is scoped to a single
-	 * IP), this catches an attacker who distributes attempts against one
-	 * target account across many different IPs - a distributed attack no
-	 * per-IP threshold can ever detect on its own. The account itself is
-	 * never locked - only wrong attempts get progressively expensive, so a
-	 * correct password still logs the real owner in immediately.
-	 *
-	 * @return int the seconds to delay the response by
-	 */
-	private function accountThrottleDelay($logEntry)
-	{
-		if (!$this->getBoolParam('accountThrottleEnabled', true))
-		{
-			return 0;
-		}
-		$checkInterval = $this->getIntParam('accountCheckInterval', 60);
-		$accountBlockNumber = $this->getIntParam('accountBlockNumber', 20);
-		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledForUsername(
-			$checkInterval, $logEntry->username, $logEntry->logtime);
-		if ($numberOfFailedLogins < $accountBlockNumber)
-		{
-			return 0;
-		}
-		$throttleDelay = max(0, $this->getIntParam('accountThrottleDelay', 5));
-		if ($throttleDelay > 0)
-		{
-			$this->logger->log('Account-level throttle triggered for username \''.
-				$logEntry->username.'\' ('.$numberOfFailedLogins.
-				' failed attempts across all IPs within '.$checkInterval.
-				' minutes), adding '.$throttleDelay.'s delay', Log::INFO);
-		}
-		return $throttleDelay;
-	}
-
-	/**
-	 * The name of the application of a request, as the log and mails show it:
-	 * the client id site 0, administrator 1, api 3.
-	 */
-	public static function originName($clientId)
-	{
-		switch ((int) $clientId)
-		{
-			case 0:
-				return 'Frontend';
-			case 3:
-				return 'API';
-			default:
-				return 'Backend';
-		}
 	}
 
 	private function init()
@@ -583,12 +149,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			$this->languageLoaded = $this->loadLanguage();
 		}
-		$this->logger = new LoggerHelper($this->getIntParam('logLevel', self::DefaultSettings['logLevel']),
-			LoggerHelper::maxBytesFromMegabytes($this->getIntParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
+		$app = $this->getApplication();
+		$this->logger = new LoggerHelper($this->intParam('logLevel', self::DefaultSettings['logLevel']),
+			LoggerHelper::maxBytesFromMegabytes($this->intParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
 		$this->repositories = new Repositories($this->logger);
 		$this->logins = new LoginService($this->repositories);
 		$this->blocker = new BlockService($this->repositories);
 		$this->maintenance = new Maintenance($this->repositories);
+		$this->request = new RequestClassifier($app);
+		$this->policy = new BlockPolicy($this->params, $this->repositories, $this->logins, $this->logger);
+		$this->responder = new Responder($app, $this->params, $this->logger);
+		$this->loginTurn ??= new LoginTurn();
 		$this->notifier = null;
 		$this->accounts = array();
 	}
@@ -609,57 +180,51 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			$this->notifier = new NotifierHelper($this->logger, $this->repositories,
 				$this->params->get('emailaddress', ''),
-				$this->getIntParam('userID', -1),
-				$this->getIntParam('userGroup', -1),
-				$this->getBoolParam('groupNotificationEnabled', false));
+				$this->intParam('userID', -1),
+				$this->intParam('userGroup', -1),
+				(bool) $this->params->get('groupNotificationEnabled', false));
 		}
 		return $this->notifier;
 	}
 
-	private function notifyOfRemainingAttempts($logEntry, $riskScore = 0)
+	/**
+	 * The link to the unblock page, which is a page of the site: Uri::root()
+	 * is the site's address in every application (Uri::base() is the
+	 * backend's in the backend, and the API's in the API). Like any address
+	 * Joomla builds, it has the host the request was sent to unless the
+	 * site's $live_site is set.
+	 */
+	public static function unblockLink($token)
 	{
-		// remaining attempts notification only makes sense if we
-		// actually block
-		$notifyRemaining = $this->getBoolParam('notifyRemainingAttempts', false);
-		$passwordReminder = $this->getIntParam('notifyUsePasswordReminder', self::DefaultSettings['notifyUsePasswordReminder']);
-		if ($this->getStringParam('blockMode', 'full') === 'off' ||
-			(!$notifyRemaining &&
-			  !($passwordReminder == -1 || $passwordReminder > 0)) ||
-			// an API client gets no messages shown
-			$this->isApiRequest())
+		return Uri::root().'index.php?option=com_bfstop&view=tokenunblock&token='.rawurlencode((string) $token);
+	}
+
+	/** See BlockPolicy::hasLiveSite() (used by com_bfstop). */
+	public static function hasLiveSite()
+	{
+		return BlockPolicy::hasLiveSite();
+	}
+
+	/** See BlockPolicy::effectiveNotifyBlockedUser() (used by com_bfstop). */
+	public static function effectiveNotifyBlockedUser($setting, $hasLiveSite)
+	{
+		return BlockPolicy::effectiveNotifyBlockedUser($setting, $hasLiveSite);
+	}
+
+	/**
+	 * The name of the application of a request, as the log and mails show it:
+	 * the client id site 0, administrator 1, api 3.
+	 */
+	public static function originName($clientId)
+	{
+		switch ((int) $clientId)
 		{
-			// avoid database access if reminders are disabled anyway
-			return;
-		}
-		$allowedAttempts = $this->determineEffectiveBlockNumber($riskScore);
-		$checkInterval = $this->getRealDurationFromDBDuration(
-			$this->getIntParam('checkInterval', self::DefaultSettings['checkInterval']));
-		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledFromAddress(
-			$checkInterval,
-			$logEntry->ipaddress, $logEntry->logtime);
-		$attemptsLeft = $allowedAttempts - $numberOfFailedLogins;
-		$this->logger->log("Failed logins: $numberOfFailedLogins; ".
-			"allowed: $allowedAttempts", Log::DEBUG);
-		if ($attemptsLeft < 0)
-		{
-			$this->logger->log('Remaining attempts below zero ('.
-				$attemptsLeft.'), that should not happen. ',
-				Log::ERROR);
-			return;
-		}
-		$app = $this->getApplication();
-		if ($notifyRemaining && $attemptsLeft > 0)
-		{
-			$app->enqueueMessage(Text::sprintf(
-				"PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT", $attemptsLeft),
-				'warning');
-		}
-		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
-		{
-			$resetLink = $this->getPasswordResetLink();
-			$app->enqueueMessage(Text::sprintf(
-				"PLG_SYSTEM_BFSTOP_PASSWORD_RESET_RECOMMENDED",
-				$resetLink), 'warning');
+			case 0:
+				return 'Frontend';
+			case 3:
+				return 'API';
+			default:
+				return 'Backend';
 		}
 	}
 
@@ -714,66 +279,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		return false;
 	}
 
-	private function isApiRequest()
-	{
-		return $this->getApplication()->isClient('api');
-	}
-
-	/**
-	 * The global-attack-volume-based delay (unchanged), plus an additional
-	 * delay proportional to the per-attempt risk score (issue #76) - the two
-	 * are independent, orthogonal mechanisms; only a positive (suspicious)
-	 * score adds delay, a trust bonus never reduces it below the base.
-	 */
-	private function determineDelayDuration($riskScore = 0)
-	{
-		$baseDelay = $this->determineBaseDelayDuration();
-		$riskDelaySecondsPerPoint = $this->getIntParam('riskDelaySecondsPerPoint', self::DefaultSettings['riskDelaySecondsPerPoint']);
-		return $baseDelay + max(0, $riskScore) * $riskDelaySecondsPerPoint;
-	}
-
-	private function determineBaseDelayDuration()
-	{
-		$delayDuration = $this->getIntParam('delayDuration', 0);
-		$adaptive = $this->getBoolParam('adaptiveDelay', false);
-		if ($adaptive)
-		{
-			$maxDelay = $this->getIntParam('adaptiveDelayMax', self::DefaultSettings['adaptiveDelayMax']);
-			$lowThreshold = $this->getIntParam('adaptiveDelayThresholdMin', self::DefaultSettings['adaptiveDelayThresholdMin']);
-			$highThreshold = $this->getIntParam('adaptiveDelayThresholdMax', self::DefaultSettings['adaptiveDelayThresholdMax']);
-			if ($lowThreshold > $highThreshold)
-			{
-				$tmp = $lowThreshold;
-				$lowThreshold = $highThreshold;
-				$highThreshold = $tmp;
-				$this->logger->log('Lower threshold is configured to a smaller value than higher threshold!'.
-					' Please correct! Swapping the values for now!',
-					Log::WARNING);
-			}
-			if ($lowThreshold == $highThreshold)
-			{
-				$this->logger->log('Lower and higher threshold cannot be configured to the same value!'.
-					' Either disable adaptive delay and use the delay duration instead, or'.
-					' set the thresholds to reasonable values! Using delay duration for now',
-					Log::WARNING);
-				return $delayDuration;
-			}
-
-			$recentFailed = $this->repositories->failedLogins()->countInLastHour();
-			$recentFailed = min($recentFailed, $highThreshold);
-			if ($recentFailed > $lowThreshold)
-			{
-				return $delayDuration + ($recentFailed - $lowThreshold)
-					* ($maxDelay - $delayDuration)
-					/ ($highThreshold - $lowThreshold);
-			}
-		}
-		return $delayDuration;
-	}
-
 	private function trackedAddress($ipAddress)
 	{
-		return IpHelper::trackedAddress($ipAddress, $this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']));
+		return IpHelper::trackedAddress($ipAddress, $this->intParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']));
 	}
 
 	/**
@@ -782,7 +290,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function usernameForStorage($username)
 	{
-		$mode = $this->getStringParam('unknownUsernameMode', UsernameHelper::ModeHash);
+		$mode = (string) $this->params->get('unknownUsernameMode', UsernameHelper::ModeHash);
 		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
 			($this->isAccount($username) ||
 				RiskHelper::isCommonUsername($this->params, $username));
@@ -810,7 +318,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$username = (string) ($user['username'] ?? '');
-		if ($this->isApiRequest() && $username === '')
+		if ($this->request->isApi() && $username === '')
 		{
 			// Joomla tries to log in every API request to an endpoint which
 			// isn't public, also one which comes without any credentials:
@@ -851,29 +359,36 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$riskScore = RiskHelper::computeScore($this->repositories, $this->logger, $this->params, $ipAddress, $username,
 			$logEntry->ipaddress);
 
-		$this->notifyOfRemainingAttempts($logEntry, $riskScore);
+		// remaining attempts notification only makes sense if we actually
+		// block (and the count needs a query, which is saved otherwise)
+		if (!$this->policy->isOff() && $this->responder->showsRemainingAttempts())
+		{
+			$this->responder->showRemainingAttempts($this->policy->attemptsLeft($logEntry, $riskScore));
+		}
 
-		$this->blockIfTooManyAttempts($logEntry, $riskScore);
+		if ($this->policy->isTooManyAttempts($logEntry, $riskScore))
+		{
+			$this->block($logEntry);
+		}
 		// counted, and blocked if that was one too many: the next login of
-		// this address may be handled (see awaitLoginTurn()). The mail below
-		// and the delay take time it needn't wait for
-		$this->endLoginTurn();
+		// this address may be handled (see LoginTurn). The mail below and the
+		// delay take time it needn't wait for
+		$this->loginTurn->end();
 
 		// $username is what was typed; the entry only holds a hash of it if
 		// it isn't an account (see usernameForStorage())
-		if ($this->getBoolParam('notifyFailedOnlyExisting', false) &&
+		if ((bool) $this->params->get('notifyFailedOnlyExisting', false) &&
 			!$this->isAccount($username))
 		{
 			$this->logger->log('Not notifying of failed login: the username does not belong to an account', Log::DEBUG);
 		}
 		else
 		{
-			$maxNumber = $this->getIntParam('notifyFailedNumber', 0);
-			$this->notifier()->failedLogin($logEntry, $maxNumber);
+			$this->notifier()->failedLogin($logEntry, $this->intParam('notifyFailedNumber', 0));
 		}
 
-		$delayDuration = $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
-		if ($delayDuration > 0)
+		$delay = $this->policy->delaySeconds($logEntry, $riskScore);
+		if ($delay > 0)
 		{
 			// a blocked address gets nothing more out of a slow response;
 			// don't let it hold on to a worker (attackers could otherwise use
@@ -885,115 +400,66 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 			else
 			{
-				$seconds = self::cappedDelay($delayDuration);
-				if ($seconds < (int) round($delayDuration))
-				{
-					$this->logger->log('Delay of '.round($delayDuration).'s cut to '.
-						$seconds.'s', Log::WARNING);
-				}
-				$this->delayResponse($seconds);
+				$this->responder->delay($delay);
 			}
 		}
 	}
 
 	/**
-	 * Every second of delay occupies a PHP worker, which is what an attacker
-	 * with many addresses would like to run out of - so however the delays of
-	 * the settings add up, one response is never held back longer than this.
+	 * Blocks the client of $logEntry, if it isn't yet; the decision and the
+	 * new block happen under a lock per tracked address (see
+	 * BlockService::withLock()), the mails after it.
 	 */
-	public const MaxDelaySeconds = 60;
-
-	public static function cappedDelay($seconds)
+	private function block($logEntry)
 	{
-		return max(0, min((int) round($seconds), self::MaxDelaySeconds));
+		$block = $this->blocker->withLock($logEntry->ipaddress, function () use ($logEntry)
+		{
+			return $this->blocker->blockAsDecided($logEntry, $this->clientAddress, $this->policy);
+		});
+		// the next login of this address sees the block (or the failed logins
+		// counted) now: it needn't wait for the mails, see LoginTurn
+		$this->loginTurn->end();
+		if ($block !== null)
+		{
+			$this->notifyOfBlock($logEntry, $block['id'], $block['duration'], $block['targetedOtherAccounts']);
+		}
 	}
 
 	/**
-	 * The files of the slots for delayed responses (see delayResponse()), one
-	 * set per site (database), as the temporary directory may be shared.
-	 *
-	 * @return string[]
+	 * The mails about the new block $id (after the lock: sending may take a
+	 * while).
 	 */
-	public static function delaySlotFiles($count)
+	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
 	{
-		$site = LockHelper::siteHash();
-		$files = array();
-		for ($i = 0; $i < max(1, (int) $count); ++$i)
+		$this->notifier()->blockedNotifyAdmin($logEntry, BlockPolicy::realDuration($duration),
+			$this->intParam('notifyBlockedNumber', 5));
+		if (!$this->policy->notifiesBlockedUser())
 		{
-			$files[] = HtaccessHelper::lockDirectory().'/bfstop-delay-'.$site.'-'.$i.'.lock';
+			return;
 		}
-		return $files;
-	}
-
-	/**
-	 * Holds back the response by $seconds - if fewer than
-	 * "delayMaxConcurrent" responses are being held back right now.
-	 *
-	 * A delay only slows down whoever waits for one answer before sending the
-	 * next request; for the whole time, it occupies a PHP worker, of which a
-	 * server has only so many. An attacker with many addresses (an IPv6
-	 * network gives plenty) sends failed logins in parallel instead, each of
-	 * them sleeping in a worker of its own, until there are none left for
-	 * anybody else. So a delayed response takes one of a fixed number of
-	 * slots - an exclusive lock on one of delaySlotFiles(), which the
-	 * operating system releases however the request ends - and if none is
-	 * free, the response goes out at once. The failed login has been counted
-	 * by then (see onUserLoginFailure()), so blocking is not affected.
-	 *
-	 * Not answering at all wouldn't help: PHP can't keep a connection open
-	 * without a worker, and a connection which is closed at once tells the
-	 * client just as quickly that the login failed. Holding connections open
-	 * cheaply is something only the web server or a proxy in front of it can
-	 * do (e.g. nginx's limit_req).
-	 *
-	 * @return bool whether the response was delayed
-	 */
-	private function delayResponse($seconds)
-	{
-		if ($seconds <= 0)
+		$userEmail = $this->repositories->users()->emailByUsername($logEntry->username);
+		if ($userEmail == null)
 		{
-			return false;
+			$this->logger->log('Unknown user ('.$logEntry->username.') blocked, not sending any notifications', Log::DEBUG);
+			return;
 		}
-		$maxConcurrent = max(1, $this->getIntParam('delayMaxConcurrent', self::DefaultSettings['delayMaxConcurrent']));
-		$opened = false;
-		foreach (self::delaySlotFiles($maxConcurrent) as $file)
+		$withheld = $this->policy->whyNoUnblockMail($logEntry, $this->clientAddress, $targetedOtherAccounts);
+		if ($withheld !== null)
 		{
-			$handle = @fopen($file, 'c');
-			if ($handle === false)
-			{
-				continue;
-			}
-			$opened = true;
-			if (!flock($handle, LOCK_EX | LOCK_NB))
-			{
-				fclose($handle);
-				continue;
-			}
-			try
-			{
-				sleep($seconds);
-			}
-			finally
-			{
-				flock($handle, LOCK_UN);
-				fclose($handle);
-			}
-			return true;
+			$this->logger->log("Existing user '".$logEntry->username."' was blocked, but ".$withheld.
+				' - not sending unblock instructions', Log::INFO);
+			return;
 		}
-		// without a way to count the delayed responses, there is no limit:
-		// not delaying is what keeps the server available
-		$this->logger->log($opened
-			? 'Not delaying the response: '.$maxConcurrent.' response(s) are being delayed already'
-			: 'Not delaying the response: could not create the lock files in '.HtaccessHelper::lockDirectory(),
-			$opened ? Log::INFO : Log::WARNING);
-		return false;
+		$this->logger->log("Existing user '".$logEntry->username."' was blocked, sending unblock instructions", Log::INFO);
+		$token = $this->repositories->unblockTokens()->add($id, TokenHelper::getToken($this->logger), $logEntry->username);
+		$this->notifier()->sendUnblockMail($userEmail, self::unblockLink($token));
 	}
 
 	public function onUserLogin(LoginEvent $event)
 	{
 		$user = $event->getAuthenticationResponse();
 		// nothing to count: the next login of this address may be handled
-		$this->endLoginTurn();
+		$this->loginTurn?->end();
 		$this->init();
 		if (!$this->isEnabledForCurrentOrigin())
 		{
@@ -1006,285 +472,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			' from IP address '.$info->ipaddress, Log::DEBUG);
 		$this->logins->recordSuccessfulLogin($info, $this->trackedAddress($info->ipaddress),
 			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
-				$this->getIntParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))));
-	}
-
-	/**
-	 * A blocked IP may only reach com_bfstop's unblock page, and only with an
-	 * unexpired token that was issued for one of *its own* blocks. The pass
-	 * has to stay this narrow: the request is the one that consumes the token,
-	 * so it must really be the unblock view (no task, no other component).
-	 * Letting any request with view=tokenunblock through would turn a single
-	 * valid token - which the owner of any account can get emailed by getting
-	 * themselves blocked - into a reusable key around the block for logins
-	 * (e.g. option=com_users&task=user.login&view=tokenunblock&token=...).
-	 */
-	private function isUnblockRequest($blockIds)
-	{
-		// tokenunblock is a view of the site; in the backend, the request of
-		// a guest would go to com_login (see requestedOption())
-		if (!$this->getApplication()->isClient('site') ||
-			strcmp($this->requestString('option'), 'com_bfstop') != 0 ||
-			strcmp($this->requestString('view'), 'tokenunblock') != 0 ||
-			$this->requestString('task') !== '')
-		{
-			return false;
-		}
-		$token = $this->requestString('token', 'string');
-		$result = $this->repositories->unblockTokens()->validForBlocks($token, $blockIds);
-		if ($result)
-		{
-			// deliberately not logging the token: it is a bearer secret and
-			// the log is readable in the backend
-			$this->logger->log('Seeing a valid unblock token for this IP '.
-				'address, letting the request pass through to com_bfstop',
-				Log::INFO);
-		}
-		return $result;
-	}
-
-	/**
-	 * The controller and the method of it which Joomla's component dispatcher
-	 * runs for this request, in lower case, as it determines them
-	 * (ComponentDispatcher::dispatch(), BaseController::execute()): "task" is
-	 * either "controller.method" - anything after a second dot is ignored - or
-	 * just the method, with the controller from the "controller" parameter;
-	 * the method's case doesn't matter. Both are '' if there is no task (which
-	 * shows a view). Checks of the task have to go by this, not by the raw
-	 * parameter, or "task=user.LOGIN" or "task=user.login.x" would not be
-	 * recognised as the login they are.
-	 *
-	 * @return string[] array(controller, method)
-	 */
-	private function requestedTask()
-	{
-		$task = strtolower($this->requestString('task'));
-		if ($task === '')
-		{
-			return array('', '');
-		}
-		if (strpos($task, '.') !== false)
-		{
-			$parts = explode('.', $task);
-			return array($parts[0], $parts[1]);
-		}
-		$controller = strtolower($this->requestString('controller'));
-		return array($controller === '' ? 'display' : $controller, $task);
-	}
-
-	// the components the backend runs for a guest (or a user who may not log in
-	// there) as requested; every other request goes to com_login, see
-	// AdministratorApplication::$allowedUnprivilegedOptions
-	private const UnprivilegedBackendOptions = array('com_login', 'com_ajax');
-
-	/**
-	 * The component Joomla runs for this request, in lower case. Usually the
-	 * "option" parameter, but not in the backend: there,
-	 * AdministratorApplication::findOption() - called when the request is
-	 * dispatched, after onAfterRoute - runs com_login for a guest, whatever
-	 * else the request names, and com_cpanel if it names nothing. Checks of
-	 * the component have to go by that, or a login posted to the backend
-	 * with "option" left out (or set to any other component) would not be
-	 * recognised as the login it is.
-	 */
-	private function requestedOption()
-	{
-		$option = strtolower($this->requestString('option'));
-		$app = $this->getApplication();
-		if (!$app->isClient('administrator'))
-		{
-			return $option;
-		}
-		$user = $app->getIdentity();
-		if (($user === null || $user->guest || !$user->authorise('core.login.admin')) &&
-			!in_array($option, self::UnprivilegedBackendOptions, true))
-		{
-			return 'com_login';
-		}
-		return $option === '' ? 'com_cpanel' : $option;
-	}
-
-	// the tasks of com_users (controller.method) with which a user who forgot
-	// their password or username gets a new one: the forms of the reset and
-	// remind views post to them (index.php?task=reset.request, ...)
-	private const PasswordRecoveryTasks = array(
-		'reset.request',
-		'reset.confirm',
-		'reset.complete',
-		'remind.remind',
-		'user.remind',
-	);
-
-	/**
-	 * Password reset / username reminder must stay reachable even for a
-	 * blocked IP - otherwise a legitimate user who got blocked (and is told
-	 * by this very plugin to use password reset, see
-	 * notifyOfRemainingAttempts()) would have no way to actually act on
-	 * that advice, turning the block itself into a denial-of-service
-	 * against them (see OWASP Authentication Cheat Sheet guidance on
-	 * lockouts).
-	 *
-	 * That is: showing the reset and remind views, and submitting their
-	 * forms - nothing else. In particular not any task with view=reset: the
-	 * task is what Joomla runs, the view is ignored then, so that would let a
-	 * blocked IP log in (option=com_users&view=reset&task=user.login).
-	 */
-	private function isPasswordRecoveryRequest()
-	{
-		if ($this->requestedOption() !== 'com_users')
-		{
-			return false;
-		}
-		list($controller, $method) = $this->requestedTask();
-		if ($method === '' || ($controller === 'display' && $method === 'display'))
-		{
-			$view = strtolower($this->requestString('view'));
-			$result = ($view === 'reset' || $view === 'remind');
-			$what = 'view '.$view;
-		}
-		else
-		{
-			$result = in_array($controller.'.'.$method, self::PasswordRecoveryTasks, true);
-			$what = 'task '.$controller.'.'.$method;
-		}
-		if ($result)
-		{
-			$this->logger->log('Allowing blocked IP through to the '.
-				'password recovery ('.$what.'), so a blocked '.
-				'legitimate user can still recover their account',
-				Log::INFO);
-		}
-		return $result;
-	}
-
-	/**
-	 * Detects a request that actually submits login credentials, for
-	 * "Login Only" block mode (issue #187): on the frontend, credentials
-	 * are submitted to com_users (task=user.login), the backend login form
-	 * posts to com_login (task=login) - merely viewing the login form (no
-	 * task, or a display task) doesn't match, so it stays reachable.
-	 *
-	 * The task is compared as Joomla's dispatcher runs it (see
-	 * requestedTask()): the login method of whatever controller, in any case
-	 * - "task=user.LOGIN", "task=user.login.x" and
-	 * "controller=user&task=login" are all logins. Matching more than
-	 * Joomla would run only blocks a request which wouldn't do anything.
-	 * The same goes for the component (see requestedOption()): a backend
-	 * login without "option=com_login" is a login all the same.
-	 */
-	private function isLoginAttemptRequest()
-	{
-		if ($this->isApiRequest())
-		{
-			// an API request carries its credentials with it, each one with
-			// them is a login (see ApiHelper)
-			return ApiHelper::requestCredentialsUsername() !== null;
-		}
-		$option = $this->requestedOption();
-		list(, $method) = $this->requestedTask();
-		$result = ($option === 'com_users' || $option === 'com_login') && $method === 'login';
-		if ($result)
-		{
-			$this->logger->log('Detected a login-attempt request (task='.
-				$this->requestString('task').')', Log::DEBUG);
-		}
-		return $result;
-	}
-
-	/**
-	 * Whether the request submits a username and a password - what can be
-	 * guessed: a login as isLoginAttemptRequest() recognises it, but of the
-	 * API requests only those with HTTP Basic credentials, not those with a
-	 * token (a long random value, and what nearly every API request carries).
-	 */
-	private function isPasswordLoginRequest()
-	{
-		return $this->isApiRequest()
-			? ApiHelper::requestCredentialsArePassword()
-			: $this->isLoginAttemptRequest();
-	}
-
-	// the lock files of awaitLoginTurn(): an address always gets the same one.
-	// Addresses which share a file wait for each other's logins too (each at
-	// most LoginTurnWaitSeconds), so when many addresses log in at once - an
-	// attack from many - the more files, the less often a user's login waits
-	// for one of them: with 100 such addresses about 1 in 11 does, with 64
-	// files 4 in 5. Each file is empty; it is created when first used and
-	// kept (deleting a lock file which others may be waiting for is unsafe)
-	public const LoginTurnSlots = 1024;
-
-	// how long a login waits for those of its address before it; if they are
-	// not done by then, it is handled alongside them
-	public const LoginTurnWaitSeconds = 5;
-
-	/**
-	 * The lock file for the logins of a client, by the key it is tracked
-	 * under (IpHelper::trackedAddress()), one set of files per site (see
-	 * delaySlotFiles()). A fixed number of files, not one per address: a
-	 * visitor with many addresses must not be able to fill the directory.
-	 * Which one an address gets depends on the site's secret, so nobody can
-	 * pick addresses which share the file of somebody else's.
-	 */
-	public static function loginTurnFile($trackedAddress)
-	{
-		$app = Factory::getApplication();
-		$site = LockHelper::siteHash();
-		$slot = hexdec(substr(hash_hmac('sha256', (string) $trackedAddress, (string) $app->get('secret', '')), 0, 7))
-			% self::LoginTurnSlots;
-		return HtaccessHelper::lockDirectory().'/bfstop-login-'.$site.'-'.$slot.'.lock';
-	}
-
-	/**
-	 * Lets the logins of one address be handled one after the other.
-	 *
-	 * A failed login is only known - and counted - once Joomla has checked
-	 * the password, long after this request was let through as not blocked.
-	 * Logins sent at the same time would therefore all be let through and
-	 * all get their password checked, however few attempts are allowed: as
-	 * many as the server handles in parallel, with every burst. So a request
-	 * which submits a password waits here until the one before it from the
-	 * same address has been counted (onUserLoginFailure()) or has succeeded
-	 * (onUserLogin()) - or has ended otherwise, the operating system
-	 * releases the lock then. After that, the caller looks at the block list
-	 * again.
-	 *
-	 * The wait is limited (LoginTurnWaitSeconds), and without a lock file
-	 * (no writable temporary directory) there is none: the login is handled
-	 * as before then, it must never become impossible to log in.
-	 *
-	 * @return bool whether the block list has to be looked at again
-	 */
-	private function awaitLoginTurn($ipAddress)
-	{
-		if ($this->loginTurn !== null)
-		{
-			return false;
-		}
-		$file = self::loginTurnFile($this->trackedAddress($ipAddress));
-		$handle = LockHelper::acquire($file, self::LoginTurnWaitSeconds);
-		if ($handle === false)
-		{
-			$this->logger->log('Could not create the lock file '.$file.
-				': logins from the same address are not handled one at a time', Log::WARNING);
-			return false;
-		}
-		if ($handle === null)
-		{
-			$this->logger->log('Login from '.$ipAddress.' waited '.self::LoginTurnWaitSeconds.
-				's for other logins from this address, handling it alongside them', Log::INFO);
-			return true;
-		}
-		$this->loginTurn = $handle;
-		return true;
-	}
-
-	private function endLoginTurn()
-	{
-		if ($this->loginTurn !== null)
-		{
-			LockHelper::release($this->loginTurn);
-			$this->loginTurn = null;
-		}
+				$this->intParam('ipv6PrefixLength', self::DefaultSettings['ipv6PrefixLength']))));
 	}
 
 	public function onAfterInitialise($event)
@@ -1294,149 +482,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		// lookups of the block and allow list need the addresses in canonical
-		// form, which entries of earlier versions are not in: once, before the
-		// first lookup of this version (every request has one, later). The
-		// installer script can't do this reliably - the class of the previous
-		// version may be loaded still
-		if (!$this->getBoolParam('addressesCanonical', false))
-		{
-			$this->canonicalizeStoredAddressesOnce();
-		}
-		// periodic maintenance, at most once a day
-		$purgeInterval = 86400; // = 24*60*60 => one day
-		$lastPurge = $this->params->get('lastPurge', 0);
-		$now = time();
-		if ($now > ($lastPurge + $purgeInterval))
-		{
-			// before the purge, which deletes the blocks that ran out long
-			// ago: without them, their entries couldn't be told from those
-			// added by hand
-			$this->tidyHtaccess();
-			$purgeAge = $this->getIntParam('deleteOld', self::DefaultSettings['deleteOld']);
-			if ($purgeAge > 0)
-			{
-				$this->maintenance->purgeOldEntries($purgeAge);
-			}
-			// regardless of the purge age setting: these are not deleted by age
-			$this->maintenance->keepWithinBounds();
-			LoggerHelper::pruneByAge($this->getIntParam('logKeepDays', LoggerHelper::DefaultKeepDays));
-			$this->params->set('lastPurge', $now);
-			$this->repositories->pluginSettings()->set('lastPurge', (int) $now);
-		}
-	}
-
-	/**
-	 * The daily maintenance of the .htaccess file, whatever the blocking mode
-	 * is now:
-	 *
-	 * - a block section of an earlier version grants access (see
-	 *   HtaccessHelper::LegacyLines), and one which doesn't let the unblock
-	 *   page through makes the links of unblock emails lead nowhere: it is
-	 *   written in the current form (the update can't, see updatescript.php);
-	 * - the web server knows nothing of durations and unblocks: with blocking
-	 *   through the file, the addresses whose blocks are over come out of it;
-	 *   with another blocking mode, every address the plugin has blocked -
-	 *   the entries are left from the time the file blocked, and would turn
-	 *   the addresses away for good, see HtaccessHelper::removeStaleBlocks().
-	 */
-	private function tidyHtaccess()
-	{
-		$htaccess = new HtaccessHelper($this->getHtaccessPath(), $this->logger);
-		if (!is_file($htaccess->getFileName()))
-		{
-			return;
-		}
-		if (!$htaccess->upgradeFormat())
-		{
-			$this->logger->log('Could not write the block section of '.$htaccess->getFileName().' in its current form '.
-				'- make the file writable: one of an earlier version lets everybody who isn\'t blocked past the other '.
-				'access controls of the directory, and without the current form, the links of unblock emails can\'t be '.
-				'followed', Log::ERROR);
-		}
-		$throughFile = $this->getStringParam('blockMode', 'full') === 'htaccess';
-		if ($htaccess->removeStaleBlocks($this->repositories->blocks(), $throughFile) === false)
-		{
-			$this->logger->log('Could not take the addresses the plugin blocked out of '.$htaccess->getFileName().
-				': the web server goes on refusing them - make the file writable', Log::ERROR);
-		}
-	}
-
-	/**
-	 * Brings the stored addresses into canonical form, if no other request
-	 * did or does: every request starts out with the settings as they were
-	 * when it began, so after the update all requests arriving before the
-	 * first of them is done would see the setting unset, and each would go
-	 * through the whole block and allow list (and update the same rows) - on
-	 * a busy site with a long list, many at once. The first takes a lock; the
-	 * others go on without waiting (their lookups may miss an entry which
-	 * isn't converted yet, as they would have before the update). Once it has
-	 * the lock, a request checks the stored setting again, as another one may
-	 * have finished in the meantime. If no lock can be taken (no writable
-	 * temporary directory), it is done without one: it can be run more than
-	 * once, it only costs time.
-	 */
-	private function canonicalizeStoredAddressesOnce()
-	{
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-canonicalize-'.
-			LockHelper::siteHash().'.lock';
-		$handle = @fopen($lockFile, 'c');
-		if ($handle !== false && !flock($handle, LOCK_EX | LOCK_NB))
-		{
-			fclose($handle);
-			$this->logger->log('Another request is converting the stored addresses, not waiting for it', Log::DEBUG);
-			return;
-		}
-		try
-		{
-			if (!$this->repositories->pluginSettings()->get('addressesCanonical', false))
-			{
-				$changed = $this->maintenance->canonicalizeStoredAddresses();
-				$this->repositories->pluginSettings()->set('addressesCanonical', 1);
-				$this->logger->log('Converted '.$changed.' stored address(es) to canonical form', Log::INFO);
-			}
-			$this->params->set('addressesCanonical', 1);
-		}
-		finally
-		{
-			if ($handle !== false)
-			{
-				flock($handle, LOCK_UN);
-				fclose($handle);
-			}
-		}
-	}
-
-	/**
-	 * The status code of the page shown to a blocked client, or null for none
-	 * (which makes it 200). Set with http_response_code(), not as a raw
-	 * "HTTP/1.x 403 ..." header: that would hard-code the protocol version,
-	 * which is the web server's business (HTTP/2 doesn't even have a status line).
-	 */
-	public static function blockedResponseCode($useHttpError)
-	{
-		return $useHttpError ? 403 : null;
-	}
-
-	/**
-	 * The headers of the page shown to a blocked client.
-	 *
-	 * It must never be cached: a cache (browser, proxy, CDN) which kept it
-	 * would show it to other visitors of the same URL. It is no page of the
-	 * site either: not for search engines (it is what a crawler gets for
-	 * every address of the site while its own is blocked), and with its type
-	 * and character set named - the server's defaults are not necessarily
-	 * those of the message - and not to be guessed by the browser.
-	 */
-	public static function blockedResponseHeaders()
-	{
-		return array(
-			'Cache-Control: no-store, no-cache, must-revalidate, private',
-			'Pragma: no-cache',
-			'Content-Type: text/html; charset=utf-8',
-			'X-Content-Type-Options: nosniff',
-			'X-Robots-Tag: noindex, nofollow',
-		);
+		$this->maintenance->runDue($this->params);
 	}
 
 	/**
@@ -1476,8 +522,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$blockIds = $this->repositories->blocks()->activeIdsFor($ipaddress);
-		if ($blockIds !== null && count($blockIds) === 0 && $this->getStringParam('blockMode', 'full') !== 'off' &&
-			$this->isPasswordLoginRequest() && $this->awaitLoginTurn($ipaddress))
+		if ($blockIds !== null && count($blockIds) === 0 && !$this->policy->isOff() &&
+			$this->request->isPasswordLogin() &&
+			$this->loginTurn->await($this->trackedAddress($ipaddress), $ipaddress, $this->logger))
 		{
 			// the logins before this one may have got the address blocked
 			$blockIds = $this->repositories->blocks()->activeIdsFor($ipaddress);
@@ -1487,99 +534,59 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// the block list can't be read (see the previous error): browsing
 			// goes on, but a login attempt - the one thing the block is there
 			// to stop - is refused rather than let through unchecked
-			$loginAttempt = $this->isLoginAttemptRequest();
+			$loginAttempt = $this->request->isLoginAttempt();
 			$this->logger->log('Could not find out whether '.$ipaddress.' is blocked'.
 				($loginAttempt ? ', refusing the login attempt' : ''), Log::ERROR);
 			if ($loginAttempt)
 			{
-				$this->refuseUnchecked();
+				$this->responder->refuseUnchecked();
 			}
 			return;
 		}
-		if (count($blockIds) > 0)
+		if (count($blockIds) === 0)
 		{
-			$this->logger->log("Blocked IP Address $ipaddress ".
-				"trying to access ".
-				self::originName(
-					$this->getApplication()->getClientId()),
-				Log::INFO);
-			// the unblock page and the password recovery are pages of the
-			// site; the API has neither
-			if (!$this->isApiRequest() && $this->isUnblockRequest($blockIds))
-			{
-				return;
-			}
-			if (!$this->isApiRequest() && $this->isPasswordRecoveryRequest())
-			{
-				return;
-			}
-			if ($this->getStringParam('blockMode', 'full') === 'loginonly' &&
-				!$this->isLoginAttemptRequest())
-			{
-				// let the blocked IP keep browsing normally; only an
-				// actual login attempt gets rejected below
-				return;
-			}
-			$this->repositories->blocks()->recordAttempt($blockIds);
-			$status = self::blockedResponseCode($this->getBoolParam('useHttpError', true));
-			if ($status !== null)
-			{
-				http_response_code($status);
-			}
-			foreach (self::blockedResponseHeaders() as $header)
-			{
-				header($header);
-			}
-			$message = $this->params->get('blockedMessage',
-				Text::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
-
-			if ($this->getBoolParam('blockedMsgShowIP', false))
-			{
-				$message .= " ".Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
-			}
-			if ($this->isApiRequest())
-			{
-				header('Content-Type: application/vnd.api+json; charset=utf-8');
-				$message = self::blockedApiResponse($message, $status);
-			}
-			echo $message;
-			$this->getApplication()->close();
+			return;
 		}
+		$this->logger->log('Blocked IP Address '.$ipaddress.' trying to access '.
+			self::originName($this->getApplication()->getClientId()), Log::INFO);
+		if ($this->isPassedThrough($blockIds))
+		{
+			return;
+		}
+		if ($this->policy->mode() === 'loginonly' && !$this->request->isLoginAttempt())
+		{
+			// let the blocked IP keep browsing normally; only an actual login
+			// attempt gets rejected below
+			return;
+		}
+		$this->repositories->blocks()->recordAttempt($blockIds);
+		$this->responder->refuseBlocked($ipaddress);
 	}
 
 	/**
-	 * Answers a login attempt whose address could not be checked against the
-	 * block list: 503 (it is not refused for good), with Retry-After.
+	 * Whether a request of a client with the blocks $blockIds is let through
+	 * all the same: to the unblock page with an unexpired token that was
+	 * issued for one of *its own* blocks, or to the password recovery (see
+	 * RequestClassifier).
 	 */
-	private function refuseUnchecked()
+	private function isPassedThrough($blockIds)
 	{
-		http_response_code(503);
-		header('Retry-After: 60');
-		foreach (self::blockedResponseHeaders() as $header)
+		$token = $this->request->unblockPageToken();
+		if ($token !== null && $this->repositories->unblockTokens()->validForBlocks($token, $blockIds))
 		{
-			header($header);
+			// deliberately not logging the token: it is a bearer secret and
+			// the log is readable in the backend
+			$this->logger->log('Seeing a valid unblock token for this IP address, letting the request pass '.
+				'through to com_bfstop', Log::INFO);
+			return true;
 		}
-		$message = Text::_('PLG_SYSTEM_BFSTOP_LOGIN_UNAVAILABLE');
-		if ($this->isApiRequest())
+		$recovery = $this->request->passwordRecovery();
+		if ($recovery !== null)
 		{
-			header('Content-Type: application/vnd.api+json; charset=utf-8');
-			$message = self::blockedApiResponse($message, 503);
+			$this->logger->log('Allowing blocked IP through to the password recovery ('.$recovery.'), so a '.
+				'blocked legitimate user can still recover their account', Log::INFO);
+			return true;
 		}
-		echo $message;
-		$this->getApplication()->close();
-	}
-
-	/**
-	 * The body of the answer to a blocked API request: an error in the form
-	 * the API answers others with (JSON:API, see Joomla's JsonapiRenderer).
-	 */
-	public static function blockedApiResponse($message, $status)
-	{
-		$error = array('title' => trim(html_entity_decode(strip_tags((string) $message), ENT_QUOTES | ENT_HTML5, 'UTF-8')));
-		if ($status !== null)
-		{
-			$error['code'] = $status;
-		}
-		return json_encode(array('errors' => array($error)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		return false;
 	}
 }

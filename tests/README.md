@@ -41,6 +41,14 @@ the site only needs to be set up again when the database schema changes.
   against a real Apache 2.4 (CI job ".htaccess blocks on Apache"): it turns
   away the blocked addresses and doesn't open up what the directory's other
   access controls keep out.
+- `Integration/RequestClassifierTest.php` compares what the plugin's
+  `RequestClassifier` says a request does (a login, the unblock page, the
+  password recovery) with what the Joomla site under test runs for it
+  (`fixtures/classify.php`: Joomla's own `findOption()`, component dispatchers
+  and `BaseController::execute()`, with a controller that records the task
+  instead of running it). The classifier rebuilds Joomla internals, so this is
+  what tells whether a Joomla version still handles requests the way it
+  expects; CI runs it on every Joomla version of the matrix.
 - `Integration/QueryCountTest.php` keeps the number of queries a page view, the
   request of a blocked address and a failed login send within limits (the
   scripts of `Integration/fixtures` print the queries when called with
