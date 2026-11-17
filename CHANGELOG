@@ -45,6 +45,21 @@
     class of its own (src/Service). A unit test keeps the repositories
     free of SQL built from values. The component reads its settings the
     same way
+  - Internal: the plugin class (src/Extension/Bfstop.php) only handles
+    Joomla's events; what it did itself is split up in src/Service:
+    RequestClassifier (what a request does - a login, the unblock page, the
+    password recovery), BlockPolicy (when, for how long and how a client is
+    blocked, the unblock mail, the delays), Responder (the block page, the
+    messages, the delayed response), LoginTurn (logins of one address one
+    after the other) and DailyMaintenance (see the Task Scheduler entry).
+    RequestClassifier works out what
+    Joomla will run the way Joomla's own code does, which is no API: a new
+    test, RequestClassifierTest, compares it with what the Joomla version
+    under test runs - its findOption(), the dispatcher of each component
+    and BaseController::execute() - for every combination of a few hundred
+    request parameters, on every Joomla version of the CI matrix. The
+    password recovery is let through to a blocked address on the site
+    only: the backend has no such page
   - What happens if the database fails is decided in one place now, per
     operation, and the same for each: counting and the bookkeeping fail
     open (nobody is blocked or let through because of it, and it is tried

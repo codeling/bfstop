@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Repository\UnblockTokenRepository;
 use Codeling\Plugin\System\Bfstop\Helper\HtaccessHelper;
@@ -284,7 +285,7 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testBlockPageIsNeverCached()
 	{
-		$headers = Bfstop::blockedResponseHeaders();
+		$headers = Responder::blockedResponseHeaders();
 		$this->assertContains('Cache-Control: no-store, no-cache, must-revalidate, private', $headers);
 		$this->assertContains('Pragma: no-cache', $headers);
 		// nor indexed, and what it is isn't left to the browser to guess
@@ -299,8 +300,8 @@ class BlockedRequestTest extends IntegrationTestCase
 
 	public function testBlockedResponseCode()
 	{
-		$this->assertSame(403, Bfstop::blockedResponseCode(true));
-		$this->assertNull(Bfstop::blockedResponseCode(false));
+		$this->assertSame(403, Responder::blockedResponseCode(true));
+		$this->assertNull(Responder::blockedResponseCode(false));
 	}
 
 	public function testBlockPageIsAnErrorByDefault()
@@ -467,8 +468,8 @@ class BlockedRequestTest extends IntegrationTestCase
 	public function testBlockedApiResponse()
 	{
 		$this->assertSame('{"errors":[{"title":"Blocked & gone","code":403}]}',
-			Bfstop::blockedApiResponse('<b>Blocked</b> &amp; gone ', 403));
-		$this->assertSame('{"errors":[{"title":"x"}]}', Bfstop::blockedApiResponse('x', null));
+			Responder::blockedApiResponse('<b>Blocked</b> &amp; gone ', 403));
+		$this->assertSame('{"errors":[{"title":"x"}]}', Responder::blockedApiResponse('x', null));
 	}
 
 	public function testUnblockTokenAndPasswordRecoveryAreNoPassToTheBackend()

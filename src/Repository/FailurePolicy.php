@@ -33,7 +33,7 @@ use Joomla\CMS\Log\Log;
  *   where the answer decides to trust an address or to send a link.
  * - Unknown: null, for whoever has to decide for itself what a list which
  *   can't be read means (the block list on a login attempt, see
- *   Bfstop::isBlocked()).
+ *   Bfstop::enforceBlock()).
  *
  * Every failure is logged at error level in the same form, and counted:
  * failures() lets whoever shows a status see that the database misbehaved

@@ -58,7 +58,7 @@ class HtaccessHelper
 	 * The query of the link of an unblock email (see Bfstop::unblockLink()):
 	 * the token is the 40 hex digits of TokenHelper::getToken(), and nothing
 	 * else may follow - the plugin lets a blocked address reach the unblock
-	 * page only without a task, see Bfstop::isUnblockRequest().
+	 * page only without a task, see RequestClassifier::unblockPageToken().
 	 */
 	public const UnblockQueryPattern = '^option=com_bfstop&view=tokenunblock&token=[0-9a-f]{40}$';
 

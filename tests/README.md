@@ -45,6 +45,14 @@ the site only needs to be set up again when the database schema changes.
   has to do it (it didn't run for two days), what it does, and that Joomla's
   Task Scheduler runs it through the task plugin (the scheduler's own
   command line is called, on the installed site).
+- `Integration/RequestClassifierTest.php` compares what the plugin's
+  `RequestClassifier` says a request does (a login, the unblock page, the
+  password recovery) with what the Joomla site under test runs for it
+  (`fixtures/classify.php`: Joomla's own `findOption()`, component dispatchers
+  and `BaseController::execute()`, with a controller that records the task
+  instead of running it). The classifier rebuilds Joomla internals, so this is
+  what tells whether a Joomla version still handles requests the way it
+  expects; CI runs it on every Joomla version of the matrix.
 - `Integration/QueryCountTest.php` keeps the number of queries a page view, the
   request of a blocked address and a failed login send within limits (the
   scripts of `Integration/fixtures` print the queries when called with

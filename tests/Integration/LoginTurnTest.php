@@ -7,13 +7,13 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
 use Codeling\Plugin\System\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Factory;
 
 /**
  * Logins from one address are handled one after the other (see
- * Bfstop::awaitLoginTurn()): a failed login is only counted after its
+ * LoginTurn::await()): a failed login is only counted after its
  * password was checked, so logins sent at the same time would otherwise all
  * be checked, however few attempts are allowed. The test stands in for the
  * login before the one it sends - it holds the lock of the address - and
@@ -76,7 +76,7 @@ class LoginTurnTest extends IntegrationTestCase
 	/** as the login of the address which is being handled right now */
 	private function holdTurn($ip = self::Ip)
 	{
-		$this->turn = LockHelper::acquire(Bfstop::loginTurnFile($ip), 0);
+		$this->turn = LockHelper::acquire(LoginTurn::file($ip), 0);
 		$this->assertIsResource($this->turn);
 	}
 
@@ -122,7 +122,7 @@ class LoginTurnTest extends IntegrationTestCase
 	{
 		list($output, $seconds) = $this->request($query, $options);
 		$this->assertStringContainsString('NOT BLOCKED', $output, $message);
-		$this->assertLessThan(Bfstop::LoginTurnWaitSeconds - 1, $seconds, $message);
+		$this->assertLessThan(LoginTurn::WaitSeconds - 1, $seconds, $message);
 	}
 
 	public function testLoginSeesTheBlockOfTheLoginBeforeIt()
@@ -172,14 +172,14 @@ class LoginTurnTest extends IntegrationTestCase
 
 	public function testLoginsOfOtherAddressesDoNotWait()
 	{
-		// unless they share the lock file, which 1 in Bfstop::LoginTurnSlots
+		// unless they share the lock file, which 1 in LoginTurn::Slots
 		// does - which ones depends on the site's secret, a new one on every
 		// test site: so the other address is one with a lock file of its own
-		$file = Bfstop::loginTurnFile(self::Ip);
+		$file = LoginTurn::file(self::Ip);
 		$other = null;
 		for ($i = 1; $i < 256 && $other === null; ++$i)
 		{
-			if (Bfstop::loginTurnFile('198.51.100.'.$i) !== $file)
+			if (LoginTurn::file('198.51.100.'.$i) !== $file)
 			{
 				$other = '198.51.100.'.$i;
 			}
@@ -209,7 +209,7 @@ class LoginTurnTest extends IntegrationTestCase
 		$this->holdTurn();
 		list($output, $seconds) = $this->request(self::Login);
 		$this->assertStringContainsString('NOT BLOCKED', $output);
-		$this->assertGreaterThanOrEqual(Bfstop::LoginTurnWaitSeconds, $seconds);
+		$this->assertGreaterThanOrEqual(LoginTurn::WaitSeconds, $seconds);
 	}
 
 	public function testTurnEndsWhenTheFailedLoginIsCounted()
@@ -236,11 +236,11 @@ class LoginTurnTest extends IntegrationTestCase
 		$files = array();
 		for ($i = 0; $i < 2000; ++$i)
 		{
-			$files[Bfstop::loginTurnFile('198.51.'.($i >> 8).'.'.($i & 255))] = true;
+			$files[LoginTurn::file('198.51.'.($i >> 8).'.'.($i & 255))] = true;
 		}
-		$this->assertLessThanOrEqual(Bfstop::LoginTurnSlots, count($files));
-		$this->assertGreaterThan(Bfstop::LoginTurnSlots / 2, count($files), 'spread over the files');
-		$this->assertSame(Bfstop::loginTurnFile('2001:db8:1:200::/56'), Bfstop::loginTurnFile('2001:db8:1:200::/56'));
-		$this->assertStringStartsWith(Factory::getApplication()->get('tmp_path'), Bfstop::loginTurnFile(self::Ip));
+		$this->assertLessThanOrEqual(LoginTurn::Slots, count($files));
+		$this->assertGreaterThan(LoginTurn::Slots / 2, count($files), 'spread over the files');
+		$this->assertSame(LoginTurn::file('2001:db8:1:200::/56'), LoginTurn::file('2001:db8:1:200::/56'));
+		$this->assertStringStartsWith(Factory::getApplication()->get('tmp_path'), LoginTurn::file(self::Ip));
 	}
 }

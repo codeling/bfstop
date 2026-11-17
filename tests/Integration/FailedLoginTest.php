@@ -8,6 +8,8 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Extension\Bfstop;
+use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
+use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
 
@@ -305,7 +307,7 @@ class FailedLoginTest extends IntegrationTestCase
 		$handles = array();
 		try
 		{
-			foreach (Bfstop::delaySlotFiles(2) as $file)
+			foreach (Responder::delaySlotFiles(2) as $file)
 			{
 				$handle = fopen($file, 'c');
 				// waits for a delayed response of an earlier test which still
@@ -348,10 +350,10 @@ class FailedLoginTest extends IntegrationTestCase
 
 	public function testDelaysAreCapped()
 	{
-		$this->assertSame(0, Bfstop::cappedDelay(0));
-		$this->assertSame(0, Bfstop::cappedDelay(-5));
-		$this->assertSame(7, Bfstop::cappedDelay(6.6));
-		$this->assertSame(Bfstop::MaxDelaySeconds, Bfstop::cappedDelay(100000));
+		$this->assertSame(0, Responder::cappedDelay(0));
+		$this->assertSame(0, Responder::cappedDelay(-5));
+		$this->assertSame(7, Responder::cappedDelay(6.6));
+		$this->assertSame(Responder::MaxDelaySeconds, Responder::cappedDelay(100000));
 	}
 
 	public function testExistingAndCommonUsernamesAreStoredReadably()
@@ -695,10 +697,10 @@ class FailedLoginTest extends IntegrationTestCase
 	{
 		foreach (array(0, 1, 2) as $setting)
 		{
-			$this->assertSame($setting, Bfstop::effectiveNotifyBlockedUser((string) $setting, true));
+			$this->assertSame($setting, BlockPolicy::effectiveNotifyBlockedUser((string) $setting, true));
 		}
-		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(0, false));
-		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser(1, false));
-		$this->assertSame(0, Bfstop::effectiveNotifyBlockedUser('2', false));
+		$this->assertSame(0, BlockPolicy::effectiveNotifyBlockedUser(0, false));
+		$this->assertSame(0, BlockPolicy::effectiveNotifyBlockedUser(1, false));
+		$this->assertSame(0, BlockPolicy::effectiveNotifyBlockedUser('2', false));
 	}
 }

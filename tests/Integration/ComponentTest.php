@@ -921,7 +921,7 @@ class ComponentTest extends IntegrationTestCase
 	public function testUnblockLinksNeedTheLiveSite()
 	{
 		// without $live_site, the link would have the host the attacker's
-		// request named, see Bfstop::effectiveNotifyBlockedUser()
+		// request named, see BlockPolicy::effectiveNotifyBlockedUser()
 		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
 		$data = array('params' => array('enabledForOrigin' => array('1'), 'notifyBlockedUser' => '2'));
 		$validate = function () use (&$data)
