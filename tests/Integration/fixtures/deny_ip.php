@@ -16,7 +16,7 @@ spl_autoload_register(function ($class)
 	$prefix = 'Codeling\\Plugin\\System\\Bfstop\\';
 	if (strncmp($class, $prefix, strlen($prefix)) === 0)
 	{
-		require dirname(__DIR__, 3).'/src/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
+		require dirname(__DIR__, 3).'/plugin/src/'.str_replace('\\', '/', substr($class, strlen($prefix))).'.php';
 	}
 });
 

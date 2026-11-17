@@ -72,7 +72,7 @@ class InstallTest extends IntegrationTestCase
 			"WHERE e.type='plugin' AND e.element='bfstop'");
 		$row = $this->db->loadObject();
 		$this->assertSame(1, (int) $row->enabled);
-		$manifest = simplexml_load_file(dirname(__DIR__, 2).'/bfstop.xml');
+		$manifest = simplexml_load_file(BFSTOP_PLUGIN_ROOT.'/bfstop.xml');
 		$this->assertSame((string) $manifest->version, $row->version_id);
 	}
 }

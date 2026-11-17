@@ -24,7 +24,7 @@ class InstallerScriptTest extends IntegrationTestCase
 	protected function setUp(): void
 	{
 		parent::setUp();
-		require_once dirname(__DIR__, 2).'/updatescript.php';
+		require_once BFSTOP_PLUGIN_ROOT.'/updatescript.php';
 		$this->originalManifestCache = $this->queryValue(
 			"SELECT manifest_cache FROM #__extensions WHERE type='plugin' AND element='bfstop'");
 		Factory::getApplication()->getMessageQueue(true);
@@ -54,7 +54,7 @@ class InstallerScriptTest extends IntegrationTestCase
 	{
 		$adapter = $this->createMock(InstallerAdapter::class);
 		$adapter->method('getName')->willReturn('plg_system_bfstop');
-		$adapter->method('getManifest')->willReturn(simplexml_load_file(dirname(__DIR__, 2).'/bfstop.xml'));
+		$adapter->method('getManifest')->willReturn(simplexml_load_file(BFSTOP_PLUGIN_ROOT.'/bfstop.xml'));
 		return array(new \PlgsystembfstopInstallerScript($adapter), $adapter);
 	}
 

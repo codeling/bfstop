@@ -110,7 +110,7 @@ class RepositoriesTest extends IntegrationTestCase
 	/** what the update does to the entries of earlier versions (see the installer script) */
 	private function convertStoredAddresses()
 	{
-		require_once dirname(__DIR__, 2).'/updatescript.php';
+		require_once BFSTOP_PLUGIN_ROOT.'/updatescript.php';
 		return \PlgsystembfstopInstallerScript::canonicalizeAddresses($this->db);
 	}
 

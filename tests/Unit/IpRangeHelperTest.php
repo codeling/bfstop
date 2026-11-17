@@ -13,19 +13,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * IP range helper of the component (https://github.com/codeling/com_bfstop),
- * loaded from the checkout given in COM_BFSTOP_ROOT.
+ * IP range helper of the component (component/).
  */
 class IpRangeHelperTest extends TestCase
 {
-	protected function setUp(): void
-	{
-		if (!class_exists(IpRangeHelper::class))
-		{
-			$this->markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
-		}
-	}
-
 	public function testIsIPv6()
 	{
 		$this->assertTrue(IpRangeHelper::isIPv6('2001:db8::1'));

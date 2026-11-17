@@ -1,8 +1,18 @@
 #!/bin/bash
+#
+# Builds the release zip of the component (zip), or copies the component into
+# a Joomla! site (to update an existing installation for development):
+#
+#   component/deploy.sh zip                 writes component/com_bfstop-<version>.zip
+#   component/deploy.sh <joomla directory>  copies the files into that site
+#
+# Released together with the plugins, with the same version: see
+# tests/lint/check-versions.php and package/build.sh.
+set -e
+cd "$(dirname "$0")"
+
 name=bfstop
-# released together with the plugin, with the same version: see
-# tests/lint/check-versions.php and package/build.sh of codeling/bfstop
-version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$(dirname "$0")/${name}.xml" | head -n 1)"
+version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "${name}.xml" | head -n 1)"
 
 component_name=com_${name}
 site_files=site/*

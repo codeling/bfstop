@@ -8,29 +8,26 @@
 #
 #   - $BFSTOP_PACKAGE set: that package zip (e.g. the one CI built, or the
 #     previous release for the upgrade test)
-#   - else, with $COM_BFSTOP_ROOT: the package built from the checkouts by
-#     package/build.sh
-#   - else: only the plugin, zipped by its deploy.sh
+#   - else: the package built from this checkout by package/build.sh
 #
 # Environment:
 #   JOOMLA_VERSION   Joomla version to download, e.g. 5.4.8
 #   JOOMLA_ROOT      directory to set up the site in
 #   DB_TYPE          mysqli or pgsql
 #   DB_HOST, DB_USER, DB_PASS, DB_NAME   database connection (database must exist)
-#   COM_BFSTOP_ROOT  optional: checkout of https://github.com/codeling/com_bfstop
 #   BFSTOP_PACKAGE   optional: package zip to install instead of building one
 #   DOWNLOAD_CACHE   optional: directory to keep the Joomla package in between
 #                    runs, see download-joomla.sh
 set -euo pipefail
 
 : "${JOOMLA_ROOT:?}" "${DB_TYPE:?}" "${DB_HOST:?}" "${DB_USER:?}" "${DB_NAME:?}"
-plugin_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 build_dir="$(mktemp -d)"
 
 if [ ! -f "$JOOMLA_ROOT/index.php" ]; then
 	: "${JOOMLA_VERSION:?}"
 	# verifies the package against tests/ci/joomla-checksums.sha256
-	"$plugin_root/tests/ci/download-joomla.sh" "$JOOMLA_VERSION" "$JOOMLA_ROOT"
+	"$root/tests/ci/download-joomla.sh" "$JOOMLA_VERSION" "$JOOMLA_ROOT"
 fi
 
 echo "Installing Joomla ($DB_TYPE on $DB_HOST)"
@@ -51,11 +48,8 @@ install_zip() {
 
 if [ -n "${BFSTOP_PACKAGE:-}" ]; then
 	install_zip "$BFSTOP_PACKAGE"
-elif [ -n "${COM_BFSTOP_ROOT:-}" ]; then
-	"$plugin_root/package/build.sh" "$COM_BFSTOP_ROOT" "$build_dir" > /dev/null
-	install_zip "$build_dir"/pkg_bfstop-*.zip
 else
-	(cd "$plugin_root" && ./deploy.sh zip > /dev/null && mv bfstop-*.zip "$build_dir/")
-	install_zip "$build_dir"/bfstop-*.zip
+	"$root/package/build.sh" "$build_dir" > /dev/null
+	install_zip "$build_dir"/pkg_bfstop-*.zip
 fi
 rm -rf "$build_dir"

@@ -526,6 +526,12 @@
     logins are counted against
   - Component: the list views escape everything they print, also what can
     only be a number, a date or one of the sort columns
+  - Internal: the component's repository, codeling/com_bfstop, is merged
+    into this one, with its history: plugins and component are one code
+    base, released together with one version, and a change spanning both
+    is one pull request now, tested by one CI run. The system plugin is in
+    plugin/, the task plugin in task/, the component in component/;
+    package/build.sh builds the package from this checkout alone
 
 1.5.2 (2024-02-18)
   - Note: Only component changes, no plugin changes

@@ -14,20 +14,10 @@ use Joomla\CMS\Language\Text;
 use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
- * IP address validation of the component (https://github.com/codeling/com_bfstop),
- * loaded from the checkout given in COM_BFSTOP_ROOT.
+ * IP address validation of the component (component/).
  */
 class IpValidateHelperTest extends IntegrationTestCase
 {
-	public static function setUpBeforeClass(): void
-	{
-		parent::setUpBeforeClass();
-		if (!getenv('COM_BFSTOP_ROOT'))
-		{
-			self::markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
-		}
-	}
-
 	protected function setUp(): void
 	{
 		parent::setUp();

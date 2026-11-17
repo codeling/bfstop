@@ -41,7 +41,7 @@ class UpdateSqlTest extends IntegrationTestCase
 			$this->db->setQuery("UPDATE #__schemas SET version_id='1.4.3' WHERE extension_id=".$extensionId);
 			$this->db->execute();
 
-			$root = dirname(__DIR__, 2);
+			$root = BFSTOP_PLUGIN_ROOT;
 			$manifest = simplexml_load_file($root.'/bfstop.xml');
 			$installer = new Installer();
 			$installer->setDatabase($this->db);

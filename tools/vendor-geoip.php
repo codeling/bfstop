@@ -6,16 +6,16 @@
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
 **/
 // Copies the MaxMind DB reader (maxmind-db/reader, installed by composer from
-// composer.lock) into src/Helper/Geo, the way the plugin ships it: Joomla
+// composer.lock) into plugin/src/Helper/Geo, the way the plugin ships it: Joomla
 // extensions have no composer at install time, so the code is vendored into the
 // package. The only changes made to the upstream files are the namespace, the
 // licence header and the _JEXEC guard - so the result is reproducible, and
-// `--check` can tell whether the copy in src/Helper/Geo is the version in
+// `--check` can tell whether the copy in plugin/src/Helper/Geo is the version in
 // composer.lock, unmodified.
 //
 //   composer install
-//   php tools/vendor-geoip.php           (re)writes src/Helper/Geo
-//   php tools/vendor-geoip.php --check   exits 1 if src/Helper/Geo differs
+//   php tools/vendor-geoip.php           (re)writes plugin/src/Helper/Geo
+//   php tools/vendor-geoip.php --check   exits 1 if plugin/src/Helper/Geo differs
 //
 // Updating the reader: `composer update maxmind-db/reader`, then
 // `composer vendor-geoip`, then review the diff and run the tests.
@@ -93,7 +93,7 @@ if ($vendorDir === $root.'/vendor' && $version !== lockedVersion($root))
 		" - run 'composer install'.");
 }
 $source = $vendorDir.'/maxmind-db/reader/src/MaxMind/Db';
-$target = $root.'/src/Helper/Geo';
+$target = $root.'/plugin/src/Helper/Geo';
 
 $mainHeader = <<<TXT
 /*
@@ -203,13 +203,13 @@ if ($check)
 {
 	if ($differences)
 	{
-		fwrite(STDERR, "src/Helper/Geo is not maxmind-db/reader $version as locked in composer.lock:\n  ".
+		fwrite(STDERR, "plugin/src/Helper/Geo is not maxmind-db/reader $version as locked in composer.lock:\n  ".
 			implode("\n  ", $differences)."\nRun 'composer vendor-geoip' and commit the result.\n");
 		exit(1);
 	}
-	echo "src/Helper/Geo is maxmind-db/reader $version, as locked in composer.lock.\n";
+	echo "plugin/src/Helper/Geo is maxmind-db/reader $version, as locked in composer.lock.\n";
 	exit(0);
 }
 echo $differences
-	? "Updated src/Helper/Geo to maxmind-db/reader $version: ".implode(', ', $differences)."\n"
-	: "src/Helper/Geo already is maxmind-db/reader $version.\n";
+	? "Updated plugin/src/Helper/Geo to maxmind-db/reader $version: ".implode(', ', $differences)."\n"
+	: "plugin/src/Helper/Geo already is maxmind-db/reader $version.\n";

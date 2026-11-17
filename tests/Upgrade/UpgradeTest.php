@@ -38,13 +38,13 @@ class UpgradeTest extends IntegrationTestCase
 
 	private static function newVersion()
 	{
-		return (string) simplexml_load_file(self::root().'/bfstop.xml')->version;
+		return (string) simplexml_load_file(BFSTOP_PLUGIN_ROOT.'/bfstop.xml')->version;
 	}
 
 	private static function latestSchema()
 	{
 		$versions = array_map(function ($file) { return basename($file, '.sql'); },
-			glob(self::root().'/sql/updates/*.sql'));
+			glob(BFSTOP_PLUGIN_ROOT.'/sql/updates/*.sql'));
 		usort($versions, 'version_compare');
 		return end($versions);
 	}

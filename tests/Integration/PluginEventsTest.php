@@ -195,7 +195,7 @@ class PluginEventsTest extends IntegrationTestCase
 		try
 		{
 			$container = new Container();
-			(require dirname(__DIR__, 2).'/services/provider.php')->register($container);
+			(require BFSTOP_PLUGIN_ROOT.'/services/provider.php')->register($container);
 			$plugin = $container->get(PluginInterface::class);
 			// as PluginHelper::import() does it from Joomla 6.0 on
 			$dispatcher = new Dispatcher();

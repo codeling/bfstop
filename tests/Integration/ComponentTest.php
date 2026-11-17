@@ -26,20 +26,10 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\MVC\Factory\MVCFactory;
 
 /**
- * Database access of the component (https://github.com/codeling/com_bfstop),
- * loaded from the checkout given in COM_BFSTOP_ROOT.
+ * Database access of the component (component/).
  */
 class ComponentTest extends IntegrationTestCase
 {
-	public static function setUpBeforeClass(): void
-	{
-		parent::setUpBeforeClass();
-		if (!getenv('COM_BFSTOP_ROOT'))
-		{
-			self::markTestSkipped('COM_BFSTOP_ROOT not set, see tests/README.md');
-		}
-	}
-
 	private function model($class)
 	{
 		$model = new $class(array('dbo' => $this->db), new MVCFactory('Codeling\\Component\\Bfstop'));
@@ -219,7 +209,7 @@ class ComponentTest extends IntegrationTestCase
 		ob_start();
 		(function ()
 		{
-			include getenv('COM_BFSTOP_ROOT').'/admin/tmpl/log/default_body.php';
+			include BFSTOP_COMPONENT_ROOT.'/admin/tmpl/log/default_body.php';
 		})->call($view);
 		$html = ob_get_clean();
 		$this->assertStringNotContainsString('<script>', $html);
@@ -285,7 +275,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// Joomla shows the messages as HTML
 		$app = Factory::getApplication();
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$app->getMessageQueue(true);
 		$evil = '<script>alert(1)</script>';
 		$this->assertFalse(IpValidateHelper::validIPRange($evil));
@@ -303,7 +293,7 @@ class ComponentTest extends IntegrationTestCase
 	private function settingsForm()
 	{
 		$form = new \Joomla\CMS\Form\Form('com_bfstop.settings');
-		$form->loadFile(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$form->loadFile(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		return $form;
 	}
 
@@ -368,7 +358,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testEveryListAndIntegerSettingIsValidatedAgainstItsOptions()
 	{
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		$fields = $xml->xpath('//field[@type="list" or @type="integer" or @type="checkboxes"]');
 		$this->assertGreaterThan(30, count($fields));
 		foreach ($fields as $field)
@@ -572,7 +562,7 @@ class ComponentTest extends IntegrationTestCase
 
 			if (!function_exists('posix_geteuid') || posix_geteuid() !== 0)
 			{
-				Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+				Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 				Factory::getApplication()->getMessageQueue(true);
 				$fill();
 				chmod($former.'/.htaccess', 0444);
@@ -600,11 +590,11 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testInstallerScriptHintAndVersionCheck()
 	{
-		require_once getenv('COM_BFSTOP_ROOT').'/installscript.php';
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
 		$app = \Joomla\CMS\Factory::getApplication();
 		$adapter = $this->createMock(\Joomla\CMS\Installer\InstallerAdapter::class);
 		$adapter->method('getName')->willReturn('com_bfstop');
-		$adapter->method('getManifest')->willReturn(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/bfstop.xml'));
+		$adapter->method('getManifest')->willReturn(simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/bfstop.xml'));
 		$script = new \com_bfstopInstallerScript($adapter);
 		$app->getMessageQueue(true);
 
@@ -639,7 +629,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// the plugin is enabled by the installation: until the settings are
 		// saved it must behave like the page says
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		foreach (\Codeling\Plugin\System\Bfstop\Extension\Bfstop::DefaultSettings as $name => $default)
 		{
 			$field = $xml->xpath('//field[@name="'.$name.'"]');
@@ -660,9 +650,9 @@ class ComponentTest extends IntegrationTestCase
 		// a path with a leading slash would become "//administrator/...", a link to another host
 		foreach (array('Allow' => 'block', 'Block' => 'block', 'Htblock' => 'htblock') as $view => $folder)
 		{
-			$source = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/src/View/'.$view.'/HtmlView.php');
+			$source = file_get_contents(BFSTOP_COMPONENT_ROOT.'/admin/src/View/'.$view.'/HtmlView.php');
 			$this->assertSame(1, preg_match("#registerAndUseStyle\(\s*'([\w.]+)',\s*'([^']+)'\)#", $source, $m), $view);
-			$this->assertFileExists(getenv('COM_BFSTOP_ROOT').'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
+			$this->assertFileExists(BFSTOP_COMPONENT_ROOT.'/admin/'.substr($m[2], strlen('administrator/components/com_bfstop/')), $view);
 			$wa = new \Joomla\CMS\WebAsset\WebAssetManager(new \Joomla\CMS\WebAsset\WebAssetRegistry());
 			$wa->registerAndUseStyle($m[1], $m[2]);
 			$uri = $wa->getAsset('style', $m[1])->getUri();
@@ -685,7 +675,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testBlockDurationsAreShownAsText()
 	{
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 		$this->assertSame('unlimited', DurationHelper::toReadable(0));
 		$this->assertSame('15 minutes', DurationHelper::toReadable('15'));
 		$this->assertSame('1 day', DurationHelper::toReadable(1440));
@@ -696,7 +686,7 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertSame('16 hours', DurationHelper::toReadable(960));
 		$this->assertSame('20 minutes', DurationHelper::toReadable(20));
 		$this->assertSame('90 minutes', DurationHelper::toReadable(90));
-		$xml = simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/settings.xml');
+		$xml = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml');
 		$options = $xml->xpath('//field[@name="blockDuration"]/option');
 		$this->assertNotEmpty($options);
 		foreach ($options as $option)
@@ -720,7 +710,7 @@ class ComponentTest extends IntegrationTestCase
 		{
 			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
 		}
-		\Joomla\CMS\Form\Form::addFormPath(getenv('COM_BFSTOP_ROOT').'/admin/forms');
+		\Joomla\CMS\Form\Form::addFormPath(BFSTOP_COMPONENT_ROOT.'/admin/forms');
 		$model = $this->model(BlockModel::class);
 		$model->getState(); // populated now, so it doesn't overwrite the id
 		$model->setState('block.id', $id);
@@ -733,8 +723,8 @@ class ComponentTest extends IntegrationTestCase
 		// week and the progressive block duration doubles it: without an
 		// option for its value, the browser selected the first one -
 		// unlimited - and saving the block, even unchanged, made it permanent
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
-		$listed = count(simplexml_load_file(getenv('COM_BFSTOP_ROOT').'/admin/forms/block.xml')
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
+		$listed = count(simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/block.xml')
 			->xpath('//field[@name="duration"]/option'));
 		foreach (array(10080 => '7 days', 2880 => '2 days', 1440 => null, 0 => null) as $duration => $added)
 		{
@@ -797,7 +787,7 @@ class ComponentTest extends IntegrationTestCase
 	 */
 	public function testBlocksOfTheBlocklistGoIntoTheHtaccessFile()
 	{
-		Factory::getApplication()->getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin', 'en-GB', true);
+		Factory::getApplication()->getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin', 'en-GB', true);
 		$dir = sys_get_temp_dir().'/bfstop-blocklist-'.bin2hex(random_bytes(4));
 		mkdir($dir);
 		$original = $this->getPluginParams();
@@ -889,7 +879,7 @@ class ComponentTest extends IntegrationTestCase
 			'usernamestats' => UsernamestatsModel::class);
 		foreach ($models as $view => $class)
 		{
-			$head = file_get_contents(getenv('COM_BFSTOP_ROOT').'/admin/tmpl/'.$view.'/default_head.php');
+			$head = file_get_contents(BFSTOP_COMPONENT_ROOT.'/admin/tmpl/'.$view.'/default_head.php');
 			preg_match_all("#'grid\.sort',\s*'\w+',\s*'([^']+)'#", $head, $m);
 			$this->assertNotEmpty($m[1], $view);
 			$filterFields = (new \ReflectionProperty($class, 'filter_fields'))->getValue($this->model($class));
@@ -922,7 +912,7 @@ class ComponentTest extends IntegrationTestCase
 	{
 		// without $live_site, the link would have the host the attacker's
 		// request named, see BlockPolicy::effectiveNotifyBlockedUser()
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$data = array('params' => array('enabledForOrigin' => array('1'), 'notifyBlockedUser' => '2'));
 		$validate = function () use (&$data)
 		{
@@ -946,7 +936,7 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testSettingsPageProposesTheLiveSite()
 	{
-		Factory::getLanguage()->load('com_bfstop', getenv('COM_BFSTOP_ROOT').'/admin');
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$note = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::liveSiteNote();
 		$root = rtrim(\Joomla\CMS\Uri\Uri::root(), '/');
 		$this->assertStringContainsString('<code>public $live_site = &#039;'.htmlspecialchars($root, ENT_QUOTES, 'UTF-8').'&#039;;</code>', $note);

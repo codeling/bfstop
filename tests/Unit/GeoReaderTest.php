@@ -13,7 +13,7 @@ use Codeling\Plugin\System\Bfstop\Helper\Geo\Reader\InvalidDatabaseException;
 use PHPUnit\Framework\TestCase;
 
 /**
- * The vendored MaxMind DB reader (src/Helper/Geo, see tools/vendor-geoip.php)
+ * The vendored MaxMind DB reader (plugin/src/Helper/Geo, see tools/vendor-geoip.php)
  * with a real database: whoever updates the reader sees here at once if it
  * stopped working.
  */

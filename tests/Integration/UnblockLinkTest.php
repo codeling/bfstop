@@ -29,7 +29,7 @@ define("_JEXEC", 1);
 define("JPATH_BASE", __DIR__);
 require JPATH_BASE."/includes/defines.php";
 require JPATH_BASE."/includes/framework.php";
-require '.var_export(dirname(__DIR__, 2).'/src/Extension/Bfstop.php', true).';
+require '.var_export(BFSTOP_PLUGIN_ROOT.'/src/Extension/Bfstop.php', true).';
 $c = \\Joomla\\CMS\\Factory::getContainer();
 $c->get("config")->set("live_site", '.var_export($liveSite, true).');
 foreach (array("session.web.site", "session.web.administrator", \\Joomla\\Session\\SessionInterface::class) as $alias)
