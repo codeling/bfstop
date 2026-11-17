@@ -148,18 +148,28 @@ class UpgradeTest extends IntegrationTestCase
 		$this->assertSame(array(2, 2, 1), array_map('intval', array_values($stats)));
 	}
 
-	public function testFirstRequestConvertsTheStoredAddresses()
+	public function testTheUpdateConvertsTheStoredAddresses()
 	{
-		$this->request('192.0.2.200');
+		// no request has done it: the update does (it was the first request's job until 2.0.0)
 		$this->db->setQuery('SELECT ipaddress FROM #__bfstop_bannedip ORDER BY id');
 		$this->assertSame(array('2001:db8::5', '203.0.113.0/24', '198.51.100.9'), $this->db->loadColumn());
 		$this->assertSame('abcd::1', $this->queryValue('SELECT ipaddress FROM #__bfstop_allowlist'));
-		$this->assertSame(1, json_decode($this->getPluginParams(), true)['addressesCanonical'] ?? null);
+		$params = json_decode($this->getPluginParams(), true);
+		$this->assertArrayNotHasKey('addressesCanonical', $params);
+		$this->assertArrayNotHasKey('lastPurge', $params, 'the bookkeeping is not in the settings any more');
+		$this->assertNotNull($this->queryValue("SELECT value FROM #__bfstop_state WHERE name='lastMaintenance'"));
 
 		// and what was blocked stays blocked
 		$this->assertStringContainsString('STATUS: 403', $this->request('2001:db8::5'));
 		$this->assertStringContainsString('STATUS: 403', $this->request('203.0.113.99'));
 		$this->assertStringContainsString('NOT BLOCKED', $this->request('192.0.2.201'));
+	}
+
+	public function testThePackageMadeTheMaintenanceTask()
+	{
+		// the task plugin is new in 2.0.0: the update installs it, switched on, with its task
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__scheduler_tasks WHERE type='bfstop.maintenance' AND state=1"));
+		$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='task' AND element='bfstop'"));
 	}
 
 	public function testAnUpdateWhichStoppedHalfwayCanBeRepeated()

@@ -119,3 +119,15 @@ CREATE TABLE IF NOT EXISTS #__bfstop_username_stats (
 	KEY attempts (attempts),
 	KEY last_attempt (last_attempt)
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
+
+-- the plugin's own bookkeeping (name => value), apart from its settings: when
+-- the maintenance last ran. In the plugin's row of #__extensions, it was
+-- written by requests with the whole settings, and so raced with an
+-- administrator saving them.
+CREATE TABLE IF NOT EXISTS #__bfstop_state (
+	name varchar(64) NOT NULL,
+	value varchar(255) NOT NULL,
+	changed datetime NOT NULL,
+	PRIMARY KEY (name)
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;

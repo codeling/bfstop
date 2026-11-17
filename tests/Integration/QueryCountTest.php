@@ -87,11 +87,11 @@ class QueryCountTest extends IntegrationTestCase
 			'accountThrottleEnabled' => 0,
 			'notifyBlockedNumber' => 0,
 			'logLevel' => 8, // errors only
-			// the daily maintenance (purging, trimming - a score of queries) runs in
-			// the first request of the day, whoever makes it: not what is counted here
-			'lastPurge' => time(),
-			'addressesCanonical' => 1,
 		)));
+		// the daily maintenance (purging, trimming - a score of queries) is the task of
+		// the Task Scheduler, or of a request if it didn't run for two days: it just
+		// ran, so no request in the counts does it
+		$this->markMaintenanceDone();
 	}
 
 	private function createUser($username)

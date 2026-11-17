@@ -20,9 +20,9 @@ use Codeling\Plugin\System\Bfstop\Helper\UsernameHelper;
 use Codeling\Plugin\System\Bfstop\Repository\Repositories;
 use Codeling\Plugin\System\Bfstop\Service\BlockPolicy;
 use Codeling\Plugin\System\Bfstop\Service\BlockService;
+use Codeling\Plugin\System\Bfstop\Service\DailyMaintenance;
 use Codeling\Plugin\System\Bfstop\Service\LoginService;
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
-use Codeling\Plugin\System\Bfstop\Service\Maintenance;
 use Codeling\Plugin\System\Bfstop\Service\RequestClassifier;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Event\User\LoginEvent;
@@ -66,11 +66,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	);
 
 	/**
-	 * Values the plugin keeps among its settings for itself: they are not on
-	 * the settings page, so saving that page must keep them (see com_bfstop's
-	 * SettingsModel).
+	 * Values the plugin keeps among its settings for itself, which saving the
+	 * settings page must keep: none any more - its bookkeeping is the table
+	 * #__bfstop_state, which that page can't overwrite. com_bfstop's
+	 * SettingsModel::keepInternalSettings() goes through this until it is
+	 * removed there; then so can this.
 	 */
-	public const InternalSettings = array('addressesCanonical', 'lastPurge');
+	public const InternalSettings = array();
 
 	/**
 	 * What the settings are while they have not been saved: the same as the
@@ -116,7 +118,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private Repositories $repositories;
 	private LoginService $logins;
 	private BlockService $blocker;
-	private Maintenance $maintenance;
 	private RequestClassifier $request;
 	private BlockPolicy $policy;
 	private Responder $responder;
@@ -150,12 +151,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->languageLoaded = $this->loadLanguage();
 		}
 		$app = $this->getApplication();
-		$this->logger = new LoggerHelper($this->intParam('logLevel', self::DefaultSettings['logLevel']),
-			LoggerHelper::maxBytesFromMegabytes($this->intParam('logMaxSize', LoggerHelper::DefaultMaxSizeMB)));
+		$this->logger = LoggerHelper::fromSettings($this->params);
 		$this->repositories = new Repositories($this->logger);
 		$this->logins = new LoginService($this->repositories);
 		$this->blocker = new BlockService($this->repositories);
-		$this->maintenance = new Maintenance($this->repositories);
 		$this->request = new RequestClassifier($app);
 		$this->policy = new BlockPolicy($this->params, $this->repositories, $this->logins, $this->logger);
 		$this->responder = new Responder($app, $this->params, $this->logger);
@@ -482,7 +481,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$this->maintenance->runDue($this->params);
+		// the daily maintenance is the task of Joomla's Task Scheduler (plugin
+		// plg_task_bfstop); only if it didn't run for two days - the site doesn't
+		// use the scheduler, or the task is gone - a request does it, which costs
+		// no query as long as it did (see MaintenanceSchedule)
+		(new DailyMaintenance($this->repositories, $this->params))->runIfOverdue();
 	}
 
 	/**

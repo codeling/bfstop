@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="task" method="upgrade">
+	<name>plg_task_bfstop</name>
+	<author>Bernhard Froehler</author>
+	<description>PLG_TASK_BFSTOP_XML_DESCRIPTION</description>
+	<creationDate>November 2026</creationDate>
+	<copyright>Copyright (C) Bernhard Froehler</copyright>
+	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
+	<authorEmail>bfstop@bfroehler.info</authorEmail>
+	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
+	<version>2.0.0</version>
+	<namespace path="src">Codeling\Plugin\Task\Bfstop</namespace>
+	<scriptfile>script.php</scriptfile>
+	<files>
+		<filename>index.html</filename>
+		<filename>script.php</filename>
+		<folder plugin="bfstop">services</folder>
+		<folder>src</folder>
+	</files>
+	<languages>
+		<language tag="en-GB">language/en-GB/en-GB.plg_task_bfstop.ini</language>
+		<language tag="en-GB">language/en-GB/en-GB.plg_task_bfstop.sys.ini</language>
+	</languages>
+</extension>
