@@ -5,7 +5,7 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
  *
- * Writes the files of the update server, https://bfstop.bfroehler.info
+ * Writes the files of the update server, https://bfstop.de
  * (GitHub Pages, .github/workflows/pages.yml): the update sites of the
  * installed extensions ask for
  *
@@ -30,7 +30,7 @@
 **/
 
 const UpdateServerPackageAsset = 'pkg_bfstop-%s.zip';
-const UpdateServerDetailsUrl = 'https://bfstop.bfroehler.info/update-pkg.xml';
+const UpdateServerDetailsUrl = 'https://bfstop.de/update-pkg.xml';
 const UpdateServerPackageName = 'Brute Force Stop Package';
 
 /**

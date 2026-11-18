@@ -62,6 +62,6 @@
 		</languages>
 	</administration>
 	<updateservers>
-		<server type="collection" name="BFStop Package Update Server">https://bfstop.bfroehler.info/update.xml</server>
+		<server type="collection" name="BFStop Package Update Server">https://bfstop.de/update.xml</server>
 	</updateservers>
 </extension>

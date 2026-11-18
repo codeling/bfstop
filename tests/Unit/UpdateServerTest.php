@@ -108,7 +108,7 @@ class UpdateServerTest extends TestCase
 	{
 		$files = updateServerFiles(array(self::release('1.5.2'), self::release('2.0.0')), self::noFetch());
 		$xpath = self::xpath($files['update.xml']);
-		$this->assertSame(array('https://bfstop.bfroehler.info/update-pkg.xml'),
+		$this->assertSame(array('https://bfstop.de/update-pkg.xml'),
 			self::values($xpath, '//extensionset/extension/@detailsurl'));
 		$this->assertSame(array('2.0.0'), self::values($xpath, '//extensionset/extension/@version'));
 		$this->assertSame(array('pkg_bfstop'), self::values($xpath, '//extensionset/extension/@element'));

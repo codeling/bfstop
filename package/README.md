@@ -13,7 +13,7 @@ repository (with its history) for 2.0.0.
 - `script.php`: the package's installer script; refuses Joomla! < 5.4 and
   PHP < 8.1 before anything is installed (sites on Joomla! 4 stay with 1.5).
 - `update-server.php`: writes the files of the update server
-  (`update.xml` and `update-pkg.xml` at `https://bfstop.bfroehler.info`, which
+  (`update.xml` and `update-pkg.xml` at `https://bfstop.de`, which
   installed sites ask) from the GitHub releases, see "The update server".
 - `build.sh`: builds the zips.
 
@@ -70,7 +70,7 @@ version line, never a test release.
 
 ## The update server
 
-`https://bfstop.bfroehler.info` is served by GitHub Pages and deployed by
+`https://bfstop.de` is served by GitHub Pages and deployed by
 `.github/workflows/pages.yml`: the page in `site/`, and the two files the
 installed extensions ask for new versions, which `update-server.php` writes
 from the releases on GitHub (`gh api repos/codeling/bfstop/releases`):
@@ -91,7 +91,28 @@ Publishing a test release changes nothing in the files, but is a harmless way to
 see the workflow work.
 
 Setting it up (once, by the repository owner): *Settings → Pages → Source:
-GitHub Actions*; the custom domain `bfstop.bfroehler.info` there (with *Enforce
-HTTPS*) and a `CNAME` record for it at the DNS provider pointing to
-`codeling.github.io`. Only `main` may deploy to the `github-pages` environment
-(its default); `release` events start the workflow on `main` for that reason.
+GitHub Actions*, and the custom domain `bfstop.de` there (then *Enforce
+HTTPS*, once the certificate is issued). At the DNS provider, for the apex
+domain `bfstop.de`: `A` records to `185.199.108.153`, `185.199.109.153`,
+`185.199.110.153` and `185.199.111.153` (and `AAAA` records to
+`2606:50c0:8000::153`, `2606:50c0:8001::153`, `2606:50c0:8002::153` and
+`2606:50c0:8003::153`) - or an `ALIAS`/`ANAME` record to `codeling.github.io`
+if the provider has them; `www.bfstop.de` can be a `CNAME` to
+`codeling.github.io` (GitHub then redirects it). The current addresses are in
+GitHub's documentation, "Managing a custom domain for your GitHub Pages site".
+Verifying the domain for the account (*Settings → Pages* of the account; a
+`TXT` record) keeps others from claiming it. Only `main` may deploy to the
+`github-pages` environment (its default); `release` events start the workflow
+on `main` for that reason.
+
+### The old domain, bfstop.bfroehler.info
+
+Every site which has BFStop 1.x (and a 2.0 test release, if the manifests of
+that one were not changed) asks `https://bfstop.bfroehler.info/update.xml`, and
+has to be offered 2.x from there. A GitHub Pages site has only *one* custom
+domain, so `bfstop.bfroehler.info` can't be pointed at it as well: a `CNAME`
+to `codeling.github.io` for a host which isn't the site's custom domain is
+answered with a 404. Whatever answers for `bfstop.bfroehler.info` has to keep
+serving `update.xml` and `update-pkg.xml` (or redirect to `bfstop.de`; check
+with a real site that Joomla! follows it, which is H3 in #250) - do not
+switch that host off.
