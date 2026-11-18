@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brute Force Stop (BFStop) for Joomla!</title>
+<meta name="description" content="BFStop blocks brute-force login attacks on your Joomla! site: it blocks the IP addresses that fail to log in too often.">
+<style>
+:root { color-scheme: light dark; --bg: #fff; --fg: #1d2330; --muted: #5b6474; --link: #0b5cad; --rule: #d9dde4; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14171d; --fg: #e6e9ef; --muted: #9aa3b2; --link: #6cb2ff; --rule: #2d3340; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 1rem/1.6 system-ui, sans-serif; }
+main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+h1 { font-size: 1.8rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+p, li { margin: .4rem 0; }
+.lead { color: var(--muted); margin-top: 0; }
+a { color: var(--link); }
+code { font: .9em ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>Brute Force Stop</h1>
+<p class="lead">Brute-force protection for Joomla! sites.</p>
+
+<p>BFStop watches the logins of your Joomla! site. An IP address that fails to
+log in too often is blocked, for a time that grows with every repeated block,
+so password guessing gets nowhere. It comes as one package with a system
+plugin, a task plugin and an administration component, free and open source
+(GPLv3).</p>
+
+<h2>Download and install</h2>
+<ul>
+<li><a href="https://github.com/codeling/bfstop/releases/latest">Latest release</a>
+  on GitHub: install <code>pkg_bfstop-&lt;version&gt;.zip</code> in Joomla!'s
+  <em>System → Install → Extensions</em>.</li>
+<li>Also listed in the
+  <a href="https://extensions.joomla.org/extensions/extension/access-a-security/site-security/brute-force-stop/">Joomla! Extensions Directory</a>.</li>
+<li>BFStop 2 needs Joomla! 5.4 or 6 and PHP 8.1 or later. Sites on Joomla! 4 or
+  5.0–5.3 stay with BFStop 1.5, which is what their updater offers.</li>
+<li>Once installed, Joomla! offers updates itself: the update server of BFStop
+  is this site.</li>
+</ul>
+
+<h2>Documentation and help</h2>
+<ul>
+<li><a href="https://github.com/codeling/bfstop/wiki">Documentation (wiki)</a></li>
+<li><a href="https://github.com/codeling/bfstop/blob/main/CHANGELOG">Changes (CHANGELOG)</a></li>
+<li><a href="https://github.com/codeling/bfstop/issues">Questions and bug reports</a></li>
+<li>Security problems: please don't use the issue tracker, see
+  <a href="https://github.com/codeling/bfstop/blob/main/SECURITY.md">SECURITY.md</a>.</li>
+</ul>
+
+<h2>Source</h2>
+<p><a href="https://github.com/codeling/bfstop">github.com/codeling/bfstop</a>
+— contributions are welcome.</p>
+
+<h2>For the curious: the update server</h2>
+<p>Joomla! sites with BFStop ask <a href="update.xml"><code>update.xml</code></a>
+and <a href="update-pkg.xml"><code>update-pkg.xml</code></a> on this site for
+new versions. They are generated from the releases published on GitHub (never
+from test releases), and offer each site only a version that runs on its
+Joomla! version.</p>
+</main>
+</body>
+</html>
