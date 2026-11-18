@@ -124,7 +124,7 @@ class DisplayController extends BaseController
 		try
 		{
 			$db = Factory::getContainer()->get(DatabaseInterface::class);
-			$query = $db->getQuery(true)
+			$query = $db->createQuery()
 				->select($db->quoteName(array('manifest_cache', 'enabled')))
 				->from($db->quoteName('#__extensions'))
 				->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
@@ -138,7 +138,7 @@ class DisplayController extends BaseController
 				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_PLUGIN_NOT_INSTALLED'), 'warning');
 				return false;
 			}
-			$query = $db->getQuery(true)
+			$query = $db->createQuery()
 				->select($db->quoteName('manifest_cache'))
 				->from($db->quoteName('#__extensions'))
 				->where($db->quoteName('type') . ' = ' . $db->quote('component'))
