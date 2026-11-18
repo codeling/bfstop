@@ -21,11 +21,11 @@ use Joomla\CMS\Uri\Uri;
 
 class HtmlView extends BaseHtmlView
 {
-	protected $form;
+	protected \Joomla\CMS\Form\Form|false $form;
 	protected $item;
-	protected $canSave;
-	protected $pluginVersion;
-	protected $componentVersion;
+	protected bool $canSave = false;
+	protected string $pluginVersion = '';
+	protected string $componentVersion = '';
 
 	public function display($tpl = null)
 	{
@@ -48,11 +48,11 @@ class HtmlView extends BaseHtmlView
 		$this->item = $this->getModel()->getItem();
 
 		$user = Factory::getApplication()->getIdentity();
-		$this->canSave = $user && $user->authorise('core.admin', 'com_bfstop');
+		$this->canSave = (bool) ($user && $user->authorise('core.admin', 'com_bfstop'));
 
 		$versions = VersionHelper::getInstalledVersions();
-		$this->pluginVersion = $versions['plugin'];
-		$this->componentVersion = $versions['component'];
+		$this->pluginVersion = (string) $versions['plugin'];
+		$this->componentVersion = (string) $versions['component'];
 
 		if (!BlockPolicy::hasLiveSite())
 		{

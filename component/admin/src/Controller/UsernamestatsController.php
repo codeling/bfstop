@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Controller\AdminController;
@@ -25,16 +24,16 @@ class UsernamestatsController extends AdminController
 		return $model;
 	}
 
-	function purge()
+	public function purge()
 	{
 		$this->checkToken();
 		$listUrl = Route::_('index.php?option=com_bfstop&view=usernamestats', false);
-		if (!Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop'))
+		if (!$this->app->getIdentity()->authorise('core.delete', 'com_bfstop'))
 		{
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return;
 		}
-		$age = Factory::getApplication()->getInput()->post->getInt('age', 0);
+		$age = $this->input->post->getInt('age', 0);
 		if ($age < 1)
 		{
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_USERNAMESTATS_PURGE_INVALID_AGE'), 'error');

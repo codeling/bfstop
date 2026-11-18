@@ -14,7 +14,6 @@ use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\FormController;
 use Joomla\CMS\Router\Route;
@@ -51,7 +50,7 @@ class SettingsController extends FormController
 
 	protected function allowSave($data = array(), $key = 'id')
 	{
-		$user = Factory::getApplication()->getIdentity();
+		$user = $this->app->getIdentity();
 		return $user && $user->authorise('core.admin', 'com_bfstop');
 	}
 
@@ -138,8 +137,8 @@ class SettingsController extends FormController
 			$success
 				? Text::_('COM_BFSTOP_TEST_NOTIFICATION_SUCCESS')
 				: Text::sprintf('COM_BFSTOP_TEST_NOTIFICATION_FAILED', $result),
-			$result
-				? 'notice'
+			$success
+				? 'message'
 				: 'error'
 		);
 	}

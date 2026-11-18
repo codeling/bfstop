@@ -129,7 +129,7 @@ class BlockService
 			}
 			return $id;
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$logger->log('Blocking '.$logEntry->ipaddress.' failed: '.$e->getMessage(), Log::ERROR);
 			return -1;

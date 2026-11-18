@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\AdminController;
 use Joomla\CMS\Router\Route;
@@ -24,19 +23,19 @@ class HtblocklistController extends AdminController
 		return $model;
 	}
 
-	function unblock()
+	public function unblock()
 	{
 		$this->checkToken();
 		// custom action, not AdminModel's standard delete() flow, so it
 		// doesn't get the built-in core.delete check for free
-		if (!Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop'))
+		if (!$this->app->getIdentity()->authorise('core.delete', 'com_bfstop'))
 		{
 			$this->setRedirect(Route::_('index.php?option=com_bfstop&view=htblocklist', false),
 				Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return;
 		}
 		$logger = LogHelper::getLogger();
-		$input = Factory::getApplication()->getInput();
+		$input = $this->input;
 		$ips = $input->post->get('cid', array(), 'array');
 		$model = $this->getModel('htblocklist');
 		$message = $model->unblock($ips, $logger);

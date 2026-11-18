@@ -14,8 +14,8 @@ class TokenHelperTest extends IntegrationTestCase
 {
 	public function testToken()
 	{
-		$token = TokenHelper::getToken($this->logger);
+		$token = TokenHelper::getToken();
 		$this->assertMatchesRegularExpression('/^[0-9a-f]{40}$/', $token);
-		$this->assertNotSame($token, TokenHelper::getToken($this->logger));
+		$this->assertNotSame($token, TokenHelper::getToken());
 	}
 }

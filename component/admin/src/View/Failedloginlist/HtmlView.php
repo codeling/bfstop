@@ -19,16 +19,25 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	/** @var object[] */
+	protected $items = array();
+	protected \Joomla\CMS\Pagination\Pagination $pagination;
+	protected string $sortColumn = '';
+	protected string $sortDirection = '';
+	protected string $filterUsername = '';
+	protected int $autoPurgeWeeks = 0;
+	protected bool $canPurge = false;
+
 	function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
 		$state            = $this->getModel()->getState();
-		$this->sortColumn = $state->get('list.ordering');
-		$this->sortDirection = $state->get('list.direction');
+		$this->sortColumn = (string) $state->get('list.ordering');
+		$this->sortDirection = (string) $state->get('list.direction');
 		$this->filterUsername = (string) $state->get('filter.username', '');
 		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Settings::Defaults['deleteOld']);
-		$this->canPurge   = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
+		$this->canPurge   = (bool) Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
 		{
 			Factory::getApplication()->getDocument()->getWebAssetManager()->useScript('bootstrap.modal');

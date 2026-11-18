@@ -10,43 +10,18 @@ namespace Codeling\Library\Bfstop\Helper;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Log\Log;
 use Joomla\CMS\Uri\Uri;
 
 class TokenHelper
 {
-	public const HexLetter = '0123456789abcdef';
-
-	private static function getRandHexLetter()
+	/**
+	 * 160 random bits as 40 hex digits. random_bytes() throws if the system
+	 * has no source of randomness: better no token (the caller's exception
+	 * handling) than a weak one.
+	 */
+	public static function getToken()
 	{
-		$idx = random_int(0, 15);
-		return substr(self::HexLetter, $idx, 1);
-	}
-
-	private static function getRandToken($length)
-	{
-		$token = '';
-		for ($i = 0; $i < $length; ++$i)
-		{
-			$token .= self::getRandHexLetter();
-		}
-		return $token;
-	}
-
-	public static function getToken(LoggerHelper $logger)
-	{
-		$length = 64;
-		try
-		{
-			$token = random_bytes($length);
-			$logger->log('Using PHP random_bytes() for token', Log::DEBUG);
-		}
-		catch (\Exception $e)
-		{
-			$logger->log('random_bytes() failed ('.$e->getMessage().'), falling back to a less strong token generator!', Log::WARNING);
-			$token = self::getRandToken($length);
-		}
-		return sha1($token);
+		return bin2hex(random_bytes(20));
 	}
 
 	/**

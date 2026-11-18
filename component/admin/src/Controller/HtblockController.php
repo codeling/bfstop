@@ -16,7 +16,6 @@ use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Controller\FormController;
@@ -34,7 +33,7 @@ class HtblockController extends FormController
 
 	public function returnToFormWithMessage($ipaddress, $msg)
 	{
-		$application = Factory::getApplication();
+		$application = $this->app;
 		$formdata = array("ipaddress" => $ipaddress);
 		$application->setUserState('com_bfstop.edit.htblock.data', $formdata);
 		$application->enqueueMessage($msg, 'warning');
@@ -52,7 +51,7 @@ class HtblockController extends FormController
 		// addresses away before Joomla runs, so nobody can lift it from
 		// within the site who is in it - core.admin as well, like the
 		// settings (which choose the file) and the allow list
-		$user = Factory::getApplication()->getIdentity();
+		$user = $this->app->getIdentity();
 		if (!$user || !$user->authorise('core.create', 'com_bfstop') || !$user->authorise('core.admin', 'com_bfstop'))
 		{
 			$this->returnToFormWithMessage('', Text::_('COM_BFSTOP_NOT_AUTHORISED'));
@@ -63,7 +62,7 @@ class HtblockController extends FormController
 		$htaccess = new HtaccessHelper($htaccessPath, null);
 		$model = $this->getModel('block');
 		$form = $model->getForm(null, false);
-		$input = Factory::getApplication()->getInput();
+		$input = $this->input;
 		$data  = $input->post->get('jform', array(), 'array');
 		$validData = $model->validate($form, $data);
 		if ($validData === false)
@@ -115,7 +114,7 @@ class HtblockController extends FormController
 
 	public function cancel($key = null)
 	{
-		$application = Factory::getApplication();
+		$application = $this->app;
 		$application->setUserState('com_bfstop.edit.htblock.data', array());
 		$this->setRedirect(
 			Route::_('index.php?option=com_bfstop&view=htblocklist', false)

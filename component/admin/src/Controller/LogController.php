@@ -13,7 +13,6 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Controller\BaseController;
@@ -32,7 +31,7 @@ class LogController extends BaseController
 	private function checkRequest($listUrl)
 	{
 		$this->checkToken();
-		$user = Factory::getApplication()->getIdentity();
+		$user = $this->app->getIdentity();
 		if (!$user || !$user->authorise('core.admin', 'com_bfstop') || !$user->authorise('core.delete', 'com_bfstop'))
 		{
 			$this->setRedirect($listUrl, Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
@@ -45,7 +44,7 @@ class LogController extends BaseController
 	 * Does what the plugin does once a day: moves a log file which is too
 	 * big out of the way, and removes the entries older than the retention.
 	 */
-	function prune()
+	public function prune()
 	{
 		$listUrl = Route::_('index.php?option=com_bfstop&view=log', false);
 		if (!$this->checkRequest($listUrl))
@@ -67,7 +66,7 @@ class LogController extends BaseController
 			Text::plural('COM_BFSTOP_LOG_PRUNE_N_DELETED', $deleted, $keepDays), 'message');
 	}
 
-	function clear()
+	public function clear()
 	{
 		$listUrl = Route::_('index.php?option=com_bfstop&view=log', false);
 		if (!$this->checkRequest($listUrl))
