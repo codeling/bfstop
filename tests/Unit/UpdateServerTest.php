@@ -158,6 +158,20 @@ class UpdateServerTest extends TestCase
 			self::release('2.0.0', array('draft' => true))), self::noFetch());
 	}
 
+	public function testReleasesOlderThanTheFirstLineAreNotOffered()
+	{
+		$files = updateServerFiles(array(self::release('0.9.11'), self::release('0.9.2', array('assets' => array())),
+			self::release('1.5.2')), self::noFetch());
+		$this->assertSame(array('1.5.2'), self::values(self::xpath($files['update-pkg.xml']), '//update/version'));
+		$this->assertSame(array('1.5.2'), self::values(self::xpath($files['update.xml']), '//extension/@version'));
+	}
+
+	public function testOnlyReleasesOlderThanTheFirstLineIsNothingToOffer()
+	{
+		$this->expectException(RuntimeException::class);
+		updateServerFiles(array(self::release('0.9.11')), self::noFetch());
+	}
+
 	public function testMajorVersionWithoutLineIsAnError()
 	{
 		$this->expectException(RuntimeException::class);

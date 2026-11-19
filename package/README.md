@@ -80,9 +80,10 @@ from the releases on GitHub (`gh api repos/codeling/bfstop/releases`):
 - `update-pkg.xml`, with one update per version line: the newest published
   release of 1.x for Joomla! 4 and 5.0-5.3, of 2.x for Joomla! 5.4 and 6 (its
   `targetplatform` and `php_minimum`). Drafts and pre-releases (test releases)
-  are never offered, and a release of a major version without a line in
+  are never offered, and a release of a major version newer than the lines in
   `updateServerLines()` makes the generator fail - decide which Joomla!
-  versions it is for first. The SHA-256 is the one GitHub has for the package
+  versions it is for first; releases older than the first line (0.9.x) are
+  not offered. The SHA-256 is the one GitHub has for the package
   asset.
 
 The workflow runs when a release is published, edited, unpublished or deleted,
