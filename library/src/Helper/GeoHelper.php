@@ -94,7 +94,7 @@ class GeoHelper
 			}
 			return is_array($record) ? $record : null;
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$logger->log('GeoHelper: GeoIP lookup failed: '.$e->getMessage(), Log::WARNING);
 			return null;

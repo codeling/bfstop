@@ -20,6 +20,9 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	protected ?string $ipAddress = null;
+	protected string $ipInfo = '';
+
 	public function display($tpl = null)
 	{
 		$input = Factory::getApplication()->getInput();

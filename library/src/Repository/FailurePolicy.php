@@ -62,7 +62,7 @@ final class FailurePolicy
 		{
 			return $operation();
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			++self::$failures;
 			self::$lastFailure = $name.': '.$e->getMessage();

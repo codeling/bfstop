@@ -19,16 +19,25 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	/** @var object[] */
+	protected $items = array();
+	protected \Joomla\CMS\Pagination\Pagination $pagination;
+	protected string $sortColumn = '';
+	protected string $sortDirection = '';
+	protected int $maxAttempts = 0;
+	protected int $maxUsernames = 0;
+	protected bool $canPurge = false;
+
 	function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
 		$state            = $this->getModel()->getState();
-		$this->sortColumn = $state->get('list.ordering');
-		$this->sortDirection = $state->get('list.direction');
-		$this->maxAttempts = $this->getModel()->getMaxAttempts();
-		$this->maxUsernames = UsernameStatsRepository::MaxRows;
-		$this->canPurge   = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
+		$this->sortColumn = (string) $state->get('list.ordering');
+		$this->sortDirection = (string) $state->get('list.direction');
+		$this->maxAttempts = (int) $this->getModel()->getMaxAttempts();
+		$this->maxUsernames = (int) UsernameStatsRepository::MaxRows;
+		$this->canPurge   = (bool) Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
 		{
 			Factory::getApplication()->getDocument()->getWebAssetManager()->useScript('bootstrap.modal');

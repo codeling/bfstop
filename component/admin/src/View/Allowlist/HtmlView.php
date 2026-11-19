@@ -17,13 +17,19 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	/** @var object[] */
+	protected $items = array();
+	protected \Joomla\CMS\Pagination\Pagination $pagination;
+	protected string $sortColumn = '';
+	protected string $sortDirection = '';
+
 	function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
 		$state            = $this->getModel()->getState();
-		$this->sortColumn = $state->get('list.ordering');
-		$this->sortDirection = $state->get('list.direction');
+		$this->sortColumn = (string) $state->get('list.ordering');
+		$this->sortDirection = (string) $state->get('list.direction');
 		// selecting a range of rows with shift-click, see grid.checkall in the head
 		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();

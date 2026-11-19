@@ -71,9 +71,4 @@ class BlocklistModel extends ListModel
 			return Text::_("COM_BFSTOP_UNBLOCK_FAILED");
 		}
 	}
-
-	public function getTotal()
-	{
-		return parent::getTotal();
-	}
 }

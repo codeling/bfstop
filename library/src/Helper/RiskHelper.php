@@ -47,7 +47,7 @@ class RiskHelper
 				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
 			}
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$logger->log('RiskHelper: known-IP lookup failed: '.$e->getMessage(), Log::WARNING);
 		}
@@ -158,7 +158,7 @@ class RiskHelper
 				return self::getIntParam($params, 'riskReverseDnsPoints', 2);
 			}
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$logger->log('RiskHelper: reverse DNS lookup failed: '.$e->getMessage(), Log::WARNING);
 		}

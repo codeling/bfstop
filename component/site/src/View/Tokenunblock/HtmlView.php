@@ -22,6 +22,10 @@ use Joomla\CMS\Session\Session;
 
 class HtmlView extends BaseHtmlView
 {
+	protected string $token = '';
+	protected string $message = '';
+	protected bool $showConfirmation = false;
+
 	function getLoginLink()
 	{
 		return Route::_('index.php?option=com_users&view=login');
@@ -42,13 +46,13 @@ class HtmlView extends BaseHtmlView
 		$this->token = $input->getString('token', '');
 		$this->showConfirmation = false;
 		$logger = LogHelper::getLogger();
-		$this->model = $this->getModel();
+		$model = $this->getModel();
 		$isPost = $input->getMethod() === 'POST';
 		// the confirmation is a form of this page: a POST without its form
 		// token (one another site makes the browser send) unblocks nothing
 		$result = ($isPost && !Session::checkToken('post'))
 			? TokenunblockModel::ResultInvalid
-			: $this->model->process($this->token, $isPost, IpHelper::getAddress($logger), $logger);
+			: $model->process($this->token, $isPost, IpHelper::getAddress($logger), $logger);
 		switch ($result)
 		{
 			case TokenunblockModel::ResultConfirm:

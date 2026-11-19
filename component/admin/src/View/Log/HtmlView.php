@@ -20,6 +20,15 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	/** @var object[] */
+	protected $items = array();
+	protected \Joomla\CMS\Pagination\Pagination $pagination;
+	protected string $sortColumn = '';
+	protected string $sortDirection = '';
+	protected int $keepDays = 0;
+	protected int $maxSizeMB = 0;
+	protected bool $canDelete = false;
+
 	function display($tpl = null)
 	{
 		// the log holds addresses and usernames of failed logins and details
@@ -31,11 +40,11 @@ class HtmlView extends BaseHtmlView
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
 		$state            = $this->getModel()->getState();
-		$this->sortColumn = $state->get('list.ordering');
-		$this->sortDirection = $state->get('list.direction');
+		$this->sortColumn = (string) $state->get('list.ordering');
+		$this->sortDirection = (string) $state->get('list.direction');
 		$this->keepDays = (int) ParamHelper::get('logKeepDays', LoggerHelper::DefaultKeepDays);
 		$this->maxSizeMB = max(1, (int) ParamHelper::get('logMaxSize', LoggerHelper::DefaultMaxSizeMB));
-		$this->canDelete = Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
+		$this->canDelete = (bool) Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canDelete)
 		{
 			Factory::getApplication()->getDocument()->getWebAssetManager()->useScript('bootstrap.modal');

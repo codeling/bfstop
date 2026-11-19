@@ -87,7 +87,7 @@ class BlockPolicy
 	/** The duration of a first block, in minutes (0: permanent). */
 	public function blockDuration(): int
 	{
-		return $this->intParam('blockDuration', NotifierHelper::$ONE_DAY);
+		return $this->intParam('blockDuration', NotifierHelper::OneDay);
 	}
 
 	public function htaccessPath(): string

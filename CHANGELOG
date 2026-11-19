@@ -1,4 +1,13 @@
 2.0.0 (unreleased)
+  - Code clean-up (issue #283): unblock tokens are 40 hex digits of
+    random_bytes() without the weaker fallback generator; the notifier's
+    "one day" is a constant; the log page of the component shows the newest
+    entries first, includes the previous generation of the log file and
+    reads the file once; "Send test notification" shows a failure as an
+    error; the plugin ignores a login from an empty address instead of
+    remembering it as a known one; unexpected errors (TypeError etc.), not
+    only exceptions, no longer break the request where the plugin carries on
+    without the failed part
   - The daily maintenance - purging old failed logins, blocks and unblock
     links, keeping the tables below their bounds, taking expired blocks out
     of the .htaccess file, removing old logs - no longer runs in the

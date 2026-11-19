@@ -24,9 +24,9 @@ use Joomla\Database\DatabaseInterface;
 
 class DisplayController extends BaseController
 {
-	function display($cachable = false, $urlparams = false)
+	public function display($cachable = false, $urlparams = false)
 	{
-		$input = Factory::getApplication()->getInput();
+		$input = $this->input;
 		$view = $input->getCmd('view', 'blocklist');
 
 		$pluginInstalled = $this->checkWhetherPluginInstalled();
@@ -46,7 +46,7 @@ class DisplayController extends BaseController
 		parent::display($cachable);
 	}
 
-	function warnIfAdminUserExists()
+	public function warnIfAdminUserExists()
 	{
 		try
 		{
@@ -57,18 +57,18 @@ class DisplayController extends BaseController
 			$db->setQuery($query);
 			if ($db->loadResult() > 0)
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_ADMIN_USER_EXISTS'), 'warning');
 			}
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
-			$application = Factory::getApplication();
+			$application = $this->app;
 			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
 		}
 	}
 
-	function warnIfHtAccessNotWorking()
+	public function warnIfHtAccessNotWorking()
 	{
 		$htaccessPath = UnblockHelper::getHtaccessPath();
 		$htaccess = new HtaccessHelper($htaccessPath, null);
@@ -79,7 +79,7 @@ class DisplayController extends BaseController
 			!$req['writeable'])
 		// TODO: add check whether .htaccess actually is effective!
 		{
-			$application = Factory::getApplication();
+			$application = $this->app;
 			$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_HTACCESS_NOT_WORKING')
 				// .'found='.$req['found'].', readable='.$req['readable'].', writeable='.$req['writeable'].', apache='.$req['apacheserver']
 				, 'warning');
@@ -91,17 +91,17 @@ class DisplayController extends BaseController
 	 * $live_site was removed since), but they need $live_site: the plugin
 	 * sends none, see BlockPolicy::effectiveNotifyBlockedUser().
 	 */
-	function warnIfUnblockLinksNeedLiveSite()
+	public function warnIfUnblockLinksNeedLiveSite()
 	{
 		$setting = (int) ParamHelper::get('notifyBlockedUser', 0);
 		if (BlockPolicy::effectiveNotifyBlockedUser($setting, BlockPolicy::hasLiveSite()) !== $setting)
 		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_NOTIFY_ANY_WITHOUT_LIVE_SITE',
+			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_NOTIFY_ANY_WITHOUT_LIVE_SITE',
 				Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
 		}
 	}
 
-	function checkWhetherProxyConfigured()
+	public function checkWhetherProxyConfigured()
 	{
 		$useProxy = (bool) ParamHelper::get('useProxy', false);
 		if ($useProxy)
@@ -112,33 +112,42 @@ class DisplayController extends BaseController
 		{
 			if (array_key_exists($header, $_SERVER) && $_SERVER[$header] !== '')
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_PROXY_NOT_CONFIGURED', Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
 				return;
 			}
 		}
 	}
 
-	function checkWhetherPluginInstalled()
+	public function checkWhetherPluginInstalled()
 	{
 		try
 		{
 			$db = Factory::getContainer()->get(DatabaseInterface::class);
-			$query = "SELECT manifest_cache,enabled FROM #__extensions WHERE name='plg_system_bfstop'";
+			$query = $db->createQuery()
+				->select($db->quoteName(array('manifest_cache', 'enabled')))
+				->from($db->quoteName('#__extensions'))
+				->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+				->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+				->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
 			$db->setQuery($query);
 			$plugin = $db->loadObject();
 			if (is_null($plugin))
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_PLUGIN_NOT_INSTALLED'), 'warning');
 				return false;
 			}
-			$query = "SELECT manifest_cache FROM #__extensions WHERE name='com_bfstop'";
+			$query = $db->createQuery()
+				->select($db->quoteName('manifest_cache'))
+				->from($db->quoteName('#__extensions'))
+				->where($db->quoteName('type') . ' = ' . $db->quote('component'))
+				->where($db->quoteName('element') . ' = ' . $db->quote('com_bfstop'));
 			$db->setQuery($query);
 			$component = $db->loadObject();
 			if (is_null($component))
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_CANNOT_RETRIEVE_COMPONENT_CACHE'), 'warning');
 				return false;
 			}
@@ -146,23 +155,24 @@ class DisplayController extends BaseController
 			$component_version = VersionHelper::getVersion($component->manifest_cache);
 			if (!VersionHelper::checkSameMajorMinor($component_version, $plugin_version))
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_COMPONENT_PLUGIN_DIFFERENT_VERSION'), 'warning');
 				return false;
 			}
 			if ($plugin->enabled != 1)
 			{
-				$application = Factory::getApplication();
+				$application = $this->app;
 				$application->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_PLUGIN_DISABLED', Route::_('index.php?option=com_plugins&view=plugins', false)), 'warning');
 				// this is not a "hard" failure; we can still manage the tables!
 				// return false;
 			}
 			return true;
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
-			$application = Factory::getApplication();
+			$application = $this->app;
 			$application->enqueueMessage("Database exception occurred: ".$e->getMessage(), 'warning');
+			return false;
 		}
 	}
 }

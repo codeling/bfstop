@@ -19,6 +19,9 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
+	protected \Joomla\CMS\Form\Form|false $form;
+	protected $item;
+
 	public function display($tpl = null)
 	{
 		$this->form = $this->getModel()->getForm();

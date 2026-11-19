@@ -64,7 +64,7 @@ class RepositoryRulesTest extends TestCase
 		$code = file_get_contents($file);
 		if (basename($file) === 'FailurePolicy.php')
 		{
-			$this->assertStringContainsString('catch (\Exception', $code, 'the policy is where failures are caught');
+			$this->assertStringContainsString('catch (\Throwable', $code, 'the policy is where failures are caught');
 			return;
 		}
 		$this->assertStringNotContainsString('catch (', $code,

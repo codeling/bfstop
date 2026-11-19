@@ -20,7 +20,7 @@ use Joomla\CMS\Uri\Uri;
 
 class NotifierHelper
 {
-	public static $ONE_DAY = 1440;
+	public const OneDay = 1440;
 	private $logger;
 	private $repositories;
 	private $notifyAddresses;
@@ -123,8 +123,8 @@ class NotifierHelper
 			return false;
 		}
 		$events = $blocks
-			? $this->repositories->blocks()->countCreatedInWindow($logtime, self::$ONE_DAY)
-			: $this->repositories->failedLogins()->countInWindow($logtime, self::$ONE_DAY);
+			? $this->repositories->blocks()->countCreatedInWindow($logtime, self::OneDay)
+			: $this->repositories->failedLogins()->countInWindow($logtime, self::OneDay);
 		return $events <= $maxNumber;
 	}
 
@@ -198,7 +198,7 @@ class NotifierHelper
 			}
 			$sendResult = $mail->send();
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$sendResult = $e->getMessage();
 		}

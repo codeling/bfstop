@@ -17,7 +17,10 @@ use Joomla\CMS\Toolbar\ToolbarHelper;
 
 class HtmlView extends BaseHtmlView
 {
-	protected $canSave;
+	protected \Joomla\CMS\Form\Form|false $form;
+	protected $item;
+	protected bool $canSave = false;
+
 
 	public function display($tpl = null)
 	{
@@ -25,7 +28,7 @@ class HtmlView extends BaseHtmlView
 		$this->item = $this->getModel()->getItem();
 
 		$user = Factory::getApplication()->getIdentity();
-		$this->canSave = $user && $user->authorise('core.create', 'com_bfstop');
+		$this->canSave = (bool) ($user && $user->authorise('core.create', 'com_bfstop'));
 
 		$this->addToolbar();
 		// the stylesheet is in the component's template folder, not in media/: a

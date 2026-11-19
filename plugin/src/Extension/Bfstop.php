@@ -170,7 +170,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$ipAddress = IpHelper::getAddress($this->logger);
-		if (empty($ipAddress) || $ipAddress === '')
+		if ($ipAddress === '')
 		{
 			$this->logger->log('Empty IP address!', Log::ERROR);
 			return;
@@ -317,7 +317,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$this->logger->log("Existing user '".$logEntry->username."' was blocked, sending unblock instructions", Log::INFO);
-		$token = $this->repositories->unblockTokens()->add($id, TokenHelper::getToken($this->logger), $logEntry->username);
+		$token = $this->repositories->unblockTokens()->add($id, TokenHelper::getToken(), $logEntry->username);
 		$this->notifier()->sendUnblockMail($userEmail, TokenHelper::unblockLink($token));
 	}
 
@@ -331,8 +331,16 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
+		$ipAddress = IpHelper::getAddress($this->logger);
+		if ($ipAddress === '')
+		{
+			// no address to remember as a known one (and none to tell that
+			// the login is from a known one)
+			$this->logger->log('Empty IP address!', Log::ERROR);
+			return;
+		}
 		$info = new \stdClass();
-		$info->ipaddress = IpHelper::getAddress($this->logger);
+		$info->ipaddress = $ipAddress;
 		$info->username = (string) ($user['username'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
