@@ -53,7 +53,7 @@ of another, only those of the library.
   [codeling/bfstop issues](https://github.com/codeling/bfstop/issues)
 - Security issues: please don't report them in the bug tracker, see
   [SECURITY.md](SECURITY.md)
-- Update server: `https://bfstop.bfroehler.info/update.xml`
+- Update server: `https://bfstop.de/update.xml`
 - Source: [codeling/bfstop](https://github.com/codeling/bfstop) (plugins,
   component and package)
 - Contact: info@bfstop.de
@@ -66,7 +66,10 @@ of another, only those of the library.
 - Tests: [tests/README.md](tests/README.md), for plugins and component.
 - `update.xml` (at the top) is an empty file for the sites which still have a
   version of the plugin before 1.1.1, whose update server it was; the update
-  server of the package is `package/update.xml`.
+  server of the package is generated from the GitHub releases
+  (`package/update-server.php`, deployed with the website in `site/` to
+  `https://bfstop.de` by `.github/workflows/pages.yml`, see
+  [package/README.md](package/README.md)).
 - Contributions are welcome, as pull requests to this repository.
 
 ### GeoIP reader
