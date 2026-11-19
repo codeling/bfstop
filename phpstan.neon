@@ -1,0 +1,29 @@
+# Static analysis, see tests/README.md ("Static analysis").
+#
+#   JOOMLA_ROOT=/path/to/joomla php vendor/bin/phpstan analyse
+#
+# Joomla has no stubs package; instead its own code (libraries/) is scanned
+# from an unpacked full package, so the types are those of the real release.
+# CI uses tests/ci/phpstan.sh, which downloads and verifies one.
+includes:
+	- phpstan-baseline.neon
+
+parameters:
+	level: 5
+	# the oldest PHP the extensions support (composer.json)
+	phpVersion: 80100
+	paths:
+		- library/src
+		- plugin/src
+		- component/admin/src
+		- component/site/src
+	excludePaths:
+		analyse:
+			# generated from maxmind-db/reader by tools/vendor-geoip.php: scanned
+			# (the classes are used), not analysed
+			- library/src/Helper/Geo
+	bootstrapFiles:
+		- tests/phpstan/bootstrap.php
+	scanDirectories:
+		- %env.JOOMLA_ROOT%/libraries
+	treatPhpDocTypesAsCertain: false

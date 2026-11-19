@@ -8,6 +8,8 @@
     remembering it as a known one; unexpected errors (TypeError etc.), not
     only exceptions, no longer break the request where the plugin carries on
     without the failed part
+  - phpstan (level 5, with a baseline) runs in CI, against the types of the
+    Joomla! classes (issue #283)
   - The daily maintenance - purging old failed logins, blocks and unblock
     links, keeping the tables below their bounds, taking expired blocks out
     of the .htaccess file, removing old logs - no longer runs in the

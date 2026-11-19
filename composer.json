@@ -1,6 +1,6 @@
 {
     "name": "codeling/bfstop",
-    "description": "Brute Force Stop for Joomla! - this file only tracks the third-party code vendored into the package (library/src/Helper/Geo), see README.md",
+    "description": "Brute Force Stop for Joomla! - this file tracks the third-party code vendored into the package (library/src/Helper/Geo, see README.md) and the development tools (phpstan)",
     "type": "project",
     "license": "GPL-3.0-or-later",
     "require": {
@@ -16,5 +16,8 @@
     "scripts": {
         "vendor-geoip": "@php tools/vendor-geoip.php",
         "check-geoip": "@php tools/vendor-geoip.php --check"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.3"
     }
 }

@@ -1,0 +1,379 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Cannot call method remove\(\) on bool\|Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: component/admin/src/Controller/AllowlistController.php
+
+		-
+			message: '#^Cannot call method unblock\(\) on bool\|Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: component/admin/src/Controller/BlocklistController.php
+
+		-
+			message: '#^Default value of the parameter \#2 \$urlparams \(false\) of method Codeling\\Component\\Bfstop\\Administrator\\Controller\\DisplayController\:\:display\(\) is incompatible with type array\.$#'
+			identifier: parameter.defaultValue
+			count: 1
+			path: component/admin/src/Controller/DisplayController.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Controller\\DisplayController\:\:display\(\) should return static\(Codeling\\Component\\Bfstop\\Administrator\\Controller\\DisplayController\) but empty return statement found\.$#'
+			identifier: return.empty
+			count: 1
+			path: component/admin/src/Controller/DisplayController.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Controller\\DisplayController\:\:display\(\) should return static\(Codeling\\Component\\Bfstop\\Administrator\\Controller\\DisplayController\) but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: component/admin/src/Controller/DisplayController.php
+
+		-
+			message: '#^Cannot call method purgeOlderThan\(\) on bool\|Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: component/admin/src/Controller/FailedloginlistController.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Controller/HtblockController.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:validate\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Controller/HtblockController.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Controller\\HtblockController\:\:cancel\(\) should return bool but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: component/admin/src/Controller/HtblockController.php
+
+		-
+			message: '#^Cannot call method unblock\(\) on bool\|Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: component/admin/src/Controller/HtblocklistController.php
+
+		-
+			message: '#^Cannot call method purgeNotSeenFor\(\) on bool\|Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\.$#'
+			identifier: method.nonObject
+			count: 1
+			path: component/admin/src/Controller/UsernamestatsController.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getUserState\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Model/AllowModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Model\\AllowModel\:\:getForm\(\) should return Joomla\\CMS\\Form\\Form but returns false\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Model/AllowModel.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getUserState\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Model/BlockModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Model\\BlockModel\:\:getForm\(\) should return Joomla\\CMS\\Form\\Form but returns false\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Model/BlockModel.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getUserState\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Model/HtblockModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Model\\HtblockModel\:\:getForm\(\) should return Joomla\\CMS\\Form\\Form but returns false\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Model/HtblockModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Model\\HtblockModel\:\:getItem\(\) should return stdClass\|false but returns array\{ipaddress\: ''0\.0\.0\.0''\}\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Model/HtblockModel.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getUserState\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/Model/SettingsModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Model\\SettingsModel\:\:getForm\(\) should return Joomla\\CMS\\Form\\Form but returns false\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Model/SettingsModel.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\EmaillistRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Rule/EmaillistRule.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\GeodbpathRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Rule/GeodbpathRule.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\HtaccesspathRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Rule/HtaccesspathRule.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\ProxylistRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
+			identifier: return.type
+			count: 1
+			path: component/admin/src/Rule/ProxylistRule.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Allow/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItem\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Allow/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Allowlist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Allowlist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Block/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItem\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Block/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Blocklist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Blocklist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getDocument\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Failedloginlist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Failedloginlist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Failedloginlist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Htblock/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItem\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Htblock/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Htblocklist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Htblocklist/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getDocument\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Log/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Log/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Log/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Settings/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItem\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Settings/HtmlView.php
+
+		-
+			message: '#^Parameter \#6 \$formId of static method Joomla\\CMS\\Toolbar\\ToolbarHelper\:\:custom\(\) expects string\|null, false given\.$#'
+			identifier: argument.type
+			count: 1
+			path: component/admin/src/View/Settings/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getDocument\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Usernamestats/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getItems\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Usernamestats/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getMaxAttempts\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Usernamestats/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getPagination\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/admin/src/View/Usernamestats/HtmlView.php
+
+		-
+			message: '#^Default value of the parameter \#2 \$urlparams \(false\) of method Codeling\\Component\\Bfstop\\Site\\Controller\\DisplayController\:\:display\(\) is incompatible with type array\.$#'
+			identifier: parameter.defaultValue
+			count: 1
+			path: component/site/src/Controller/DisplayController.php
+
+		-
+			message: '#^Method Codeling\\Component\\Bfstop\\Site\\Controller\\DisplayController\:\:display\(\) should return static\(Codeling\\Component\\Bfstop\\Site\\Controller\\DisplayController\) but return statement is missing\.$#'
+			identifier: return.missing
+			count: 1
+			path: component/site/src/Controller/DisplayController.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:allowCache\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/site/src/View/Tokenunblock/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:setHeader\(\)\.$#'
+			identifier: method.notFound
+			count: 3
+			path: component/site/src/View/Tokenunblock/HtmlView.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:process\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: component/site/src/View/Tokenunblock/HtmlView.php
+
+		-
+			message: '#^Method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getMessageQueue\(\) invoked with 1 parameter, 0 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: component/site/src/View/Tokenunblock/HtmlView.php
+
+		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: library/src/Helper/ApiHelper.php
+
+		-
+			message: '#^Parameter &\$next by\-ref type of method Codeling\\Library\\Bfstop\\Helper\\DnsHelper\:\:readName\(\) expects int, \(float\|int\) given\.$#'
+			identifier: parameterByRef.type
+			count: 2
+			path: library/src/Helper/DnsHelper.php
+
+		-
+			message: '#^Parameter &\$next by\-ref type of method Codeling\\Library\\Bfstop\\Helper\\DnsHelper\:\:readName\(\) expects int, null given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: library/src/Helper/DnsHelper.php
+
+		-
+			message: '#^Argument of an invalid type string supplied for foreach, only iterables are supported\.$#'
+			identifier: foreach.nonIterable
+			count: 1
+			path: library/src/Helper/HtaccessHelper.php
+
+		-
+			message: '#^Parameter \#1 \$insertion of method Codeling\\Library\\Bfstop\\Helper\\HtaccessHelper\:\:insert\(\) expects string, array\<string\> given\.$#'
+			identifier: argument.type
+			count: 6
+			path: library/src/Helper/HtaccessHelper.php
+
+		-
+			message: '#^Property Codeling\\Library\\Bfstop\\Helper\\LoggerHelper\:\:\$maxBytes is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: library/src/Helper/LoggerHelper.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\Database\\QueryInterface\:\:returning\(\)\.$#'
+			identifier: method.notFound
+			count: 1
+			path: library/src/Repository/Repository.php
+
+		-
+			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:getClientId\(\)\.$#'
+			identifier: method.notFound
+			count: 2
+			path: plugin/src/Extension/Bfstop.php
