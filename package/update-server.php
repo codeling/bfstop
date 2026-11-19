@@ -20,8 +20,9 @@
  * updateServerLines()); the newest release of each line is offered to the
  * sites of its Joomla! versions, so a Joomla! 4 site stays with 1.x and a
  * site on Joomla! 5.0-5.3 (which the 2.x installer refuses) is not offered
- * 2.x. A stable release of a major version without a line is an error: what
- * to offer to which site has to be decided first.
+ * 2.x. A stable release of a major version *newer* than the lines is an
+ * error: what to offer to which site has to be decided first. Releases of
+ * older major versions than the first line (0.9.x) are not offered.
  *
  * Usage: php package/update-server.php RELEASES.json OUTPUT_DIRECTORY
  *   RELEASES.json is the answer of the GitHub API for
@@ -96,6 +97,13 @@ function updateServerStableReleases(array $releases)
 			// a release is X.Y.Z: whatever else is tagged (and published
 			// without the pre-release mark) is not meant for the update server
 			fwrite(STDERR, "Ignoring release '$tag': not a version X.Y.Z\n");
+			continue;
+		}
+		if ((int) explode('.', $tag)[0] < min(array_keys(updateServerLines())))
+		{
+			// the releases from before the first line (0.9.x) are history: the
+			// sites which have them are not offered anything
+			fwrite(STDERR, "Not offering release $tag: older than the first version line\n");
 			continue;
 		}
 		$release['version'] = $tag;
