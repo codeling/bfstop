@@ -344,6 +344,18 @@ class IpHelperTest extends TestCase
 		$this->assertSame(array(), IpHelper::overlapping('203.0.113.0/24', array()));
 	}
 
+	public function testPrefixLengthOfAddressesAndNetworks()
+	{
+		$this->assertSame(32, IpHelper::prefixLength('192.0.2.1'));
+		$this->assertSame(24, IpHelper::prefixLength('192.0.2.0/24'));
+		$this->assertSame(128, IpHelper::prefixLength('2001:db8::1'));
+		$this->assertSame(56, IpHelper::prefixLength('2001:db8:1::/56'));
+		$this->assertSame(0, IpHelper::prefixLength('0.0.0.0/0'));
+		$this->assertNull(IpHelper::prefixLength('nonsense'));
+		$this->assertNull(IpHelper::prefixLength(''));
+		$this->assertNull(IpHelper::prefixLength('192.0.2.0/33'));
+	}
+
 	public function testTrustIsNeverRememberedForANetworkLargerThanA64()
 	{
 		$this->assertSame(64, IpHelper::trustPrefixLength(56));
