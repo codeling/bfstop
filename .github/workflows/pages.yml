@@ -66,7 +66,8 @@ jobs:
         run: |
           mkdir _site
           php package/update-server.php "$RUNNER_TEMP/releases.json" _site
-          xmllint --noout _site/*.xml
+          # (the runner image has no xmllint) both files have to exist and be well-formed
+          php -r 'foreach (array("update.xml", "update-pkg.xml") as $f) { $d = new DOMDocument(); if (!@$d->load("_site/$f")) { fwrite(STDERR, "ERROR: _site/$f is missing or not well-formed\n"); exit(1); } echo "_site/$f is well-formed\n"; }'
       - name: Add the page
         run: cp -r site/. _site/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
