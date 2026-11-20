@@ -349,18 +349,6 @@ parameters:
 			path: library/src/Helper/DnsHelper.php
 
 		-
-			message: '#^Argument of an invalid type string supplied for foreach, only iterables are supported\.$#'
-			identifier: foreach.nonIterable
-			count: 1
-			path: library/src/Helper/HtaccessHelper.php
-
-		-
-			message: '#^Parameter \#1 \$insertion of method Codeling\\Library\\Bfstop\\Helper\\HtaccessHelper\:\:insert\(\) expects string, array\<string\> given\.$#'
-			identifier: argument.type
-			count: 6
-			path: library/src/Helper/HtaccessHelper.php
-
-		-
 			message: '#^Property Codeling\\Library\\Bfstop\\Helper\\LoggerHelper\:\:\$maxBytes is never read, only written\.$#'
 			identifier: property.onlyWritten
 			count: 1
