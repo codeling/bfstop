@@ -66,7 +66,7 @@ class RecordingLogger extends LoggerHelper
 abstract class IntegrationTestCase extends TestCase
 {
 	public const Tables = array('failedlogin', 'bannedip', 'unblock',
-		'unblock_token', 'allowlist', 'knownip', 'dnscache', 'username_stats', 'state');
+		'offence', 'unblock_token', 'allowlist', 'knownip', 'dnscache', 'username_stats', 'state');
 
 	protected $db;
 	protected $logger;

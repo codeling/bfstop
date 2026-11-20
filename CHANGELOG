@@ -13,6 +13,15 @@
     longer overrides getItems() just to call the parent, and purging the
     failed logins or the user name statistics reports any error, not only an
     exception, instead of ending in Joomla's error page
+  - Code clean-up (issue #283, C14): the purge of old blocks no longer
+    makes an address forget its history. A slow attacker - one block every
+    five weeks, with the default purge age of four - never reached
+    "block permanently after n blocks" or doubled the duration, because
+    the blocks that were counted were deleted first. The purge now counts
+    the blocks it deletes (except those an administrator lifted, which
+    didn't count before either) in a small table of offences per address,
+    #__bfstop_offence, which is kept for a year after an address's latest
+    block, and for at most 10000 addresses
   - phpstan (level 5, with a baseline) runs in CI, against the types of the
     Joomla! classes (issue #283)
   - The daily maintenance - purging old failed logins, blocks and unblock

@@ -160,6 +160,67 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertSame(1, $this->repos->blocks()->countPrevious('203.0.113.9'));
 	}
 
+	public function testPurgedBlocksStillCountAsPreviousBlocks()
+	{
+		$old = 10 * 24 * 60;
+		$this->block('203.0.113.7', $old, 60);
+		$this->block('203.0.113.7', $old + 60, 60);
+		$this->block('203.0.113.7', 10, 60);   // not ended-and-old: stays
+		$byAdministrator = $this->block('203.0.113.8', $old, 60);
+		$this->insert('#__bfstop_unblock', array('block_id' => $byAdministrator, 'source' => 0, 'crdate' => self::minutesAgo(0)));
+		$byMail = $this->block('203.0.113.9', $old, 60);
+		$this->insert('#__bfstop_unblock', array('block_id' => $byMail, 'source' => 1, 'crdate' => self::minutesAgo(0)));
+		$this->assertSame(3, $this->repos->blocks()->countPrevious('203.0.113.7'));
+
+		$this->maintenance->purgeOldEntries(1);
+
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress = '203.0.113.7'"));
+		$this->assertSame(3, $this->repos->blocks()->countPrevious('203.0.113.7'), 'the purged ones are still counted');
+		$this->assertSame(0, $this->repos->blocks()->countPrevious('203.0.113.8'), 'lifted by an administrator: not counted');
+		$this->assertSame(1, $this->repos->blocks()->countPrevious('203.0.113.9'), 'lifted by the mail: counted');
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_offence WHERE ipaddress = '203.0.113.8'"));
+
+		// a second purge adds nothing: what was counted is deleted
+		$this->maintenance->purgeOldEntries(1);
+		$this->assertSame(3, $this->repos->blocks()->countPrevious('203.0.113.7'));
+		$this->assertSame(2, (int) $this->queryValue("SELECT blocks FROM #__bfstop_offence WHERE ipaddress = '203.0.113.7'"));
+
+		// more ended blocks of the same address add to its row
+		$this->block('203.0.113.7', $old, 60);
+		$this->maintenance->purgeOldEntries(1);
+		$this->assertSame(3, (int) $this->queryValue("SELECT blocks FROM #__bfstop_offence WHERE ipaddress = '203.0.113.7'"));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_offence WHERE ipaddress = '203.0.113.7'"));
+	}
+
+	public function testPurgeOfManyEndedBlocksIsCountedOnce()
+	{
+		$old = 10 * 24 * 60;
+		for ($i = 0; $i < 1200; ++$i)
+		{
+			$this->block('203.0.113.'.(1 + $i % 3), $old, 60);
+		}
+		$this->maintenance->purgeOldEntries(1);
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertSame(1200, (int) $this->queryValue('SELECT SUM(blocks) FROM #__bfstop_offence'));
+		$this->assertSame(400, $this->repos->blocks()->countPrevious('203.0.113.2'));
+	}
+
+	public function testOffencesAreForgottenAfterAYearAndBounded()
+	{
+		$row = fn ($ip, $daysAgo) => $this->insert('#__bfstop_offence',
+			array('ipaddress' => $ip, 'blocks' => 2, 'last_block' => self::minutesAgo($daysAgo * 24 * 60)));
+		$row('203.0.113.1', 400);   // forgotten
+		$row('203.0.113.2', 30);
+		$row('203.0.113.3', 90);
+		$row('203.0.113.4', 10);
+		$addresses = fn () => $this->db->setQuery('SELECT ipaddress FROM #__bfstop_offence ORDER BY ipaddress')->loadColumn();
+		$this->repos->blocks()->pruneOffences();
+		$this->assertSame(array('203.0.113.2', '203.0.113.3', '203.0.113.4'), $addresses());
+		$this->repos->blocks()->pruneOffences(null, 2);
+		$this->assertSame(array('203.0.113.2', '203.0.113.4'), $addresses(), 'the oldest go first');
+		$this->assertSame(0, $this->repos->blocks()->countPrevious('203.0.113.3'));
+	}
+
 	public function testBlockIPAndRecordAttempts()
 	{
 		$this->failedLogin('203.0.113.50', 'bob', 0);

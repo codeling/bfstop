@@ -28,7 +28,10 @@ class Maintenance
 
 	/**
 	 * Deletes what is older than $purgeAgeWeeks weeks: failed logins, ended
-	 * blocks (with the records of their lifting) and unblock tokens.
+	 * blocks (with the records of their lifting) and unblock tokens. What the
+	 * ended blocks add to the number of an address's offences is kept (see
+	 * BlockRepository::purgeEndedBefore()), for the escalation of its next
+	 * block.
 	 */
 	public function purgeOldEntries($purgeAgeWeeks)
 	{
@@ -57,5 +60,6 @@ class Maintenance
 		$this->repositories->knownIps()->prune();
 		$this->repositories->dnsCache()->prune();
 		$this->repositories->unblockTokens()->purgeExpired();
+		$this->repositories->blocks()->pruneOffences();
 	}
 }

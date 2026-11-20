@@ -34,6 +34,19 @@ class BlockRepository extends AddressTableRepository
 
 	private const LiftTable = '#__bfstop_unblock';
 
+	// what the purge keeps of the blocks it deletes, per address (issue
+	// #283, C14): how many there were, and when the latest began. Without it
+	// an attacker who comes back every few weeks - the purge age is 4 weeks
+	// by default - would never reach maxBlocksBefore or escalate the duration
+	private const OffenceTable = '#__bfstop_offence';
+	// how long an address is remembered after its latest block began, and
+	// the most addresses remembered (there is one row per address, and a
+	// client with an IPv6 network can be blocked from another one each time)
+	public const OffenceMemoryDays = 365;
+	public const OffenceMaxRows = 10000;
+	// ended blocks folded into the offences in one transaction
+	private const PurgeBatch = 500;
+
 	// SQL for "the block t is active at :now"; names of columns and tables only
 	private function activeCondition($block, $lifted)
 	{
@@ -164,7 +177,8 @@ class BlockRepository extends AddressTableRepository
 	/**
 	 * How many blocks of $ipaddress there have been, the lifted ones (by an
 	 * administrator, not by the user through the link of a mail) not counted:
-	 * what the next block's duration is based on.
+	 * what the next block's duration is based on. The blocks the purge has
+	 * deleted are counted too, from the offences it has kept of them.
 	 *
 	 * Fail-open: 0 (no earlier blocks, so the shortest duration).
 	 */
@@ -177,6 +191,10 @@ class BlockRepository extends AddressTableRepository
 				->where($this->db->quoteName('ipaddress').' = :ip')
 				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_unblock u WHERE '.self::Table.'.id = u.block_id AND source = '.self::LiftedByAdministrator.')');
 			$values['ip'] = (string) $ipaddress;
+			// the offences in the same query: this runs for every block
+			$query->clear('select')->select('COUNT(*) + COALESCE((SELECT o.blocks FROM '.self::OffenceTable.
+				' o WHERE o.ipaddress = :offenceip), 0)');
+			$values['offenceip'] = (string) $ipaddress;
 			return $this->count($query, $values);
 		}, 0);
 	}
@@ -198,22 +216,123 @@ class BlockRepository extends AddressTableRepository
 
 	/**
 	 * Deletes the blocks which ended before $date, and the records of lifting
-	 * which belong to no block (any more). Fail-open: the next run does it.
+	 * which belong to no block (any more). The blocks which were not lifted by
+	 * an administrator are counted in the offences of their addresses first,
+	 * so that countPrevious() still knows of them.
+	 * Fail-open: the next run does it.
 	 */
 	public function purgeEndedBefore($date)
 	{
 		$this->failOpen('purgeEndedBefore', function () use ($date)
 		{
-			$query = $this->db->createQuery()
-				->delete($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('duration').' != 0')
-				->where($this->addMinutesSql('crdate', 'duration').' < :date');
-			$values = array('date' => (string) $date);
-			$this->execute($query, $values);
+			for ($round = 0; $round < 1000; ++$round)
+			{
+				$query = $this->db->createQuery()
+					->select($this->db->quoteName(array('id', 'ipaddress', 'crdate')))
+					->from($this->db->quoteName(self::Table))
+					->where($this->db->quoteName('duration').' != 0')
+					->where($this->addMinutesSql('crdate', 'duration').' < :date')
+					->order($this->db->quoteName('id'));
+				$ended = $this->objects($query, array('date' => (string) $date), 0, self::PurgeBatch);
+				if (count($ended) === 0)
+				{
+					break;
+				}
+				$this->foldAndDelete($ended);
+				if (count($ended) < self::PurgeBatch)
+				{
+					break;
+				}
+			}
 
 			$this->execute($this->db->createQuery()
 				->delete('#__bfstop_unblock')
 				->where('NOT EXISTS (SELECT 1 FROM #__bfstop_bannedip b WHERE b.id = #__bfstop_unblock.block_id)'));
+		}, null);
+	}
+
+	/**
+	 * Counts the $blocks (objects with id, ipaddress and crdate) which an
+	 * administrator hasn't lifted in the offences of their addresses, and
+	 * deletes them all - in one transaction, so that a failure between the
+	 * two doesn't count them again the next time.
+	 */
+	private function foldAndDelete(array $blocks)
+	{
+		$ids = array_map(fn ($block) => (int) $block->id, $blocks);
+		$lifted = $this->column($this->db->createQuery()
+			->select($this->db->quoteName('block_id'))
+			->from($this->db->quoteName(self::LiftTable))
+			->whereIn($this->db->quoteName('block_id'), $ids)
+			->where($this->db->quoteName('source').' = '.self::LiftedByAdministrator));
+		$lifted = array_flip(array_map('intval', $lifted));
+		$offences = array();
+		foreach ($blocks as $block)
+		{
+			if (isset($lifted[(int) $block->id]))
+			{
+				continue;
+			}
+			$address = (string) $block->ipaddress;
+			$offences[$address]['blocks'] = ($offences[$address]['blocks'] ?? 0) + 1;
+			$offences[$address]['last'] = max($offences[$address]['last'] ?? '', (string) $block->crdate);
+		}
+
+		$this->db->transactionStart();
+		try
+		{
+			foreach ($offences as $address => $offence)
+			{
+				$this->addOffences((string) $address, $offence['blocks'], $offence['last']);
+			}
+			$this->execute($this->db->createQuery()
+				->delete($this->db->quoteName(self::Table))
+				->whereIn($this->db->quoteName('id'), $ids));
+			$this->db->transactionCommit();
+		}
+		catch (\Throwable $e)
+		{
+			$this->db->transactionRollback();
+			throw $e;
+		}
+	}
+
+	/** Adds $blocks to the offences of $address; the latest began at $last. */
+	private function addOffences($address, $blocks, $last)
+	{
+		$update = $this->db->createQuery()
+			->update($this->db->quoteName(self::OffenceTable))
+			->set($this->db->quoteName('blocks').' = '.$this->db->quoteName('blocks').' + :blocks')
+			->set($this->db->quoteName('last_block').' = CASE WHEN '.$this->db->quoteName('last_block').' > :last1 THEN '.
+				$this->db->quoteName('last_block').' ELSE :last2 END')
+			->where($this->db->quoteName('ipaddress').' = :ip');
+		$count = (int) $blocks;
+		$update->bind(':blocks', $count, ParameterType::INTEGER);
+		$update->bind(':last1', $last);
+		$update->bind(':last2', $last);
+		$update->bind(':ip', $address);
+		$this->db->setQuery($update);
+		$this->db->execute();
+		if ($this->db->getAffectedRows() > 0)
+		{
+			return;
+		}
+		$this->insert(self::OffenceTable, array('ipaddress' => $address, 'blocks' => $count, 'last_block' => $last));
+	}
+
+	/**
+	 * Forgets the addresses whose latest block began more than
+	 * OffenceMemoryDays ago and, oldest first, as many more as needed to keep
+	 * at most OffenceMaxRows. Fail-open: the next run does it.
+	 */
+	public function pruneOffences($memoryDays = null, $maxRows = null)
+	{
+		$memoryDays = $memoryDays ?? self::OffenceMemoryDays;
+		$maxRows = $maxRows ?? self::OffenceMaxRows;
+		$this->failOpen('pruneOffences', function () use ($memoryDays, $maxRows)
+		{
+			$this->deleteBefore(self::OffenceTable, 'last_block', self::daysAgo($memoryDays));
+			$this->trimOldest(self::OffenceTable, 'ipaddress', 'last_block ASC', $maxRows, 1000, ParameterType::STRING);
 		}, null);
 	}
 

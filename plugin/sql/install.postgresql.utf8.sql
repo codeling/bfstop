@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_unblock" (
 );
 
 
+-- what the purge of old blocks keeps of them (issue #283, C14): the number of
+-- blocks an address has had which were not lifted by an administrator, and
+-- when the latest one began (see install.mysql.utf8.sql)
+CREATE TABLE IF NOT EXISTS "#__bfstop_offence" (
+  "ipaddress" varchar(49) NOT NULL,
+  "blocks" integer NOT NULL DEFAULT 0,
+  "last_block" timestamp without time zone NOT NULL,
+  PRIMARY KEY ("ipaddress")
+);
+CREATE INDEX IF NOT EXISTS "#__bfstop_offence_last_block" ON "#__bfstop_offence" ("last_block");
+
+
 -- username: the user the unblock link was sent to, to limit the links per user
 -- username_lc: the same in lower case, for the lookups which must not tell
 -- "Bob" from "bob" - computed by the database
