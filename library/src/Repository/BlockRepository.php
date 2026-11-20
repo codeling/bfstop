@@ -278,8 +278,7 @@ class BlockRepository extends AddressTableRepository
 			$offences[$address]['last'] = max($offences[$address]['last'] ?? '', (string) $block->crdate);
 		}
 
-		$this->db->transactionStart();
-		try
+		$this->inTransaction(function () use ($offences, $ids)
 		{
 			foreach ($offences as $address => $offence)
 			{
@@ -288,36 +287,29 @@ class BlockRepository extends AddressTableRepository
 			$this->execute($this->db->createQuery()
 				->delete($this->db->quoteName(self::Table))
 				->whereIn($this->db->quoteName('id'), $ids));
-			$this->db->transactionCommit();
-		}
-		catch (\Throwable $e)
-		{
-			$this->db->transactionRollback();
-			throw $e;
-		}
+		});
 	}
 
 	/** Adds $blocks to the offences of $address; the latest began at $last. */
 	private function addOffences($address, $blocks, $last)
 	{
-		$update = $this->db->createQuery()
+		$known = $this->scalar($this->db->createQuery()
+			->select($this->db->quoteName('ipaddress'))
+			->from($this->db->quoteName(self::OffenceTable))
+			->where($this->db->quoteName('ipaddress').' = :ip'), array('ip' => (string) $address));
+		if ($known === null || $known === false)
+		{
+			$this->insert(self::OffenceTable, array('ipaddress' => $address, 'blocks' => (int) $blocks,
+				'last_block' => $last));
+			return;
+		}
+		$this->execute($this->db->createQuery()
 			->update($this->db->quoteName(self::OffenceTable))
 			->set($this->db->quoteName('blocks').' = '.$this->db->quoteName('blocks').' + :blocks')
 			->set($this->db->quoteName('last_block').' = CASE WHEN '.$this->db->quoteName('last_block').' > :last1 THEN '.
 				$this->db->quoteName('last_block').' ELSE :last2 END')
-			->where($this->db->quoteName('ipaddress').' = :ip');
-		$count = (int) $blocks;
-		$update->bind(':blocks', $count, ParameterType::INTEGER);
-		$update->bind(':last1', $last);
-		$update->bind(':last2', $last);
-		$update->bind(':ip', $address);
-		$this->db->setQuery($update);
-		$this->db->execute();
-		if ($this->db->getAffectedRows() > 0)
-		{
-			return;
-		}
-		$this->insert(self::OffenceTable, array('ipaddress' => $address, 'blocks' => $count, 'last_block' => $last));
+			->where($this->db->quoteName('ipaddress').' = :ip'),
+			array('blocks' => (int) $blocks, 'last1' => (string) $last, 'last2' => (string) $last, 'ip' => (string) $address));
 	}
 
 	/**
