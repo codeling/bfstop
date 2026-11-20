@@ -17,7 +17,7 @@ class HtblockModel extends AdminModel
 {
 	public function getItem($pk = null)
 	{
-		return array('ipaddress' => '0.0.0.0');
+		return (object) array('ipaddress' => '0.0.0.0');
 	}
 
 	public function getForm($data = array(), $loadData = true)

@@ -24,7 +24,7 @@ use Joomla\Database\DatabaseInterface;
 
 class DisplayController extends BaseController
 {
-	public function display($cachable = false, $urlparams = false)
+	public function display($cachable = false, $urlparams = [])
 	{
 		$input = $this->input;
 		$view = $input->getCmd('view', 'blocklist');
@@ -32,7 +32,7 @@ class DisplayController extends BaseController
 		$pluginInstalled = $this->checkWhetherPluginInstalled();
 		if (!$pluginInstalled)
 		{
-			return;
+			return $this;
 		}
 		$this->warnIfAdminUserExists();
 		$this->warnIfHtAccessNotWorking();
@@ -43,7 +43,7 @@ class DisplayController extends BaseController
 			$this->warnIfUnblockLinksNeedLiveSite();
 		}
 		$input->set('view', $view);
-		parent::display($cachable);
+		return parent::display($cachable);
 	}
 
 	public function warnIfAdminUserExists()

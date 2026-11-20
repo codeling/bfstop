@@ -105,28 +105,33 @@ class LoggerHelperTest extends IntegrationTestCase
 
 	public function testPruneRemovesOldEntriesOnly()
 	{
+		// each entry is built once: entry() reads the clock, so building the
+		// expected one again could land in the next second
+		$recent = self::entry(27, 'recent');
+		$new = self::entry(0, 'new');
 		file_put_contents($this->file, self::header().
 			self::entry(40, 'ancient').
 			"continuation of the ancient entry\n".
 			self::entry(29, 'old').
-			self::entry(27, 'recent').
+			$recent.
 			"continuation of the recent entry\n".
-			self::entry(0, 'new'));
+			$new);
 		$this->assertSame(2, LoggerHelper::pruneByAge(28));
 		$this->assertSame(self::header().
-			self::entry(27, 'recent').
+			$recent.
 			"continuation of the recent entry\n".
-			self::entry(0, 'new'),
+			$new,
 			file_get_contents($this->file));
 	}
 
 	public function testPruneAlsoCoversThePreviousGeneration()
 	{
 		file_put_contents($this->rotated, self::header().self::entry(100, 'ancient'));
-		file_put_contents($this->file, self::header().self::entry(1, 'new'));
+		$new = self::entry(1, 'new');
+		file_put_contents($this->file, self::header().$new);
 		$this->assertSame(1, LoggerHelper::pruneByAge(28));
 		$this->assertSame(self::header(), file_get_contents($this->rotated));
-		$this->assertSame(self::header().self::entry(1, 'new'), file_get_contents($this->file));
+		$this->assertSame(self::header().$new, file_get_contents($this->file));
 	}
 
 	public function testPruneWithoutAgeKeepsEverything()

@@ -119,5 +119,6 @@ class HtblockController extends FormController
 		$this->setRedirect(
 			Route::_('index.php?option=com_bfstop&view=htblocklist', false)
 		);
+		return true;
 	}
 }
