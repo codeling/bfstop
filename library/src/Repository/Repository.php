@@ -58,6 +58,32 @@ abstract class Repository
 	}
 
 	/**
+	 * Runs $work in a transaction: committed when it returns, rolled back when
+	 * it throws. The exception goes on to the caller's failure policy (see
+	 * failOpen()): this only makes sure the changes of $work are all or
+	 * nothing.
+	 */
+	protected function inTransaction(callable $work)
+	{
+		$this->db->transactionStart();
+		$committed = false;
+		try
+		{
+			$result = $work();
+			$this->db->transactionCommit();
+			$committed = true;
+			return $result;
+		}
+		finally
+		{
+			if (!$committed)
+			{
+				$this->db->transactionRollback();
+			}
+		}
+	}
+
+	/**
 	 * Binds every value of $values as the parameter of its key (":key").
 	 * The values are bound by reference, so $values must be a variable which
 	 * is still there when the query is executed: it is, as the query is
