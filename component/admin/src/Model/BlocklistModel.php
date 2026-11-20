@@ -44,12 +44,6 @@ class BlocklistModel extends ListModel
 		return $query;
 	}
 
-	public function getItems()
-	{
-		$result = parent::getItems();
-		return $result;
-	}
-
 	protected function populateState($ordering = null, $direction = null)
 	{
 		parent::populateState('b.crdate', 'DESC');

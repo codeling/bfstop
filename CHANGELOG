@@ -8,6 +8,11 @@
     remembering it as a known one; unexpected errors (TypeError etc.), not
     only exceptions, no longer break the request where the plugin carries on
     without the failed part
+  - Code clean-up (issue #283, C7, C8, C16): the methods of the component's
+    controllers, views and tables say "public", the block list model no
+    longer overrides getItems() just to call the parent, and purging the
+    failed logins or the user name statistics reports any error, not only an
+    exception, instead of ending in Joomla's error page
   - phpstan (level 5, with a baseline) runs in CI, against the types of the
     Joomla! classes (issue #283)
   - The daily maintenance - purging old failed logins, blocks and unblock

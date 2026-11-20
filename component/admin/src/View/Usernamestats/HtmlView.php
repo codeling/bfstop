@@ -28,7 +28,7 @@ class HtmlView extends BaseHtmlView
 	protected int $maxUsernames = 0;
 	protected bool $canPurge = false;
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
@@ -46,13 +46,13 @@ class HtmlView extends BaseHtmlView
 		parent::display($tpl);
 	}
 
-	function getFailedLoginsLink($username)
+	public function getFailedLoginsLink($username)
 	{
 		return Route::_('index.php?option=com_bfstop&view=failedloginlist&filter_username='.
 			rawurlencode($username), false);
 	}
 
-	function getBarWidth($attempts)
+	public function getBarWidth($attempts)
 	{
 		return ($this->maxAttempts > 0)
 			? max(1, (int) round(100 * $attempts / $this->maxAttempts))

@@ -28,7 +28,7 @@ class HtmlView extends BaseHtmlView
 	protected int $autoPurgeWeeks = 0;
 	protected bool $canPurge = false;
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
@@ -46,7 +46,7 @@ class HtmlView extends BaseHtmlView
 		parent::display($tpl);
 	}
 
-	function getOriginName($origin)
+	public function getOriginName($origin)
 	{
 		// the client id of the application: site 0, administrator 1, api 3
 		switch ((int) $origin)

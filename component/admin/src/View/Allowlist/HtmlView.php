@@ -23,7 +23,7 @@ class HtmlView extends BaseHtmlView
 	protected string $sortColumn = '';
 	protected string $sortDirection = '';
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
