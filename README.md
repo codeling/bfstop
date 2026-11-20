@@ -70,6 +70,13 @@ of another, only those of the library.
   (`package/update-server.php`, deployed with the website in `site/` to
   `https://bfstop.de` by `.github/workflows/pages.yml`, see
   [package/README.md](package/README.md)).
+- Static analysis: phpstan, see "Static analysis" in
+  [tests/README.md](tests/README.md).
+- Coding style: that of Joomla!, [PSR-12](https://www.php-fig.org/psr/psr-12/)
+  (4 spaces, `if (...) {` on one line; the braces of classes and methods on
+  their own line). New files follow it. The existing code still has tabs and
+  braces on their own line everywhere, and is converted separately, not
+  along with unrelated changes.
 - Contributions are welcome, as pull requests to this repository.
 
 ### GeoIP reader

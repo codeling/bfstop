@@ -56,6 +56,7 @@ the site only needs to be set up again when the database schema changes.
   scripts of `Integration/fixtures` print the queries when called with
   `--count-queries`). A change which needs another query raises the limit of
   its kind, and the message lists the queries.
+- `phpstan/` and `ci/phpstan.sh`: static analysis, see "Static analysis" below.
 - `performance/`: not a test, a comparison of what two versions of the plugin
   (by default 1.5.2 and the checkout) cost a Joomla site, see its README. Not
   run by phpunit or CI.
@@ -66,6 +67,29 @@ sites there have bfstop installed from the package which the "Package" job
 built with `package/build.sh` - the zip users would get, kept as an artifact
 of the run - and the "Update from the previous release" jobs run
 `ci/upgrade-test.sh` with it, on the Joomla 5 sites with MySQL/MariaDB.
+
+### Static analysis
+
+[phpstan](https://phpstan.org) at level 5 analyses `library/src`, `plugin/src`
+and `component/*/src` (not the vendored GeoIP reader, `library/src/Helper/Geo`;
+not the layouts in `component/*/tmpl`); the configuration is `phpstan.neon`, CI
+runs it in the job "Static analysis (phpstan)". Joomla has no stubs package, so
+phpstan scans the `libraries/` directory of an unpacked Joomla full package
+for the types of Joomla's classes: `tests/ci/phpstan.sh` downloads (and
+verifies, like the integration tests do) the newest version of
+`tests/ci/matrix.json`, or uses the Joomla in `JOOMLA_ROOT`.
+
+    composer install
+    tests/ci/phpstan.sh
+
+The findings that were there when phpstan was introduced are listed in
+`phpstan-baseline.neon`; the job fails for any other. Fix a finding by
+removing its entry from the baseline together with the code change (phpstan
+reports baseline entries that no longer match). Don't add to the baseline for
+new code; if it has to be regenerated (after raising the Joomla version, for
+example):
+`tests/ci/phpstan.sh --generate-baseline phpstan-baseline.neon`, and look at
+what changed.
 
 ### Joomla versions of the CI matrix
 
