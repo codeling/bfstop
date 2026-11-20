@@ -22,6 +22,12 @@
     didn't count before either) in a small table of offences per address,
     #__bfstop_offence, which is kept for a year after an address's latest
     block, and for at most 10000 addresses
+  - Code clean-up (issue #283, C15): the .htaccess file is read once for
+    each change and written back once, as before / block section / after,
+    instead of being scanned for the markers by two state machines (one to
+    read the section, one to replace it). A file with several block
+    sections - not meant to exist - now gets one, with all their addresses,
+    where a change used to write the merged section once for each of them
   - phpstan (level 5, with a baseline) runs in CI, against the types of the
     Joomla! classes (issue #283)
   - The daily maintenance - purging old failed logins, blocks and unblock

@@ -223,6 +223,18 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$logger->errors = array(); // expected
 	}
 
+	public function testSeveralSectionsBecomeOne()
+	{
+		// not meant to happen (a file merged by hand, say); the addresses of
+		// all of them are kept, and what is between and around them
+		file_put_contents($this->dir.'/.htaccess', "A\n# BEGIN BFStop Blocks\nRequire not ip 203.0.113.1\n# END BFStop Blocks\n".
+			"M\n# BEGIN BFStop Blocks\nRequire not ip 203.0.113.2\n# END BFStop Blocks\nZ\n");
+		$this->assertTrue($this->helper()->denyIP('203.0.113.3'));
+		$this->assertSame("A\n# BEGIN BFStop Blocks\n".
+			self::ifLine("-R '203.0.113.1' || -R '203.0.113.2' || -R '203.0.113.3'")."\nRequire all denied\n</If>\n".
+			"# END BFStop Blocks\nM\nZ\n", $this->content());
+	}
+
 	public function testReadOnlyFileIsReported()
 	{
 		if (function_exists('posix_geteuid') && posix_geteuid() === 0)
