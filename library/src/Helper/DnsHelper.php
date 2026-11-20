@@ -105,7 +105,9 @@ class DnsHelper
 	/**
 	 * Reads the (possibly compressed) domain name at $offset of $packet.
 	 *
-	 * @param int $next set to the offset after the name where it is stored
+	 * @param string $packet
+	 * @param int $offset
+	 * @param int|null $next set to the offset after the name where it is stored
 	 * @return string|null null if the name is malformed
 	 */
 	private static function readName($packet, $offset, &$next)

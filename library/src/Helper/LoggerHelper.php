@@ -29,12 +29,9 @@ class LoggerHelper
 	// disk (a visitor can make the plugin log by failing logins)
 	public const MaxLogFileBytes = self::DefaultMaxSizeMB * 1048576;
 
-	private $maxBytes;
-
 	public function __construct($log_level, $maxBytes = self::MaxLogFileBytes)
 	{
 		$this->log_level = $log_level;
-		$this->maxBytes = $maxBytes;
 		$priorities = Log::ALL;
 		if ($log_level > self::Disabled)
 		{

@@ -87,6 +87,6 @@ class HtmlView extends BaseHtmlView
 		}
 		ToolbarHelper::cancel('settings.cancel');
 		ToolbarHelper::custom('settings.testNotify', 'preview', '',
-			'COM_BFSTOP_TEST_NOTIFICATION', false, false);
+			'COM_BFSTOP_TEST_NOTIFICATION', false);
 	}
 }
