@@ -47,7 +47,7 @@ class FailedloginlistController extends AdminController
 			$this->setRedirect($listUrl,
 				Text::plural('COM_BFSTOP_FAILEDLOGIN_PURGE_N_DELETED', $deleted, $age), 'message');
 		}
-		catch (\Exception $e)
+		catch (\Throwable $e)
 		{
 			$logger->log("Database exception occured: ".$e->getMessage(), Log::ERROR);
 			$this->setRedirect($listUrl,

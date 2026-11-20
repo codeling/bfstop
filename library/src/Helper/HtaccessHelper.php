@@ -116,12 +116,13 @@ class HtaccessHelper
 	 * which somebody wrote into it by hand. Read from both the current and
 	 * the earlier form (see LegacyLines).
 	 *
+	 * @param string[] $lines the lines of the section (see load())
 	 * @return array{addresses: string[], errorDocument: string|null, other: string[], legacy: bool}
 	 */
-	private function parseSection()
+	private static function parseSection(array $lines)
 	{
 		$section = array('addresses' => array(), 'errorDocument' => null, 'other' => array(), 'legacy' => false);
-		foreach ($this->extract() as $line)
+		foreach ($lines as $line)
 		{
 			$trimmed = trim($line);
 			if ($trimmed === '' || $trimmed === self::DenyLine || $trimmed === self::EndIfLine)
@@ -288,7 +289,7 @@ class HtaccessHelper
 		// the list is shown in the backend, and what it holds is whatever
 		// somebody wrote into the file: only addresses and subnets are
 		// passed on
-		return array_values(array_filter($this->parseSection()['addresses'],
+		return array_values(array_filter(self::parseSection($this->load()['section'])['addresses'],
 			array(IpHelper::class, 'isValidIpOrSubnet')));
 	}
 
@@ -315,7 +316,8 @@ class HtaccessHelper
 		}
 		return $this->locked(function () use ($IP)
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			if (!in_array($IP, $section['addresses'], true))
 			{
 				if (count($section['addresses']) >= self::MaxBlockLines)
@@ -329,7 +331,7 @@ class HtaccessHelper
 				}
 				$section['addresses'][] = $IP;
 			}
-			return $this->insert(self::renderSection($section));
+			return $this->store($file, self::renderSection($section));
 		});
 	}
 
@@ -343,7 +345,8 @@ class HtaccessHelper
 	{
 		return $this->locked(function () use ($IP)
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			$key = array_search((string) $IP, $section['addresses'], true);
 			if ($key === false && !$section['legacy'])
 			{
@@ -353,7 +356,7 @@ class HtaccessHelper
 			{
 				unset($section['addresses'][$key]);
 			}
-			return $this->insert(self::renderSection($section));
+			return $this->store($file, self::renderSection($section));
 		});
 	}
 
@@ -363,7 +366,7 @@ class HtaccessHelper
 	 */
 	public function hasLegacySection()
 	{
-		return $this->parseSection()['legacy'];
+		return self::parseSection($this->load()['section'])['legacy'];
 	}
 
 	/**
@@ -379,9 +382,10 @@ class HtaccessHelper
 	{
 		return $this->locked(function ()
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			$rendered = self::renderSection($section);
-			$current = array_values(array_filter($this->extract(), function ($line)
+			$current = array_values(array_filter($file['section'], function ($line)
 			{
 				return trim($line) !== '';
 			}));
@@ -397,7 +401,7 @@ class HtaccessHelper
 					: 'Writing the block section of '.$this->path.' in its current form',
 					$section['legacy'] ? Log::WARNING : Log::INFO);
 			}
-			return $this->insert($rendered);
+			return $this->store($file, $rendered);
 		});
 	}
 
@@ -490,7 +494,8 @@ class HtaccessHelper
 		}
 		return $this->locked(function () use ($addresses, $reason, $active)
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			$removed = array_values(array_intersect($section['addresses'], $addresses));
 			$within = array();
 			foreach (array_diff($section['addresses'], $removed) as $entry)
@@ -526,7 +531,7 @@ class HtaccessHelper
 				return 0;
 			}
 			$section['addresses'] = array_values(array_diff($section['addresses'], $removed));
-			if (!$this->insert(self::renderSection($section)))
+			if (!$this->store($file, self::renderSection($section)))
 			{
 				return false;
 			}
@@ -565,9 +570,10 @@ class HtaccessHelper
 
 		return $this->locked(function () use ($line)
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			$section['errorDocument'] = $line;
-			return $this->insert(self::renderSection($section));
+			return $this->store($file, self::renderSection($section));
 		});
 	}
 
@@ -580,13 +586,14 @@ class HtaccessHelper
 	{
 		return $this->locked(function ()
 		{
-			$section = $this->parseSection();
+			$file = $this->load();
+			$section = self::parseSection($file['section']);
 			if ($section['errorDocument'] === null && !$section['legacy'])
 			{
 				return true;
 			}
 			$section['errorDocument'] = null;
-			return $this->insert(self::renderSection($section));
+			return $this->store($file, self::renderSection($section));
 		});
 	}
 
@@ -694,138 +701,100 @@ class HtaccessHelper
 	private static $marker = 'BFStop Blocks';
 
 	/**
-	 * Return array of strings from between BEGIN and END markers from .htaccess.
+	 * The file as the parts the plugin cares about, read once:
 	 *
-	 * @return array Array of strings from between BEGIN and END markers from .htaccess.
+	 * - before: the lines up to the block section (all the lines if there is
+	 *   none)
+	 * - section: the lines between the BEGIN and END markers, without the
+	 *   markers. If the file has several sections (it is not meant to), their
+	 *   lines together
+	 * - after: the lines after the first section, those between and after
+	 *   the others included
+	 * - found: whether there is a section
+	 * - unterminated: whether a BEGIN marker has no END marker, which makes
+	 *   the file's structure unclear: store() doesn't write it then
+	 *
+	 * The lines are those of the file split at "\n", so a file which ends
+	 * with a line break ends with an empty line; store() relies on that to
+	 * write the file back as it was.
+	 *
+	 * @return array{before: string[], section: string[], after: string[], found: bool, unterminated: bool}
 	 */
-	private function extract()
+	private function load()
 	{
-		$result = array();
-
+		$file = array('before' => array(), 'section' => array(), 'after' => array(),
+			'found' => false, 'unterminated' => false);
 		if (!file_exists($this->path))
 		{
-			return $result;
+			return $file;
 		}
-
-		if ($markerdata = explode("\n", implode('', file($this->path))))
+		$inside = false;
+		foreach (explode("\n", implode('', file($this->path))) as $line)
 		{
-			$state = false;
-			foreach ($markerdata as $markerline)
+			if ($inside)
 			{
-				if (strpos($markerline, '# END ' . self::$marker) !== false)
+				if (strpos($line, '# END '.self::$marker) !== false)
 				{
-					$state = false;
+					$inside = false;
 				}
-				if ($state)
+				else
 				{
 					// a file saved with Windows line ends (e.g. uploaded by FTP
 					// in ASCII mode) has a \r at the end of every line
-					$result[] = rtrim($markerline, "\r");
-				}
-				if (strpos($markerline, '# BEGIN ' . self::$marker) !== false)
-				{
-					$state = true;
+					$file['section'][] = rtrim($line, "\r");
 				}
 			}
-		}
-
-		return $result;
-	}
-
-	/**
-	 * Insert an array of strings into .htaccess, placing it between BEGIN and END markers.
-	 * Replace existing marked info. Retain surrounding data.
-	 * Create file if none exists.
-	 *
-	 * @param string $insertion
-	 * @return bool True on write success, false on failure.
-	 */
-	private function insert($insertion)
-	{
-		if (!file_exists($this->path) || is_writeable($this->path))
-		{
-			if (!file_exists($this->path))
+			elseif (strpos($line, '# BEGIN '.self::$marker) !== false)
 			{
-				$markerdata = '';
+				$inside = true;
+				$file['found'] = true;
 			}
 			else
 			{
-				$markerdata = explode("\n", implode('', file($this->path)));
+				$file[$file['found'] ? 'after' : 'before'][] = $line;
 			}
-
-			$newContent = '';
-
-			$foundit = false;
-			if ($markerdata)
-			{
-				$lineCount = count($markerdata);
-
-				$state = true;
-				foreach ($markerdata as $n => $markerline)
-				{
-					if (strpos($markerline, '# BEGIN ' . self::$marker) !== false)
-					{
-						$state = false;
-					}
-
-					if ($state)
-					{ // Non-BFLP lines
-						if ($n + 1 < $lineCount)
-						{
-							$newContent .= "{$markerline}\n";
-						}
-						else
-						{
-							$newContent .= "{$markerline}";
-						}
-					}
-
-					if (strpos($markerline, '# END ' . self::$marker) !== false)
-					{
-						$newContent .= "# BEGIN ".self::$marker."\n";
-						if (is_array($insertion))
-						{
-							foreach ($insertion as $insertline)
-							{
-								$newContent .= "{$insertline}\n";
-							}
-						}
-						$newContent .= "# END ".self::$marker."\n";
-
-						$state = true;
-						$foundit = true;
-					}
-				}
-
-				// If BEGIN marker found but missing END marker
-				if ($state === false)
-				{
-					if (!is_null($this->logger))
-					{
-						$this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", Log::ERROR);
-					}
-					return false;
-				}
-			}
-
-			if (!$foundit)
-			{
-				// insert at the very beginning:
-				$beginContent = "# BEGIN ".self::$marker."\n";
-				foreach ($insertion as $insertline)
-				{
-					$beginContent .= "{$insertline}\n";
-				}
-				$beginContent .= "# END ".self::$marker."\n\n";
-				$newContent = $beginContent . $newContent;
-			}
-
-			return $this->write($newContent);
 		}
-		if (!is_null($this->logger))
+		$file['unterminated'] = $inside;
+		return $file;
+	}
+
+	/**
+	 * Writes $file (see load()) back with $lines as the block section: where
+	 * the section was, or - if there was none - at the very beginning of the
+	 * file, followed by an empty line. Creates the file if there is none.
+	 *
+	 * @param string[] $lines
+	 * @return bool True on write success, false on failure.
+	 */
+	private function store(array $file, array $lines)
+	{
+		if (file_exists($this->path) && !is_writeable($this->path))
 		{
-			$this->logger->log(".htaccess file is not writable!", Log::ERROR);
+			if (!is_null($this->logger))
+			{
+				$this->logger->log(".htaccess file is not writable!", Log::ERROR);
+			}
+			return false;
 		}
-		return false;
+		if ($file['unterminated'])
+		{
+			if (!is_null($this->logger))
+			{
+				$this->logger->log("corrupted .htaccess: BEGIN marker was found, but not END!", Log::ERROR);
+			}
+			return false;
+		}
+		$section = array_merge(array('# BEGIN '.self::$marker), $lines, array('# END '.self::$marker));
+		if (!$file['found'])
+		{
+			return $this->write(implode("\n", $section)."\n\n".implode("\n", $file['before']));
+		}
+		$after = $file['after'];
+		if (count($after) === 0)
+		{
+			// the END marker was the last line, without a line break after it
+			$after[] = '';
+		}
+		return $this->write(implode("\n", array_merge($file['before'], $section, $after)));
 	}
 }

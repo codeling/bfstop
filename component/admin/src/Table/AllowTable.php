@@ -16,7 +16,7 @@ use Joomla\Database\DatabaseDriver;
 
 class AllowTable extends Table
 {
-	function __construct(DatabaseDriver $db)
+	public function __construct(DatabaseDriver $db)
 	{
 		parent::__construct('#__bfstop_allowlist', 'id', $db);
 	}

@@ -28,7 +28,7 @@ class HtmlView extends BaseHtmlView
 	protected bool $attemptsTracked = true;
 	protected int $autoPurgeWeeks = 0;
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		$this->items      = $this->getModel()->getItems();
 		$this->pagination = $this->getModel()->getPagination();
@@ -45,7 +45,7 @@ class HtmlView extends BaseHtmlView
 		parent::display($tpl);
 	}
 
-	function getBlockedState($item)
+	public function getBlockedState($item)
 	{
 		if ($item->unblocked != null)
 		{
@@ -69,7 +69,7 @@ class HtmlView extends BaseHtmlView
 		}
 	}
 
-	function convertDurationToReadable($duration)
+	public function convertDurationToReadable($duration)
 	{
 		return DurationHelper::toReadable($duration);
 	}

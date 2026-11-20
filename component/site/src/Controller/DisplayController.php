@@ -14,7 +14,7 @@ use Joomla\CMS\MVC\Controller\BaseController;
 
 class DisplayController extends BaseController
 {
-	function display($cachable = false, $urlparams = false)
+	public function display($cachable = false, $urlparams = false)
 	{
 		parent::display($cachable, $urlparams);
 	}

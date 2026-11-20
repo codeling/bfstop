@@ -26,17 +26,17 @@ class HtmlView extends BaseHtmlView
 	protected string $message = '';
 	protected bool $showConfirmation = false;
 
-	function getLoginLink()
+	public function getLoginLink()
 	{
 		return Route::_('index.php?option=com_users&view=login');
 	}
 
-	function getPasswordResetLink()
+	public function getPasswordResetLink()
 	{
 		return Route::_('index.php?option=com_users&view=reset');
 	}
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		// clear the messages still enqueued from the invalid login attempt
 		// (also those Joomla kept in the session for this request):

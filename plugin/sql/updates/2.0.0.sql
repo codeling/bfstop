@@ -88,6 +88,16 @@ ALTER TABLE `#__bfstop_failedlogin` ADD INDEX logtime (logtime) /** CAN FAIL **/
 ALTER TABLE `#__bfstop_bannedip` ADD INDEX ipaddress (ipaddress) /** CAN FAIL **/;
 ALTER TABLE `#__bfstop_allowlist` ADD INDEX ipaddress (ipaddress) /** CAN FAIL **/;
 
+-- what the purge of old blocks keeps of them (issue #283, C14), see
+-- install.mysql.utf8.sql; blocks purged by earlier versions are gone
+CREATE TABLE IF NOT EXISTS `#__bfstop_offence` (
+	ipaddress varchar(49) NOT NULL,
+	blocks int unsigned NOT NULL DEFAULT 0,
+	last_block datetime NOT NULL,
+	PRIMARY KEY (ipaddress),
+	KEY last_block (last_block)
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
 -- the plugin's own bookkeeping (name => value), apart from its settings: when
 -- the maintenance last ran. In the plugin's row of #__extensions, it was
 -- written by requests with the whole settings, and so raced with an

@@ -47,6 +47,21 @@ CREATE TABLE IF NOT EXISTS #__bfstop_unblock (
 ) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
 
 
+-- what the purge of old blocks keeps of them (issue #283, C14): the number of
+-- blocks an address has had which were not lifted by an administrator, and
+-- when the latest one began. Together with the blocks which are still there
+-- this is what the duration of the next block is based on (maxBlocksBefore,
+-- progressiveBlockDuration), so an attacker who returns every few weeks
+-- still escalates; BlockRepository::pruneOffences() forgets the old ones.
+CREATE TABLE IF NOT EXISTS #__bfstop_offence (
+	ipaddress varchar(49) NOT NULL,
+	blocks int unsigned NOT NULL DEFAULT 0,
+	last_block datetime NOT NULL,
+	PRIMARY KEY (ipaddress),
+	KEY last_block (last_block)
+) DEFAULT CHARSET=utf8mb4 DEFAULT COLLATE=utf8mb4_unicode_ci;
+
+
 -- stores randomized tokens for unblocking an IP via an email
 -- to the blocked user
 -- username: the user the unblock link was sent to, to limit the links per user

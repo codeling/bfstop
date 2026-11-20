@@ -29,7 +29,7 @@ class HtmlView extends BaseHtmlView
 	protected int $maxSizeMB = 0;
 	protected bool $canDelete = false;
 
-	function display($tpl = null)
+	public function display($tpl = null)
 	{
 		// the log holds addresses and usernames of failed logins and details
 		// of how the plugin is set up
