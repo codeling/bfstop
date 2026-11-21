@@ -11,6 +11,7 @@ use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Factory;
 
@@ -132,6 +133,27 @@ class BlockedRequestTest extends IntegrationTestCase
 		$output = $this->request('', self::Ip, false);
 		$this->assertStringContainsString('NOT BLOCKED', $output);
 		$this->assertBlocked();
+	}
+
+	public function testBackendAndApiAreRefusedBeforeRouting()
+	{
+		// no exemption of a blocked client is a page of the backend or the
+		// API: "Full Site" refuses them already in onAfterInitialise
+		$this->configure();
+		$this->block();
+		$output = $this->request('', self::Ip, false, '');
+		$this->assertStringContainsString(self::BlockedMessage, $output, 'backend');
+		$output = $this->request('', self::Ip, false, null, array('--api'));
+		$this->assertStringNotContainsString('NOT BLOCKED', $output, 'API');
+		$this->assertStringContainsString('"errors"', $output, 'API');
+		$this->assertStringContainsString('NOT BLOCKED', $this->request('', '203.0.113.42', false, ''), 'not blocked');
+		// the site waits for the router (see testBlockIsEnforcedOnlyAfterRouting),
+		// and so does "Login Only", which has to know whether it is a login
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->assertStringContainsString('NOT BLOCKED', $this->request('', self::Ip, false, ''), 'Login Only');
+		$this->assertStringContainsString('NOT BLOCKED',
+			$this->request('option=com_login&task=login', self::Ip, false, ''), 'Login Only, before routing');
+		$this->assertBlocked('option=com_login&task=login', self::Ip, '');
 	}
 
 	private function knownIps()
@@ -290,6 +312,9 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertContains('X-Robots-Tag: noindex, nofollow', $headers);
 		$this->assertContains('Content-Type: text/html; charset=utf-8', $headers);
 		$this->assertContains('X-Content-Type-Options: nosniff', $headers);
+		// and not shown in another site's frame
+		$this->assertContains("Content-Security-Policy: frame-ancestors 'none'", $headers);
+		$this->assertContains('X-Frame-Options: DENY', $headers);
 		foreach ($headers as $header)
 		{
 			$this->assertStringStartsNotWith('HTTP/', $header, 'the status is set with http_response_code()');
@@ -511,6 +536,25 @@ class BlockedRequestTest extends IntegrationTestCase
 		// spelled the way Joomla's dispatcher understands it as well
 		$this->assertNotBlocked('option=com_users&task=Reset.Request');
 		$this->assertNotBlocked('option=com_users&controller=reset&task=request');
+	}
+
+	public function testPasswordRecoveryFormsCanBeSubmittedAFewTimesAnHour()
+	{
+		// they send mails: not as many as a blocked client likes
+		$this->configure();
+		$id = $this->block();
+		for ($i = 0; $i < BlockPolicy::RecoverySubmissionsPerHour; ++$i)
+		{
+			$this->assertNotBlocked('option=com_users&task=remind.remind');
+		}
+		$this->assertBlocked('option=com_users&task=remind.remind');
+		$this->assertBlocked('option=com_users&task=reset.request');
+		// the forms themselves can still be seen
+		$this->assertNotBlocked('option=com_users&view=reset');
+		// an hour later, the forms can be submitted again
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+		$db->setQuery("UPDATE #__bfstop_bannedip SET recovery_since='".self::minutesAgo(61)."' WHERE id=".(int) $id)->execute();
+		$this->assertNotBlocked('option=com_users&task=reset.request');
 	}
 
 	public function testPasswordRecoveryViewIsNoPassForOtherTasks()

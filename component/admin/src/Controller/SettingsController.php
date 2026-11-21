@@ -10,8 +10,10 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\HtaccessCheckHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Language\Text;
@@ -98,6 +100,50 @@ class SettingsController extends FormController
 	protected function getRedirectToItemAppend($recordId = null, $urlVar = 'id')
 	{
 		return '';
+	}
+
+	/**
+	 * Checks whether the web server honours the block section of the
+	 * .htaccess file (see HtaccessCheckHelper), for the directory of the
+	 * saved settings.
+	 */
+	public function checkHtaccess()
+	{
+		$this->checkToken();
+		$settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
+		if (!$this->allowSave())
+		{
+			$this->setRedirect($settingsUrl, Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
+			return;
+		}
+		$dir = UnblockHelper::getHtaccessPath();
+		list($message, $type) = self::htaccessCheckMessage(HtaccessCheckHelper::run($dir), $dir);
+		$this->setRedirect($settingsUrl, $message, $type);
+	}
+
+	/**
+	 * The message and its type for the result of HtaccessCheckHelper::run()
+	 * for the directory $dir.
+	 *
+	 * @return string[] array(message, type)
+	 */
+	public static function htaccessCheckMessage(array $result, string $dir): array
+	{
+		list($outcome, $detail) = $result;
+		$where = htmlspecialchars($dir, ENT_QUOTES, 'UTF-8');
+		switch ($outcome)
+		{
+			case HtaccessCheckHelper::Effective:
+				return array(Text::sprintf('COM_BFSTOP_HTACCESS_CHECK_EFFECTIVE', $where), 'message');
+			case HtaccessCheckHelper::Ignored:
+				return array(Text::sprintf('COM_BFSTOP_HTACCESS_CHECK_IGNORED', $where), 'warning');
+			case HtaccessCheckHelper::Broken:
+				return array(Text::sprintf('COM_BFSTOP_HTACCESS_CHECK_BROKEN', $where), 'error');
+		}
+		$reason = in_array($detail, array('outside', 'write', 'request'), true)
+			? Text::_('COM_BFSTOP_HTACCESS_CHECK_REASON_'.strtoupper($detail))
+			: Text::sprintf('COM_BFSTOP_HTACCESS_CHECK_REASON_STATUS', htmlspecialchars($detail, ENT_QUOTES, 'UTF-8'));
+		return array(Text::sprintf('COM_BFSTOP_HTACCESS_CHECK_UNKNOWN', $where, $reason), 'warning');
 	}
 
 	public function testNotify()

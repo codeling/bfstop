@@ -89,6 +89,26 @@ class LockHelper
 	}
 
 	/**
+	 * Whether what the stamp $file stands for is due again: true if it wasn't
+	 * done in the last $interval seconds (the file's modification time), and
+	 * then the file is touched, so that the next $interval seconds say false.
+	 * Two requests at the same moment may both be told true; it is meant for
+	 * things like log messages, which must not repeat with every request.
+	 * Where the file can't be written, everything is always due.
+	 */
+	public static function due(string $file, int $interval): bool
+	{
+		clearstatcache(true, $file);
+		$last = @filemtime($file);
+		if ($last !== false && time() - $last < $interval && $last <= time())
+		{
+			return false;
+		}
+		@touch($file);
+		return true;
+	}
+
+	/**
 	 * Takes the exclusive lock on $file, creating the file if need be.
 	 *
 	 * @param string $file

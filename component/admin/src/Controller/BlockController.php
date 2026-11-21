@@ -10,7 +10,13 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Settings;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\MVC\Controller\FormController;
 
 class BlockController extends FormController
@@ -50,6 +56,22 @@ class BlockController extends FormController
 		}
 		$user = $this->app->getIdentity();
 		return $user && $user->authorise('core.admin', $this->option);
+	}
+
+	/**
+	 * A block added or changed by hand goes into the User Actions Log.
+	 */
+	protected function postSaveHook(BaseDatabaseModel $model, $validData = array())
+	{
+		$id = (int) $model->getState($model->getName().'.id');
+		$addresses = ActionLogHelper::addresses('#__bfstop_bannedip', array($id));
+		// a block made or changed by hand goes into the nginx deny file as well
+		NginxDenyFile::syncForSettings(Settings::stored(), new Repositories(LogHelper::getLogger()));
+		ActionLogHelper::log($model->getState($model->getName().'.new') ? 'block_added' : 'block_changed', array(
+			'id' => $id,
+			'ipaddress' => $addresses[$id] ?? (string) ($validData['ipaddress'] ?? ''),
+			'duration' => (string) ($validData['duration'] ?? ''),
+		));
 	}
 
 	public function save($key = null, $urlVar = null)

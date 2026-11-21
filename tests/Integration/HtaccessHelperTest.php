@@ -67,9 +67,47 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25';
 		$req = $this->helper()->checkRequirements();
 		$this->assertFalse($req['apacheserver']);
+		$this->assertSame(HtaccessHelper::ServerNginx, $req['server']);
 		$this->assertTrue($req['found']);
 		$this->assertTrue($req['readable']);
 		$this->assertTrue($req['writeable']);
+	}
+
+	public function testWebServer()
+	{
+		foreach (array('Apache/2.4.58 (Ubuntu)' => HtaccessHelper::ServerApache, 'Apache' => HtaccessHelper::ServerApache,
+			'nginx/1.25.4' => HtaccessHelper::ServerNginx, 'nginx' => HtaccessHelper::ServerNginx,
+			'LiteSpeed' => HtaccessHelper::ServerLiteSpeed, 'Microsoft-IIS/10.0' => HtaccessHelper::ServerOther,
+			'PHP 8.3.6 Development Server' => HtaccessHelper::ServerOther, '' => HtaccessHelper::ServerOther) as $software => $server)
+		{
+			$this->assertSame($server, HtaccessHelper::webServer($software), $software);
+		}
+	}
+
+	public function testProbe()
+	{
+		$token = str_repeat('0123456789abcdef', 2);
+		$this->assertSame(array("<If \"-R '192.0.2.1' || %{QUERY_STRING} == 'deny=$token'\">", 'Require all denied', '</If>'),
+			HtaccessHelper::probeLines($token));
+		$probe = $this->dir.'/probe';
+		$this->assertTrue(HtaccessHelper::writeProbe($probe, $token));
+		$this->assertSame(implode("\n", HtaccessHelper::probeLines($token))."\n", file_get_contents($probe.'/.htaccess'));
+		$this->assertSame($token, file_get_contents($probe.'/'.HtaccessHelper::ProbeFile));
+		$this->assertFalse(HtaccessHelper::writeProbe($probe, $token), 'not into a directory which exists');
+		HtaccessHelper::removeProbe($probe);
+		$this->assertDirectoryDoesNotExist($probe);
+		foreach (array('', 'xyz', "abc'def0123456789", str_repeat('a', 65)) as $bad)
+		{
+			try
+			{
+				HtaccessHelper::probeLines($bad);
+				$this->fail('taken: '.$bad);
+			}
+			catch (\InvalidArgumentException $e)
+			{
+				$this->assertStringContainsString('hex digits', $e->getMessage());
+			}
+		}
 	}
 
 	public function testNoFileMeansNoDeniedIPs()

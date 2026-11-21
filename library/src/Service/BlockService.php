@@ -101,6 +101,9 @@ class BlockService
 			return null;
 		}
 		$logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', Log::INFO);
+		// written from the block list, which has the new block now (and no
+		// longer has those which ran out)
+		$policy->nginxDenyFile()?->sync($this->repositories, true);
 		return array('id' => $id, 'duration' => $decision['duration'],
 			'targetedOtherAccounts' => $decision['targetedOtherAccounts'], 'failedLogins' => $failedLogins);
 	}

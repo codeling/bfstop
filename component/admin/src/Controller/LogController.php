@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
@@ -62,6 +63,7 @@ class LogController extends BaseController
 		LoggerHelper::rotateIfTooBig(LoggerHelper::maxBytesFromMegabytes($maxMB));
 		$deleted = LoggerHelper::pruneByAge($keepDays);
 		LogHelper::getLogger()->log("Manually pruned $deleted log entries older than $keepDays days", Log::INFO);
+		ActionLogHelper::log('log_pruned', array('count' => $deleted, 'days' => $keepDays));
 		$this->setRedirect($listUrl,
 			Text::plural('COM_BFSTOP_LOG_PRUNE_N_DELETED', $deleted, $keepDays), 'message');
 	}
@@ -77,6 +79,7 @@ class LogController extends BaseController
 		LoggerHelper::deleteLogFiles();
 		// the new log file starts with a note on what happened to the old one
 		$logger->log('The log was cleared manually', Log::INFO);
+		ActionLogHelper::log('log_cleared');
 		$this->setRedirect($listUrl, Text::_('COM_BFSTOP_LOG_CLEARED'), 'message');
 	}
 }

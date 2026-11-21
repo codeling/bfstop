@@ -256,6 +256,24 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertNotNull($row->last_attempt);
 	}
 
+	public function testRecoverySubmissionsAreCountedPerHourAgainstTheNewestBlock()
+	{
+		$older = (int) $this->block('203.0.113.51', 5, 30);
+		$newer = (int) $this->block('203.0.113.51', 0, 30);
+		$blocks = $this->repos->blocks();
+		$this->assertSame(1, $blocks->countRecoverySubmission(array($older, $newer), 60));
+		$this->assertSame(2, $blocks->countRecoverySubmission(array($newer, $older), 60));
+		$this->db->setQuery('SELECT recovery_requests FROM #__bfstop_bannedip WHERE id='.(int) $older);
+		$this->assertSame(0, (int) $this->db->loadResult(), 'the newest block counts them');
+		// a new hour starts the count again
+		$this->db->setQuery("UPDATE #__bfstop_bannedip SET recovery_since='".self::minutesAgo(61)."' WHERE id=".(int) $newer)->execute();
+		$this->assertSame(1, $blocks->countRecoverySubmission(array($newer), 60));
+		$this->db->setQuery('SELECT recovery_since FROM #__bfstop_bannedip WHERE id='.(int) $newer);
+		$this->assertGreaterThan(time() - 120, strtotime($this->db->loadResult()), 'from now');
+		$this->assertSame(2, $blocks->countRecoverySubmission(array($newer), 60));
+		$this->assertSame(0, $blocks->countRecoverySubmission(array(), 60), 'no block');
+	}
+
 	public function testAllowList()
 	{
 		$this->insert('#__bfstop_allowlist', array('ipaddress' => '10.1.0.0/16', 'notes' => ''));

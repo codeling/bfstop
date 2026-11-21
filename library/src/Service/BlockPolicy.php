@@ -11,6 +11,7 @@ namespace Codeling\Library\Bfstop\Service;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
@@ -29,6 +30,12 @@ use Joomla\Registry\Registry;
  */
 class BlockPolicy
 {
+	// how often a blocked client may submit the forms of the password
+	// recovery (request a reset, confirm it with the code, set the password,
+	// ask for the username) in an hour: the three steps of a reset, and some
+	// room for mistakes - not a stream of mails (issue #285)
+	public const RecoverySubmissionsPerHour = 10;
+
 	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
 	// users who logged in from the blocked address before, 2 for any address
 	// - which needs the site's $live_site, see effectiveNotifyBlockedUser()
@@ -210,6 +217,15 @@ class BlockPolicy
 			return $newDuration;
 		}
 		return $duration;
+	}
+
+	/**
+	 * The nginx deny file the blocks go into (see NginxDenyFile), if the
+	 * settings name one and the blocking mode is "Full Site".
+	 */
+	public function nginxDenyFile(): ?NginxDenyFile
+	{
+		return $this->mode() === 'full' ? NginxDenyFile::forSettings($this->params, $this->logger) : null;
 	}
 
 	/**

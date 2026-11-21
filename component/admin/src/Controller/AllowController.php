@@ -10,7 +10,9 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Joomla\CMS\MVC\Controller\FormController;
+use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 
 class AllowController extends FormController
 {
@@ -33,6 +35,20 @@ class AllowController extends FormController
 	protected function allowEdit($data = array(), $key = 'id')
 	{
 		return parent::allowEdit($data, $key) && $this->mayChangeAllowList();
+	}
+
+	/**
+	 * An entry of the allow list added or changed goes into the User
+	 * Actions Log: it exempts addresses from blocking.
+	 */
+	protected function postSaveHook(BaseDatabaseModel $model, $validData = array())
+	{
+		$id = (int) $model->getState($model->getName().'.id');
+		$addresses = ActionLogHelper::addresses('#__bfstop_allowlist', array($id));
+		ActionLogHelper::log($model->getState($model->getName().'.new') ? 'allow_added' : 'allow_changed', array(
+			'id' => $id,
+			'ipaddress' => $addresses[$id] ?? (string) ($validData['ipaddress'] ?? ''),
+		));
 	}
 
 	public function save($key = null, $urlVar = null)

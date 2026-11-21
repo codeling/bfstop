@@ -218,6 +218,10 @@ class UnblockPageHttpTest extends IntegrationTestCase
 			$this->assertStringContainsString('no-store', implode(',', $headers['cache-control'] ?? array()), 'not cached');
 			$this->assertSame(array('no-referrer'), $headers['referrer-policy'] ?? null);
 			$this->assertSame(array('noindex, nofollow'), $headers['x-robots-tag'] ?? null);
+			// nor shown in another site's frame, where a click could be
+			// steered onto its button
+			$this->assertSame(array('DENY'), $headers['x-frame-options'] ?? null);
+			$this->assertSame(array('nosniff'), $headers['x-content-type-options'] ?? null);
 		}
 	}
 

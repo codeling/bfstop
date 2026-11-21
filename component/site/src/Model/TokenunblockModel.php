@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Site\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
@@ -111,7 +112,12 @@ class TokenunblockModel extends BaseDatabaseModel
 				"other than the blocked one.", Log::WARNING);
 			return self::ResultWrongIp;
 		}
-		return $this->lift($repositories, $token, $issued['blockId'], $logger);
+		$result = $this->lift($repositories, $token, $issued['blockId'], $logger);
+		if ($result === self::ResultUnblocked)
+		{
+			ActionLogHelper::log('block_lifted_by_token', array('id' => $issued['blockId'], 'ipaddress' => $issued['address']));
+		}
+		return $result;
 	}
 
 	/**

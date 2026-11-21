@@ -32,6 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # the build provenance attestation (signed by GitHub's OIDC token,
+      # stored with the repository's attestations)
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
@@ -42,6 +46,14 @@ jobs:
         with:
           name: bfstop-${{ needs.ci.outputs.version }}
           path: build
+      # who built the zips, from which commit, with which workflow: checked
+      # with `gh attestation verify pkg_bfstop-X.Y.Z.zip --repo codeling/bfstop`
+      - name: Attest the build provenance of the zips
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            build/*.zip
+            build/SHA256SUMS-*
       - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}

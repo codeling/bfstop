@@ -61,7 +61,10 @@ version line, never a test release.
    of the previous release is updated with it), and creates a **draft** GitHub
    release with the zips, the SHA-256 sums and notes from the CHANGELOG
    (`release-notes.php`). A test release is marked as pre-release and says so
-   in its notes.
+   in its notes. The zips and the sums get a build provenance attestation
+   (`actions/attest-build-provenance`): anybody can check that a zip was built
+   by this workflow, from the tag's commit, with
+   `gh attestation verify pkg_bfstop-<version>.zip --repo codeling/bfstop`.
 4. Check the draft and publish it.
 5. Publishing the release (or changing or unpublishing it) updates the update
    server by itself, see below. Only for a release: put it into

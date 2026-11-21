@@ -8,7 +8,9 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Component\Bfstop\Administrator\Controller\DisplayController;
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\HtaccessCheckHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Model\AllowModel;
@@ -632,6 +634,177 @@ class ComponentTest extends IntegrationTestCase
 		}
 	}
 
+	/** com_actionlogs' params and whether the component is in its list of extensions */
+	private function actionLogsState(): array
+	{
+		return array(
+			$this->queryValue("SELECT params FROM #__extensions WHERE type='component' AND element='com_actionlogs'"),
+			(int) $this->queryValue("SELECT COUNT(*) FROM #__action_logs_extensions WHERE extension='com_bfstop'"),
+		);
+	}
+
+	private function restoreActionLogsState(array $state): void
+	{
+		$this->db->setQuery('UPDATE #__extensions SET params='.$this->db->quote((string) $state[0]).
+			" WHERE type='component' AND element='com_actionlogs'")->execute();
+		$this->db->setQuery("DELETE FROM #__action_logs_extensions WHERE extension='com_bfstop'")->execute();
+		if ($state[1] > 0)
+		{
+			$this->db->setQuery("INSERT INTO #__action_logs_extensions (extension) VALUES ('com_bfstop')")->execute();
+		}
+		$this->db->setQuery("DELETE FROM #__action_logs WHERE extension='com_bfstop'")->execute();
+		// ComponentHelper keeps the params it read
+		(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+	}
+
+	private function loggedExtensions(): array
+	{
+		$params = json_decode((string) $this->queryValue(
+			"SELECT params FROM #__extensions WHERE type='component' AND element='com_actionlogs'"), true) ?: array();
+		return (array) ($params['loggable_extensions'] ?? array());
+	}
+
+	public function testTheInstallationRegistersWithTheUserActionsLog()
+	{
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
+		$state = $this->actionLogsState();
+		try
+		{
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			$this->assertSame(0, $this->actionLogsState()[1]);
+			$this->assertNotContains('com_bfstop', $this->loggedExtensions());
+
+			$this->assertTrue(\com_bfstopInstallerScript::registerWithActionLogs($this->db), 'new to the list');
+			$this->assertSame(1, $this->actionLogsState()[1]);
+			$this->assertContains('com_bfstop', $this->loggedExtensions(), 'and recorded');
+			$this->assertContains('com_users', $this->loggedExtensions(), "Joomla's own stay");
+			$this->assertFalse(\com_bfstopInstallerScript::registerWithActionLogs($this->db), 'once');
+
+			// an administrator unticked it: an update leaves that as it is
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			$this->db->setQuery("INSERT INTO #__action_logs_extensions (extension) VALUES ('com_bfstop')")->execute();
+			$this->assertFalse(\com_bfstopInstallerScript::registerWithActionLogs($this->db));
+			$this->assertNotContains('com_bfstop', $this->loggedExtensions());
+		}
+		finally
+		{
+			$this->restoreActionLogsState($state);
+		}
+	}
+
+	public function testWhatAdministratorsDoGoesToTheUserActionsLog()
+	{
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
+		$state = $this->actionLogsState();
+		$logged = function ()
+		{
+			$this->db->setQuery("SELECT message_language_key, message FROM #__action_logs WHERE extension='com_bfstop' ORDER BY id");
+			return $this->db->loadObjectList();
+		};
+		try
+		{
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			\com_bfstopInstallerScript::registerWithActionLogs($this->db);
+			(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+			$this->db->setQuery("DELETE FROM #__action_logs WHERE extension='com_bfstop'")->execute();
+			$this->assertTrue(ActionLogHelper::isEnabled());
+
+			$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.77',
+				'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+			$this->model(BlocklistModel::class)->unblock(array($id), $this->logger);
+			$rows = $logged();
+			$this->assertCount(1, $rows);
+			$this->assertSame('COM_BFSTOP_ACTIONLOG_BLOCKS_LIFTED', $rows[0]->message_language_key);
+			$message = json_decode($rows[0]->message, true);
+			$this->assertSame('blocks_lifted', $message['action']);
+			$this->assertSame('203.0.113.77', $message['ipaddresses']);
+
+			// not among the extensions the User Actions Log records: nothing
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+			$this->assertFalse(ActionLogHelper::isEnabled());
+			ActionLogHelper::log('log_cleared');
+			$this->assertCount(1, $logged());
+		}
+		finally
+		{
+			$this->restoreActionLogsState($state);
+		}
+	}
+
+	public function testTheHtaccessCheckTriesAProbe()
+	{
+		$root = sys_get_temp_dir().'/bfstop-check-'.bin2hex(random_bytes(4));
+		mkdir($root.'/sub', 0755, true);
+		try
+		{
+			$check = HtaccessCheckHelper::class;
+			$this->assertSame('https://example.org', $check::urlOf($root, $root, 'https://example.org/'));
+			$this->assertSame('https://example.org/site/sub', $check::urlOf($root.'/sub', $root, 'https://example.org/site/'));
+			$this->assertNull($check::urlOf(dirname($root), $root, 'https://example.org/'), 'outside the site');
+			$this->assertNull($check::urlOf($root.'-other', $root, 'https://example.org/'), 'a name which only starts the same');
+
+			// a server which answers like Apache honouring the probe's .htaccess
+			$requests = array();
+			$server = function ($deny, $allow = 200, $body = null) use ($root, &$requests)
+			{
+				return function ($url) use ($root, $deny, $allow, $body, &$requests)
+				{
+					$requests[] = $url;
+					$this->assertMatchesRegularExpression('#^https://example\.org/sub/bfstop-check-[0-9a-f]{32}/probe\.html\?(allow|deny)=[0-9a-f]{32}$#', $url);
+					preg_match('#/(bfstop-check-[0-9a-f]{32})/probe\.html\?(allow|deny)=#', $url, $m);
+					$dir = $root.'/sub/'.$m[1];
+					$this->assertFileExists($dir.'/.htaccess', 'the probe is there while it is requested');
+					return $m[2] === 'deny' ? array($deny, 'Forbidden') : array($allow, $body ?? file_get_contents($dir.'/probe.html'));
+				};
+			};
+			$run = fn ($fetch) => $check::run($root.'/sub', $fetch, $root, 'https://example.org/');
+			$this->assertSame(array($check::Effective, '403'), $run($server(403)));
+			$this->assertCount(2, $requests);
+			$this->assertSame(array($check::Ignored, '200'), $run($server(200)));
+			$this->assertSame(array($check::Broken, '500'), $run($server(500)));
+			$this->assertSame(array($check::Broken, '500'), $run($server(403, 500)), 'the first request already');
+			$this->assertSame(array($check::Unknown, '401'), $run($server(403, 401)), 'something else in the way');
+			$this->assertSame(array($check::Unknown, '200'), $run($server(403, 200, 'a login page')), 'not the probe');
+			$this->assertSame(array($check::Unknown, 'request'), $run(fn ($url) => null));
+			$this->assertSame(array($check::Unknown, 'outside'), $check::run(dirname($root), $server(403), $root, 'https://example.org/'));
+			// the probe is gone again, whatever the outcome
+			$this->assertSame(array(), glob($root.'/sub/bfstop-check-*'));
+
+			Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+			$controller = \Codeling\Component\Bfstop\Administrator\Controller\SettingsController::class;
+			list($message, $type) = $controller::htaccessCheckMessage(array($check::Effective, '403'), '/var/www/<site>');
+			$this->assertSame('message', $type);
+			$this->assertStringContainsString('/var/www/&lt;site&gt;', $message);
+			list($message, $type) = $controller::htaccessCheckMessage(array($check::Unknown, '404'), '/var/www');
+			$this->assertSame('warning', $type);
+			$this->assertStringContainsString('404', $message);
+			$this->assertStringNotContainsString('COM_BFSTOP_', $message, 'translated');
+			list($message) = $controller::htaccessCheckMessage(array($check::Unknown, 'outside'), '/var/www');
+			$this->assertStringNotContainsString('COM_BFSTOP_', $message);
+		}
+		finally
+		{
+			foreach (glob($root.'/sub/bfstop-check-*') ?: array() as $dir)
+			{
+				HtaccessHelper::removeProbe($dir);
+			}
+			@rmdir($root.'/sub');
+			@rmdir($root);
+		}
+	}
+
+	public function testTheUserActionsLogNamesTheChangedSettings()
+	{
+		$this->assertSame(array('blockNumber', 'emailaddress', 'useProxy'), SettingsModel::changedSettings(
+			array('blockNumber' => 10, 'emailaddress' => 'a@example.org', 'useProxy' => '0', 'blockMode' => 'full'),
+			array('blockNumber' => '5', 'emailaddress' => 'b@example.org', 'blockMode' => 'full', 'useProxy' => '1')));
+		$this->assertSame(array(), SettingsModel::changedSettings(array('blockNumber' => 10), array('blockNumber' => '10')),
+			'5 and "5" are the same');
+		$this->assertSame(array('enabledForOrigin', 'new'), SettingsModel::changedSettings(
+			array('enabledForOrigin' => 7), array('new' => 'x')));
+	}
+
 	public function testInstallerScriptHintAndVersionCheck()
 	{
 		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
@@ -1025,6 +1198,72 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertIsArray($valid, 'the same number');
 		list($valid) = $validate(10, 2);
 		$this->assertIsArray($valid);
+	}
+
+	public function testBlockingThroughHtaccessIsRefusedOnNginx()
+	{
+		// nginx never reads the file: the mode would only pretend to block
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+		$software = $_SERVER['SERVER_SOFTWARE'] ?? null;
+		$validate = function ($server, $mode)
+		{
+			$_SERVER['SERVER_SOFTWARE'] = $server;
+			$model = $this->model(SettingsModel::class);
+			$valid = $model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+				'blockMode' => $mode)));
+			return array($valid, implode(' ', array_map('strval', $model->getErrors())));
+		};
+		try
+		{
+			list($valid, $errors) = $validate('nginx/1.25.4', 'htaccess');
+			$this->assertFalse($valid);
+			$this->assertStringContainsString('nginx', $errors);
+			$this->assertStringNotContainsString('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE', $errors);
+			list($valid) = $validate('nginx/1.25.4', 'full');
+			$this->assertIsArray($valid, 'another mode');
+			list($valid) = $validate('Apache/2.4.58 (Ubuntu)', 'htaccess');
+			$this->assertIsArray($valid, 'Apache');
+			list($valid) = $validate('LiteSpeed', 'htaccess');
+			$this->assertIsArray($valid, 'LiteSpeed reads the file: only a warning');
+		}
+		finally
+		{
+			if ($software === null)
+			{
+				unset($_SERVER['SERVER_SOFTWARE']);
+			}
+			else
+			{
+				$_SERVER['SERVER_SOFTWARE'] = $software;
+			}
+		}
+	}
+
+	public function testSettingsPageChecksTheClientAddress()
+	{
+		// where the administrator's request came from, the forwarding headers
+		// it carried and the address the plugin makes of it, for them to see
+		// whether the proxy settings fit
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+		$view = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::class;
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7',
+			'HTTP_X_FORWARDED_FOR' => '203.0.113.5, <b>x</b>', 'HTTP_CLIENT_IP' => '', 'HTTP_HOST' => 'example.org'),
+			'203.0.113.5');
+		$this->assertStringContainsString('<code>198.51.100.7</code>', $check);
+		$this->assertStringContainsString('<code>X-Forwarded-For</code>', $check);
+		$this->assertStringContainsString('<code>203.0.113.5, &lt;b&gt;x&lt;/b&gt;</code>', $check, 'escaped');
+		$this->assertStringNotContainsString('Client-Ip', $check, 'an empty header is no header');
+		$this->assertStringContainsString('<strong><code>203.0.113.5</code></strong>', $check);
+		$this->assertStringNotContainsString('COM_BFSTOP_SETTINGS_ADDRESS_CHECK', $check, 'translated');
+
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7', 'HTTP_FORWARDED' => str_repeat('a', 500)),
+			'198.51.100.7');
+		$this->assertStringContainsString('<code>Forwarded</code>', $check);
+		$this->assertStringContainsString(str_repeat('a', 200).'…', $check, 'shortened');
+		$this->assertStringNotContainsString(str_repeat('a', 201), $check);
+
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7'), '198.51.100.7');
+		$this->assertStringContainsString(\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_NO_HEADER'), $check);
 	}
 
 	public function testSettingsPageProposesTheLiveSite()

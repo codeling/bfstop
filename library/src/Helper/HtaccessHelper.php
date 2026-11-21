@@ -78,6 +78,60 @@ class HtaccessHelper
 	 */
 	public const MaxBlockLines = 2000;
 
+	// the file a probe directory holds besides its .htaccess (see writeProbe())
+	public const ProbeFile = 'probe.html';
+	// the address of the probe's condition: TEST-NET-1, never a real client
+	private const ProbeAddress = '192.0.2.1';
+
+	/**
+	 * The .htaccess of a probe: an <If> with "Require all denied" as the
+	 * block section has, for an address no client has - or the query
+	 * "deny=$token". Whether the web server honours the block section is
+	 * then a matter of whether a request of the probe with that query is
+	 * refused, and one with another query is not (see writeProbe()).
+	 *
+	 * @param string $token hex digits
+	 * @return string[]
+	 */
+	public static function probeLines(string $token): array
+	{
+		if (!preg_match('/^[0-9a-f]{16,64}$/', $token))
+		{
+			throw new \InvalidArgumentException('The token of a probe is 16 to 64 hex digits');
+		}
+		return array(
+			'<If "-R \''.self::ProbeAddress.'\' || %{QUERY_STRING} == \'deny='.$token.'\'">',
+			self::DenyLine,
+			self::EndIfLine,
+		);
+	}
+
+	/**
+	 * Makes the probe directory $dir (which must not exist): a .htaccess (see
+	 * probeLines()) and a file with $token as its content.
+	 */
+	public static function writeProbe(string $dir, string $token): bool
+	{
+		$lines = self::probeLines($token);
+		if (file_exists($dir) || !@mkdir($dir, 0755))
+		{
+			return false;
+		}
+		return @file_put_contents($dir.'/.htaccess', implode("\n", $lines)."\n") !== false &&
+			@file_put_contents($dir.'/'.self::ProbeFile, $token) !== false;
+	}
+
+	/**
+	 * Removes a probe directory made by writeProbe(), and only that: its two
+	 * files, then the directory.
+	 */
+	public static function removeProbe(string $dir): void
+	{
+		@unlink($dir.'/.htaccess');
+		@unlink($dir.'/'.self::ProbeFile);
+		@rmdir($dir);
+	}
+
 	/**
 	 * Construct class with given $path.
 	 *
@@ -94,16 +148,44 @@ class HtaccessHelper
 		return $this->path;
 	}
 
+	public const ServerApache = 'apache';
+	public const ServerLiteSpeed = 'litespeed';
+	public const ServerNginx = 'nginx';
+	public const ServerOther = 'other';
+
 	/**
-	 * Check if .htaccess file is found, readable and writeable.
+	 * Which web server the SERVER_SOFTWARE $serverSoftware names, as far as
+	 * the .htaccess file goes: Apache reads it; nginx never does (the blocks
+	 * in it do nothing); LiteSpeed reads it, but not every directive of
+	 * Apache - whether it honours the <If> sections the blocks are written
+	 * in depends on its edition and version. Anything else (or a server
+	 * which doesn't say) is "other".
+	 */
+	public static function webServer($serverSoftware): string
+	{
+		$software = strtolower((string) $serverSoftware);
+		foreach (array(self::ServerLiteSpeed, self::ServerNginx, self::ServerApache) as $server)
+		{
+			if (str_contains($software, $server))
+			{
+				return $server;
+			}
+		}
+		return self::ServerOther;
+	}
+
+	/**
+	 * Check if .htaccess file is found, readable and writeable, and which web
+	 * server the site runs on (see webServer()).
 	 *
 	 * @return array
 	 */
 	public function checkRequirements()
 	{
+		$server = self::webServer($_SERVER['SERVER_SOFTWARE'] ?? '');
 		$result = array(
-			'apacheserver' =>
-				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'] ?? '')), 'apache'),
+			'server'       => $server,
+			'apacheserver' => $server === self::ServerApache,
 			'found'		=> file_exists($this->path),
 			'readable'	=> is_readable($this->path),
 			'writeable'	=> is_writeable($this->path)

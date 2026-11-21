@@ -1,5 +1,51 @@
 2.0.0 (unreleased)
   - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Hardening (issue #285): the page shown to a blocked address and the
+    unblock page may not be shown in another site's frame, and the unblock
+    page's type is not left to the browser to guess; with a proxy
+    configured, a request which didn't come through it is logged once an
+    hour for its address, not each time (anybody can send them, and push
+    the entries that matter out of the log); the proxy settings show where
+    the administrator's own request came from, its forwarding headers and
+    the address BFStop makes of them, and say that Client-Ip and
+    X-Cluster-Client-Ip are only safe if the proxy overwrites them; the
+    description of the blocking modes says which logins "Login Only" stops;
+    blocking through .htaccess is refused on nginx (which doesn't read the
+    file), LiteSpeed gets a warning of its own, and the warnings about the
+    .htaccess file only show where it is used; the release zips get a build
+    provenance attestation
+  - Issue #285: in "Full Site" mode, a blocked address's requests to the
+    backend and the API are refused before Joomla routes them (none of the
+    pages a blocked address may reach is there), with the queries of that
+    check not repeated after routing
+  - Issue #285: a blocked address may submit the forms of the password
+    recovery (reset request, code, new password, username reminder) at most
+    10 times an hour; they send mails, and Joomla limits only the password
+    reset (per account), not the reminder. The description of the password
+    reminder setting recommends a captcha for these forms
+  - Issue #285: what administrators do with BFStop goes into Joomla's User
+    Actions Log - blocks added, changed and lifted, the allow list, the
+    .htaccess entries, the settings (the names of those changed), purging
+    failed logins or user name statistics, pruning and clearing BFStop's
+    log - as does lifting a block with the link of an unblock mail. BFStop's
+    own log can be cleared by the people it should hold to account. The
+    installation adds "Brute Force Stop" to the extensions the User Actions
+    Log records (its option "Events To Log"), where it can be unticked
+  - Issue #285: the settings page has a button which checks whether the web
+    server honours the block section of the .htaccess file: it makes a test
+    directory next to the file, with a .htaccess of the same form which
+    refuses one particular query, requests its file once with another query
+    and once with that one, and removes it again. It tells whether the
+    section works, is ignored (AllowOverride, or not Apache), breaks the site
+    (status 500), or why it couldn't be checked
+  - Issue #285: for sites behind nginx (which doesn't read .htaccess
+    files), the new setting "nginx Deny File" names a *.conf file in which
+    BFStop keeps the active blocks as "deny" lines, for the site's nginx
+    configuration to include, with "Full Site". It is written from the
+    block list on each block, unblock and change of a block, and by the
+    daily maintenance; entries overlapping the allow list or a trusted
+    proxy are left out, and only a file BFStop wrote is ever overwritten.
+    nginx reads it when it is reloaded, which the server has to arrange
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

@@ -70,6 +70,10 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
+	// what onAfterInitialise found out about the client (see answerEarly()),
+	// for the check after routing not to ask again: its address, whether it
+	// is on the allow list and its active blocks
+	private ?array $earlyCheck = null;
 
 	public static function getSubscribedEvents(): array
 	{
@@ -385,6 +389,63 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		// use the scheduler, or the task is gone - a request does it, which costs
 		// no query as long as it did (see MaintenanceSchedule)
 		(new DailyMaintenance($this->repositories, $this->params))->runIfOverdue();
+		$this->answerEarly();
+	}
+
+	/**
+	 * Refuses a blocked client already now, before Joomla routes the request,
+	 * where nothing routing would tell can change the answer: in the backend
+	 * and the API (the unblock page and the password recovery, which a
+	 * blocked client may reach, are pages of the site), when the block
+	 * applies to every request ("Full Site", with or without .htaccess; not
+	 * "Login Only", which has to know whether the request is a login). That
+	 * spares a blocked client's requests the routing - and the backend's
+	 * loading of the session's user for it. On the site, a search-engine
+	 * friendly URL (a menu item's alias) only says after routing whether it
+	 * is the password recovery, so its requests wait for onAfterRoute.
+	 *
+	 * What it finds is kept for enforceBlock(), which doesn't ask the
+	 * database again.
+	 */
+	private function answerEarly()
+	{
+		$this->earlyCheck = null;
+		$app = $this->getApplication();
+		if (!in_array($this->policy->mode(), array('full', 'htaccess'), true) ||
+			!($app->isClient('administrator') || $app->isClient('api')))
+		{
+			return;
+		}
+		$ipaddress = IpHelper::getAddress($this->logger);
+		$allowed = $this->repositories->allowList()->contains($ipaddress);
+		$blockIds = $allowed ? array() : $this->repositories->blocks()->activeIdsFor($ipaddress);
+		if ($blockIds === null)
+		{
+			// can't be read: enforceBlock() tries again, and decides what that means
+			return;
+		}
+		$this->earlyCheck = array('address' => $ipaddress, 'allowed' => $allowed, 'blockIds' => $blockIds);
+		if (count($blockIds) > 0)
+		{
+			$this->logBlockedAccess($ipaddress);
+			$this->refuse($ipaddress, $blockIds);
+		}
+	}
+
+	private function logBlockedAccess($ipaddress)
+	{
+		$this->logger->log('Blocked IP Address '.$ipaddress.' trying to access '.
+			Origin::name($this->getApplication()->getClientId()), Log::INFO);
+	}
+
+	/**
+	 * Refuses the request of a blocked client, whose blocks are $blockIds,
+	 * and ends the request.
+	 */
+	private function refuse($ipaddress, array $blockIds)
+	{
+		$this->repositories->blocks()->recordAttempt($blockIds);
+		$this->responder->refuseBlocked($ipaddress);
 	}
 
 	/**
@@ -419,11 +480,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return;
 		}
 		$ipaddress = IpHelper::getAddress($this->logger);
-		if ($this->repositories->allowList()->contains($ipaddress))
+		$early = ($this->earlyCheck !== null && $this->earlyCheck['address'] === $ipaddress) ? $this->earlyCheck : null;
+		$this->earlyCheck = null;
+		if ($early !== null ? $early['allowed'] : $this->repositories->allowList()->contains($ipaddress))
 		{
 			return;
 		}
-		$blockIds = $this->repositories->blocks()->activeIdsFor($ipaddress);
+		$blockIds = $early !== null ? $early['blockIds'] : $this->repositories->blocks()->activeIdsFor($ipaddress);
 		if ($blockIds !== null && count($blockIds) === 0 && !$this->policy->isOff() &&
 			$this->request->isPasswordLogin() &&
 			$this->loginTurn->await($this->trackedAddress($ipaddress), $ipaddress, $this->logger))
@@ -449,8 +512,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		{
 			return;
 		}
-		$this->logger->log('Blocked IP Address '.$ipaddress.' trying to access '.
-			Origin::name($this->getApplication()->getClientId()), Log::INFO);
+		$this->logBlockedAccess($ipaddress);
 		if ($this->isPassedThrough($blockIds))
 		{
 			return;
@@ -461,8 +523,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			// attempt gets rejected below
 			return;
 		}
-		$this->repositories->blocks()->recordAttempt($blockIds);
-		$this->responder->refuseBlocked($ipaddress);
+		$this->refuse($ipaddress, $blockIds);
 	}
 
 	/**
@@ -483,12 +544,22 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return true;
 		}
 		$recovery = $this->request->passwordRecovery();
-		if ($recovery !== null)
+		if ($recovery === null)
 		{
-			$this->logger->log('Allowing blocked IP through to the password recovery ('.$recovery.'), so a '.
-				'blocked legitimate user can still recover their account', Log::INFO);
-			return true;
+			return false;
 		}
-		return false;
+		// the forms send mails and check reset codes: a blocked client may
+		// submit them a few times an hour, not as often as it likes (Joomla
+		// limits the password reset per account, the username reminder not at all)
+		if (str_starts_with($recovery, 'task ') &&
+			$this->repositories->blocks()->countRecoverySubmission($blockIds, 60) > BlockPolicy::RecoverySubmissionsPerHour)
+		{
+			$this->logger->log('Blocked IP submitted the password recovery more than '.
+				BlockPolicy::RecoverySubmissionsPerHour.' times in an hour ('.$recovery.'), refusing it', Log::WARNING);
+			return false;
+		}
+		$this->logger->log('Allowing blocked IP through to the password recovery ('.$recovery.'), so a '.
+			'blocked legitimate user can still recover their account', Log::INFO);
+		return true;
 	}
 }

@@ -118,6 +118,28 @@ class BlockRepository extends AddressTableRepository
 	}
 
 	/**
+	 * The addresses and networks of the active blocks, those of the newest
+	 * blocks first: for blocking through the web server's configuration.
+	 *
+	 * @return string[]|null null (unknown) if the block list could not be read
+	 */
+	public function activeAddresses()
+	{
+		return $this->unknown('activeAddresses', function ()
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName('t.ipaddress'))
+				->select('MAX('.$this->db->quoteName('t.id').') AS newest')
+				->from($this->db->quoteName(self::Table, 't'))
+				->where($this->activeCondition('t', 'u'))
+				->group($this->db->quoteName('t.ipaddress'))
+				->order('newest DESC');
+			$values = array('now' => self::now());
+			return $this->column($query, $values);
+		});
+	}
+
+	/**
 	 * Every address and network of the block list, whether its block is
 	 * active or not.
 	 *
@@ -157,6 +179,52 @@ class BlockRepository extends AddressTableRepository
 			$values = array('now' => self::now());
 			$this->execute($query, $values);
 		}, null);
+	}
+
+	/**
+	 * Counts a submission of the password recovery forms (see
+	 * RequestClassifier::passwordRecovery()) by a client with the active
+	 * blocks $blockIds, against the newest of them: the count starts again
+	 * once $windowMinutes have passed since the first submission it holds.
+	 *
+	 * Fail-open: 0, the submission goes through (the recovery stays reachable,
+	 * which is what it is let through for).
+	 *
+	 * @param int[] $blockIds
+	 * @return int how many submissions the current window holds, this one included
+	 */
+	public function countRecoverySubmission(array $blockIds, int $windowMinutes): int
+	{
+		if (count($blockIds) === 0)
+		{
+			return 0;
+		}
+		return $this->failOpen('countRecoverySubmission', function () use ($blockIds, $windowMinutes)
+		{
+			$now = self::now();
+			$values = array(
+				'id' => max(array_map('intval', $blockIds)),
+				'start' => self::minutesBefore($now, $windowMinutes),
+				'start2' => self::minutesBefore($now, $windowMinutes),
+				'now' => $now,
+			);
+			$count = $this->db->quoteName('recovery_requests');
+			$since = $this->db->quoteName('recovery_since');
+			// the count first: MySQL evaluates the assignments in order, so the
+			// second one would see the new recovery_since (PostgreSQL uses the
+			// old values in both)
+			$query = $this->db->createQuery()
+				->update($this->db->quoteName(self::Table))
+				->set($count.' = CASE WHEN '.$since.' IS NULL OR '.$since.' < :start THEN 1 ELSE '.$count.' + 1 END')
+				->set($since.' = CASE WHEN '.$since.' IS NULL OR '.$since.' < :start2 THEN :now ELSE '.$since.' END')
+				->where($this->db->quoteName('id').' = :id');
+			$this->execute($query, $values);
+			$read = array('id' => $values['id']);
+			return $this->count($this->db->createQuery()
+				->select($count)
+				->from($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('id').' = :id'), $read);
+		}, 0);
 	}
 
 	/**

@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
@@ -51,6 +52,7 @@ class BlocklistModel extends ListModel
 
 	public function unblock($ids, $logger)
 	{
+		$addresses = ActionLogHelper::addresses('#__bfstop_bannedip', is_array($ids) ? $ids : array());
 		$unblocked = (new Repositories($logger, $this->getDatabase()))->blocks()
 			->lift(is_array($ids) ? $ids : array(), BlockRepository::LiftedByAdministrator);
 		// with blocking through .htaccess, the web server would otherwise go on
@@ -58,6 +60,7 @@ class BlocklistModel extends ListModel
 		UnblockHelper::removeLiftedHtaccessBlocks($logger);
 		if ($unblocked)
 		{
+			ActionLogHelper::log('blocks_lifted', array('ipaddresses' => array_values($addresses)));
 			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
 		}
 		else

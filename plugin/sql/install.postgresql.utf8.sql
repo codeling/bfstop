@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS "#__bfstop_bannedip" (
   "duration" integer NOT NULL,
   "attempts" integer NOT NULL DEFAULT 0,
   "last_attempt" timestamp without time zone DEFAULT NULL,
+  "recovery_requests" integer NOT NULL DEFAULT 0,
+  "recovery_since" timestamp without time zone DEFAULT NULL,
   PRIMARY KEY ("id")
 );
 -- looked up for every request: addresses and networks are stored in canonical

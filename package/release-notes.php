@@ -76,4 +76,6 @@ echo "## Changes".($prerelease ? " in $base" : '')."\n\n```text\n".rtrim(implode
 if (count($sums) === 1)
 {
 	echo "\n## SHA-256\n\n```text\n".rtrim((string) file_get_contents($sums[0]))."\n```\n";
+	echo "\nThe zips have a build provenance attestation: `gh attestation verify pkg_bfstop-$version.zip --repo codeling/bfstop` ".
+		"checks that the file was built by the release workflow of this repository.\n";
 }

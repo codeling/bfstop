@@ -10,8 +10,10 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
@@ -120,6 +122,15 @@ class SettingsModel extends AdminModel
 			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
 			return false;
 		}
+		if (is_array($valid) && ($valid['params']['blockMode'] ?? '') === 'htaccess' &&
+			HtaccessHelper::webServer($_SERVER['SERVER_SOFTWARE'] ?? '') === HtaccessHelper::ServerNginx)
+		{
+			// nginx never reads the file: the mode would only pretend to block
+			// in the web server
+			$this->setError(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE',
+				Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS'), Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL')));
+			return false;
+		}
 		if (is_array($valid))
 		{
 			// the floor of the risk scoring is a floor of the threshold for
@@ -164,7 +175,52 @@ class SettingsModel extends AdminModel
 			return false;
 		}
 		$this->tidyFormerHtaccessFile($stored, $data['params']);
+		self::syncNginxDenyFiles($stored, is_array($data['params']) ? $data['params'] : array());
+		$changed = self::changedSettings($stored, is_array($data['params']) ? $data['params'] : array());
+		if (count($changed) > 0)
+		{
+			ActionLogHelper::log('settings_changed', array('settings' => $changed));
+		}
 		return true;
+	}
+
+	/**
+	 * Writes the nginx deny file of the settings $params from the block list
+	 * (see NginxDenyFile); the one of the settings $stored, if it is another
+	 * one, gets no entries: nginx would go on blocking with it.
+	 */
+	public static function syncNginxDenyFiles(array $stored, array $params): void
+	{
+		$logger = LogHelper::getLogger();
+		$former = trim((string) ($stored['nginxDenyFile'] ?? ''));
+		if ($former !== '' && $former !== trim((string) ($params['nginxDenyFile'] ?? '')) && is_file($former))
+		{
+			(new NginxDenyFile($former, $logger))->write(array());
+		}
+		NginxDenyFile::syncForSettings(new Registry($params), new Repositories($logger));
+	}
+
+	/**
+	 * The names of the settings which differ between $before and $after (as
+	 * stored), for the User Actions Log: the names only, not the values.
+	 *
+	 * @return string[]
+	 */
+	public static function changedSettings(array $before, array $after): array
+	{
+		$changed = array();
+		foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $name)
+		{
+			$old = $before[$name] ?? null;
+			$new = $after[$name] ?? null;
+			// stored as JSON: 5 and "5" are the same setting
+			if (json_encode(is_scalar($old) ? (string) $old : $old) !== json_encode(is_scalar($new) ? (string) $new : $new))
+			{
+				$changed[] = (string) $name;
+			}
+		}
+		sort($changed);
+		return $changed;
 	}
 
 	/**

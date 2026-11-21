@@ -544,6 +544,34 @@ class IpHelper
 	// proxySettings() holds: its REMOTE_ADDR, header and the client address
 	private static $address = null;
 
+	// a request which bypassed the proxy is warned about once in this many
+	// seconds for its address (or the others of its slot)
+	public const DirectRequestWarningInterval = 3600;
+	private const DirectRequestWarningSlots = 64;
+
+	/**
+	 * The stamp file of the warning about a request from $remoteAddr which
+	 * did not come through the proxy (see mayWarnAboutDirectRequest()).
+	 */
+	public static function directRequestWarningFile($remoteAddr): string
+	{
+		return LockHelper::file('proxywarning',
+			LockHelper::slot($remoteAddr, self::DirectRequestWarningSlots), 'stamp');
+	}
+
+	/**
+	 * Whether a request from $remoteAddr which did not come through the
+	 * proxy is to be logged. Every such request would otherwise write a
+	 * warning - anybody can send them, as many as they like, and push the
+	 * entries that matter out of the rotated log - so it is once an hour for
+	 * each address; addresses are spread over a fixed number of stamp files,
+	 * so that many addresses can't fill the temporary directory either.
+	 */
+	private static function mayWarnAboutDirectRequest($remoteAddr): bool
+	{
+		return LockHelper::due(self::directRequestWarningFile($remoteAddr), self::DirectRequestWarningInterval);
+	}
+
 	/**
 	 * The client address of a request which came through a proxy, if
 	 * REMOTE_ADDR is one of the trusted ones, see getAddress().
@@ -554,6 +582,10 @@ class IpHelper
 		$trustedProxies = $settings['trustedProxies'];
 		if (count($trustedProxies) === 0 || !self::isTrustedProxy($remoteAddr, $trustedProxies))
 		{
+			if (!self::mayWarnAboutDirectRequest($remoteAddr))
+			{
+				return $remoteAddr;
+			}
 			$logger->log('Proxy/load balancer usage is enabled, but the request did not originate from the '.
 				'configured proxy IP address (configured: "'.$proxyIpAddress.'", actual: "'.$remoteAddr.
 				'") - ignoring the proxy header and using REMOTE_ADDR!', Log::WARNING);

@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\LockHelper;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Plugin\PluginHelper;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -55,6 +56,16 @@ class IpHelperAddressTest extends IntegrationTestCase
 		{
 			unset($_SERVER[$header]);
 		}
+		// no warning about a request which bypassed the proxy was logged yet
+		self::forgetDirectRequestWarnings();
+	}
+
+	private static function forgetDirectRequestWarnings()
+	{
+		foreach (glob(LockHelper::file('proxywarning', '*', 'stamp')) ?: array() as $file)
+		{
+			@unlink($file);
+		}
 	}
 
 	protected function tearDown(): void
@@ -93,6 +104,45 @@ class IpHelperAddressTest extends IntegrationTestCase
 	{
 		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '192.0.2.1'));
 		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5';
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'did not originate from the configured proxy'));
+	}
+
+	public function testRequestsBypassingTheProxyAreWarnedAboutOnceAnHour()
+	{
+		// anybody can send them: a warning for each would push the entries
+		// that matter out of the rotated log
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '192.0.2.1'));
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.5';
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'did not originate from the configured proxy'));
+		$this->assertFileExists(IpHelper::directRequestWarningFile('198.51.100.7'));
+
+		// the next request of the address (another one: the address of a
+		// request is worked out once) is not logged again ...
+		$this->logger->messages = array();
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.6';
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
+		$this->assertFalse($this->logger->hasMessage(Log::WARNING, 'did not originate from the configured proxy'));
+
+		// ... but an address of another stamp is
+		$other = null;
+		for ($i = 1; $i < 255 && $other === null; ++$i)
+		{
+			$candidate = '198.51.100.'.(100 + $i % 150);
+			if (IpHelper::directRequestWarningFile($candidate) !== IpHelper::directRequestWarningFile('198.51.100.7'))
+			{
+				$other = $candidate;
+			}
+		}
+		$_SERVER['REMOTE_ADDR'] = $other;
+		$this->assertSame($other, IpHelper::getAddress($this->logger));
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'actual: "'.$other.'"'));
+
+		// and the first address once the hour is over
+		$this->logger->messages = array();
+		touch(IpHelper::directRequestWarningFile('198.51.100.7'), time() - IpHelper::DirectRequestWarningInterval);
+		$_SERVER['REMOTE_ADDR'] = '198.51.100.7';
 		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
 		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'did not originate from the configured proxy'));
 	}

@@ -35,7 +35,7 @@ class DisplayController extends BaseController
 			return $this;
 		}
 		$this->warnIfAdminUserExists();
-		$this->warnIfHtAccessNotWorking();
+		$this->warnIfHtAccessNotWorking($view);
 		$this->checkWhetherProxyConfigured();
 		if ($view !== 'settings')
 		{
@@ -68,21 +68,41 @@ class DisplayController extends BaseController
 		}
 	}
 
-	public function warnIfHtAccessNotWorking()
+	/**
+	 * Says why blocking through the .htaccess file won't work, if it doesn't
+	 * look as if it would: where it is the blocking mode, and on the pages
+	 * of the file's entries.
+	 *
+	 * @param string $view the page shown
+	 */
+	public function warnIfHtAccessNotWorking($view = '')
 	{
+		if (ParamHelper::get('blockMode') !== 'htaccess' && $view !== 'htblocklist' && $view !== 'htblock')
+		{
+			return;
+		}
 		$htaccessPath = UnblockHelper::getHtaccessPath();
 		$htaccess = new HtaccessHelper($htaccessPath, null);
 		$req = $htaccess->checkRequirements();
-		if (!$req['apacheserver'] ||
+		$modes = array(Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS'), Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL'));
+		if ($req['server'] === HtaccessHelper::ServerNginx)
+		{
+			// the file itself doesn't matter: nginx never reads it
+			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_HTACCESS_NGINX', ...$modes), 'warning');
+			return;
+		}
+		if ($req['server'] === HtaccessHelper::ServerLiteSpeed)
+		{
+			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_HTACCESS_LITESPEED', ...$modes), 'warning');
+		}
+		// whether the web server honours the section takes requests to find
+		// out: the settings page has a button for it (settings.checkHtaccess)
+		if (!in_array($req['server'], array(HtaccessHelper::ServerApache, HtaccessHelper::ServerLiteSpeed), true) ||
 			!$req['found'] ||
 			!$req['readable'] ||
 			!$req['writeable'])
-		// TODO: add check whether .htaccess actually is effective!
 		{
-			$application = $this->app;
-			$application->enqueueMessage(Text::_('COM_BFSTOP_WARNING_HTACCESS_NOT_WORKING')
-				// .'found='.$req['found'].', readable='.$req['readable'].', writeable='.$req['writeable'].', apache='.$req['apacheserver']
-				, 'warning');
+			$this->app->enqueueMessage(Text::_('COM_BFSTOP_WARNING_HTACCESS_NOT_WORKING'), 'warning');
 		}
 	}
 
