@@ -65,10 +65,14 @@ class BlockService
 	 *
 	 * @param object      $logEntry      the failed login which led to the block
 	 * @param string|null $clientAddress see BlockPolicy::decide()
+	 * @param bool        $listFailedLogins whether to return the failed
+	 *                    logins the block is for (for the administrators'
+	 *                    mail): read before the block marks them handled
 	 * @return array|null id, duration and targetedOtherAccounts of the new
-	 *                    block; null if nothing was blocked
+	 *                    block, and failedLogins (empty unless
+	 *                    $listFailedLogins); null if nothing was blocked
 	 */
-	public function blockAsDecided($logEntry, $clientAddress, BlockPolicy $policy)
+	public function blockAsDecided($logEntry, $clientAddress, BlockPolicy $policy, bool $listFailedLogins = false)
 	{
 		$logger = $this->repositories->logger();
 		$decision = $policy->decide($logEntry, $clientAddress);
@@ -81,6 +85,11 @@ class BlockService
 			// the file only holds what is still blocked
 			(new HtaccessHelper($decision['htaccessPath'], $logger))->removeLiftedBlocks($this->repositories->blocks());
 		}
+		// those the decision counted, see BlockPolicy::attemptsLeft()
+		$failedLogins = $listFailedLogins
+			? $this->repositories->failedLogins()->listUnhandledFromAddress($policy->checkInterval(),
+				$logEntry->ipaddress, $logEntry->logtime)
+			: array();
 		$id = $this->block($logEntry, $decision['duration'], $decision['htaccess'], $decision['htaccessPath'],
 			$decision['htaccessEntry']);
 		if ($id < 1)
@@ -93,7 +102,7 @@ class BlockService
 		}
 		$logger->log('Inserted IP address '.$logEntry->ipaddress.' into block list', Log::INFO);
 		return array('id' => $id, 'duration' => $decision['duration'],
-			'targetedOtherAccounts' => $decision['targetedOtherAccounts']);
+			'targetedOtherAccounts' => $decision['targetedOtherAccounts'], 'failedLogins' => $failedLogins);
 	}
 
 	/**

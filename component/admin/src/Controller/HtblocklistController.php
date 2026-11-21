@@ -22,6 +22,18 @@ use Joomla\CMS\Router\Route;
  */
 class HtblocklistController extends BaseController
 {
+	/**
+	 * Whether $user may take entries out of the .htaccess file: core.admin
+	 * as well as core.delete, like adding one (see HtblockController::mayAdd()):
+	 * the file is part of the web server's configuration, and an entry an
+	 * administrator added by hand is taken out with the same task. The
+	 * toolbar asks this too.
+	 */
+	public static function mayRemove($user): bool
+	{
+		return $user && $user->authorise('core.delete', 'com_bfstop') && $user->authorise('core.admin', 'com_bfstop');
+	}
+
 	public function getModel($name = 'htblocklist', $prefix = '', $config = [])
 	{
 		$model = parent::getModel($name, $prefix, array('ignore_request' => true));
@@ -33,7 +45,7 @@ class HtblocklistController extends BaseController
 		$this->checkToken();
 		// custom action, not AdminModel's standard delete() flow, so it
 		// doesn't get the built-in core.delete check for free
-		if (!$this->app->getIdentity()->authorise('core.delete', 'com_bfstop'))
+		if (!self::mayRemove($this->app->getIdentity()))
 		{
 			$this->setRedirect(Route::_('index.php?option=com_bfstop&view=htblocklist', false),
 				Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');

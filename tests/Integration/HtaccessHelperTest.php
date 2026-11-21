@@ -501,6 +501,10 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertTrue(HtaccessHelper::isEntryOf('2001:db8:1::/56', '2001:db8:1::/56'));
 		$this->assertTrue(HtaccessHelper::isEntryOf('2001:db8:1:2a::/64', '2001:db8:1::/56'));
 		$this->assertTrue(HtaccessHelper::isEntryOf('203.0.113.5', '203.0.113.5'));
+		// written by an earlier version for a client the web server reported
+		// IPv4-mapped, whose block is IPv4 now
+		$this->assertTrue(HtaccessHelper::isEntryOf('::ffff:203.0.113.5', '203.0.113.5'));
+		$this->assertFalse(HtaccessHelper::isEntryOf('::ffff:203.0.113.6', '203.0.113.5'));
 		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:2:2a::/64', '2001:db8:1::/56'), 'another network');
 		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:1:2a::/80', '2001:db8:1::/56'), 'no /64: written by hand');
 		$this->assertFalse(HtaccessHelper::isEntryOf('2001:db8:1:2a::5', '2001:db8:1::/56'));

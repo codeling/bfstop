@@ -44,7 +44,7 @@ class NotifierHelperTest extends IntegrationTestCase
 			'origin' => 0);
 		return array(
 			'failed login body' => $notifier->getFailedLoginBody($entry),
-			'blocked body' => $notifier->getBlockedBody($entry, 60),
+			'blocked body' => $notifier->getBlockedBody($entry, array($entry)),
 			'site address' => NotifierHelper::siteAddress(),
 		);
 	}

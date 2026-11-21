@@ -471,7 +471,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	 */
 	public static function canonicalAddress($value)
 	{
-		$value = trim((string) $value);
+		$value = self::unmapped(trim((string) $value));
 		if (!self::isAddressOrNetwork($value))
 		{
 			return null;
@@ -489,6 +489,31 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			$mask .= chr((0xff << (8 - $bits % 8)) & 0xff);
 		}
 		return inet_ntop($bin & str_pad($mask, strlen($bin), "\x00")).'/'.$bits;
+	}
+
+	/**
+	 * An IPv4-mapped IPv6 address or network (::ffff:203.0.113.5,
+	 * ::ffff:203.0.113.0/120) as the IPv4 one: IpHelper::unmapped() of the
+	 * plugin, see canonicalAddress().
+	 */
+	private static function unmapped($value)
+	{
+		$parts = explode('/', $value, 2);
+		$bin = @inet_pton($parts[0]);
+		if ($bin === false || strlen($bin) !== 16 || substr($bin, 0, 12) !== str_repeat("\x00", 10)."\xff\xff")
+		{
+			return $value;
+		}
+		$ipv4 = inet_ntop(substr($bin, 12));
+		if (count($parts) === 1)
+		{
+			return $ipv4;
+		}
+		if (!preg_match('/^[0-9]{1,3}\z/', $parts[1]) || (int) $parts[1] < 96 || (int) $parts[1] > 128)
+		{
+			return $value;
+		}
+		return $ipv4.'/'.((int) $parts[1] - 96);
 	}
 
 	/**

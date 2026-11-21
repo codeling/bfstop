@@ -22,6 +22,7 @@ use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
 use Joomla\CMS\Table\Asset;
 use Joomla\CMS\Table\Extension;
+use Joomla\Registry\Registry;
 
 /**
  * The settings of BFStop, which are the params of the component's row of
@@ -118,6 +119,26 @@ class SettingsModel extends AdminModel
 		{
 			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
 			return false;
+		}
+		if (is_array($valid))
+		{
+			// the floor of the risk scoring is a floor of the threshold for
+			// every client (see BlockPolicy::effectiveBlockNumber()): above the
+			// threshold it would raise it for everybody
+			$params = new Registry($valid['params'] ?? array());
+			$blockNumber = Settings::int($params, 'blockNumber');
+			$minBlockNumber = Settings::int($params, 'riskMinBlockNumber');
+			if ($minBlockNumber > $blockNumber)
+			{
+				// the label of the threshold is the plugin's, see the view
+				$language = Factory::getApplication()->getLanguage();
+				$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
+					|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS.'/system/bfstop');
+				$this->setError(Text::sprintf('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_ABOVE_BLOCK_NUMBER',
+					Text::_('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_LABEL'), $minBlockNumber,
+					Text::_('PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL'), $blockNumber));
+				return false;
+			}
 		}
 		return $valid;
 	}

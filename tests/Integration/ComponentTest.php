@@ -1005,6 +1005,28 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertIsArray($valid, 'mode 0');
 	}
 
+	public function testTheRiskFloorMayNotBeAboveTheThreshold()
+	{
+		// a floor above the threshold would raise it for every client, see
+		// BlockPolicy::effectiveBlockNumber()
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+		$validate = function ($blockNumber, $minBlockNumber)
+		{
+			$model = $this->model(SettingsModel::class);
+			$valid = $model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+				'blockNumber' => (string) $blockNumber, 'riskMinBlockNumber' => (string) $minBlockNumber)));
+			return array($valid, implode(' ', array_map('strval', $model->getErrors())));
+		};
+		list($valid, $errors) = $validate(5, 10);
+		$this->assertFalse($valid);
+		$this->assertStringContainsString('10', $errors);
+		$this->assertStringNotContainsString('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_ABOVE_BLOCK_NUMBER', $errors);
+		list($valid) = $validate(5, 5);
+		$this->assertIsArray($valid, 'the same number');
+		list($valid) = $validate(10, 2);
+		$this->assertIsArray($valid);
+	}
+
 	public function testSettingsPageProposesTheLiveSite()
 	{
 		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
@@ -1271,6 +1293,75 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertFalse($mayAdd(self::userWith(array('core.manage', 'core.admin'))));
 			$this->assertTrue($mayAdd(self::userWith(array('core.manage', 'core.create', 'core.admin'))));
 			$this->assertFalse($mayAdd(null));
+		}
+		finally
+		{
+			$this->setSettings($original);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	/**
+	 * Runs the task "unblock" of the .htaccess list for $entries as a user
+	 * with $actions; the entries of the file in $dir afterwards.
+	 */
+	private function removeHtaccessBlocks($dir, array $entries, array $actions)
+	{
+		$app = Factory::getApplication();
+		$original = $app->getIdentity();
+		$input = $app->getInput();
+		$input->post->set(\Joomla\CMS\Session\Session::getFormToken(), '1');
+		$input->post->set('cid', $entries);
+		try
+		{
+			$app->loadIdentity(self::userWith($actions));
+			// the tests run in the site application: the backend's controller
+			// would look for the site's models
+			$controller = new class(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $input)
+				extends \Codeling\Component\Bfstop\Administrator\Controller\HtblocklistController
+			{
+				public function getModel($name = 'htblocklist', $prefix = '', $config = array())
+				{
+					return parent::getModel($name, $prefix ?: 'Administrator', $config);
+				}
+			};
+			$controller->unblock();
+			$app->getMessageQueue(true);
+			return (new HtaccessHelper($dir, null))->getDeniedIPs();
+		}
+		finally
+		{
+			$app->loadIdentity($original);
+			$input->post->set('cid', null);
+		}
+	}
+
+	public function testRemovingHtaccessBlocksNeedsTheAdminPermission()
+	{
+		// taking an entry out of the web server's configuration needs what
+		// adding one needs: core.admin, here as well as core.delete
+		$dir = sys_get_temp_dir().'/bfstop-htunblock-admin-'.getmypid();
+		mkdir($dir);
+		$original = $this->getSettings();
+		try
+		{
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$this->assertTrue((new HtaccessHelper($dir, null))->denyIP('192.0.2.0/24'));
+			$this->assertSame(array('192.0.2.0/24'),
+				$this->removeHtaccessBlocks($dir, array('192.0.2.0/24'), array('core.manage', 'core.delete')));
+			$this->assertSame(array('192.0.2.0/24'),
+				$this->removeHtaccessBlocks($dir, array('192.0.2.0/24'), array('core.manage', 'core.admin')),
+				'core.delete is still needed');
+			$this->assertSame(array(),
+				$this->removeHtaccessBlocks($dir, array('192.0.2.0/24'), array('core.manage', 'core.delete', 'core.admin')));
+			// the toolbar offers "Unblock" by the same rule
+			$mayRemove = \Codeling\Component\Bfstop\Administrator\Controller\HtblocklistController::class.'::mayRemove';
+			$this->assertFalse($mayRemove(self::userWith(array('core.manage', 'core.delete'))));
+			$this->assertFalse($mayRemove(self::userWith(array('core.manage', 'core.admin'))));
+			$this->assertTrue($mayRemove(self::userWith(array('core.manage', 'core.delete', 'core.admin'))));
+			$this->assertFalse($mayRemove(null));
 		}
 		finally
 		{
