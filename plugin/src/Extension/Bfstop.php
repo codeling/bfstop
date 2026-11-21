@@ -544,12 +544,22 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			return true;
 		}
 		$recovery = $this->request->passwordRecovery();
-		if ($recovery !== null)
+		if ($recovery === null)
 		{
-			$this->logger->log('Allowing blocked IP through to the password recovery ('.$recovery.'), so a '.
-				'blocked legitimate user can still recover their account', Log::INFO);
-			return true;
+			return false;
 		}
-		return false;
+		// the forms send mails and check reset codes: a blocked client may
+		// submit them a few times an hour, not as often as it likes (Joomla
+		// limits the password reset per account, the username reminder not at all)
+		if (str_starts_with($recovery, 'task ') &&
+			$this->repositories->blocks()->countRecoverySubmission($blockIds, 60) > BlockPolicy::RecoverySubmissionsPerHour)
+		{
+			$this->logger->log('Blocked IP submitted the password recovery more than '.
+				BlockPolicy::RecoverySubmissionsPerHour.' times in an hour ('.$recovery.'), refusing it', Log::WARNING);
+			return false;
+		}
+		$this->logger->log('Allowing blocked IP through to the password recovery ('.$recovery.'), so a '.
+			'blocked legitimate user can still recover their account', Log::INFO);
+		return true;
 	}
 }

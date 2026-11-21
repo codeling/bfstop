@@ -29,6 +29,12 @@ use Joomla\Registry\Registry;
  */
 class BlockPolicy
 {
+	// how often a blocked client may submit the forms of the password
+	// recovery (request a reset, confirm it with the code, set the password,
+	// ask for the username) in an hour: the three steps of a reset, and some
+	// room for mistakes - not a stream of mails (issue #285)
+	public const RecoverySubmissionsPerHour = 10;
+
 	// values of the "notifyBlockedUser" setting besides 0 (off): 1 only to
 	// users who logged in from the blocked address before, 2 for any address
 	// - which needs the site's $live_site, see effectiveNotifyBlockedUser()

@@ -14,6 +14,12 @@ ALTER TABLE `#__bfstop_bannedip` ADD COLUMN attempts int unsigned NOT NULL DEFAU
 
 ALTER TABLE `#__bfstop_bannedip` ADD COLUMN last_attempt datetime NULL DEFAULT NULL /** CAN FAIL **/;
 
+-- submissions of the password recovery forms while a block is active, to
+-- limit them (issue #285)
+ALTER TABLE `#__bfstop_bannedip` ADD COLUMN recovery_requests int unsigned NOT NULL DEFAULT 0 /** CAN FAIL **/;
+
+ALTER TABLE `#__bfstop_bannedip` ADD COLUMN recovery_since datetime NULL DEFAULT NULL /** CAN FAIL **/;
+
 
 -- use utf8mb4 like Joomla's own tables; with utf8 (3-byte), a failed login
 -- for a username containing e.g. an emoji could not be stored at all

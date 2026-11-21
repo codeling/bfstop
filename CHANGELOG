@@ -18,6 +18,11 @@
     backend and the API are refused before Joomla routes them (none of the
     pages a blocked address may reach is there), with the queries of that
     check not repeated after routing
+  - Issue #285: a blocked address may submit the forms of the password
+    recovery (reset request, code, new password, username reminder) at most
+    10 times an hour; they send mails, and Joomla limits only the password
+    reset (per account), not the reminder. The description of the password
+    reminder setting recommends a captcha for these forms
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

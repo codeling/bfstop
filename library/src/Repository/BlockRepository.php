@@ -160,6 +160,52 @@ class BlockRepository extends AddressTableRepository
 	}
 
 	/**
+	 * Counts a submission of the password recovery forms (see
+	 * RequestClassifier::passwordRecovery()) by a client with the active
+	 * blocks $blockIds, against the newest of them: the count starts again
+	 * once $windowMinutes have passed since the first submission it holds.
+	 *
+	 * Fail-open: 0, the submission goes through (the recovery stays reachable,
+	 * which is what it is let through for).
+	 *
+	 * @param int[] $blockIds
+	 * @return int how many submissions the current window holds, this one included
+	 */
+	public function countRecoverySubmission(array $blockIds, int $windowMinutes): int
+	{
+		if (count($blockIds) === 0)
+		{
+			return 0;
+		}
+		return $this->failOpen('countRecoverySubmission', function () use ($blockIds, $windowMinutes)
+		{
+			$now = self::now();
+			$values = array(
+				'id' => max(array_map('intval', $blockIds)),
+				'start' => self::minutesBefore($now, $windowMinutes),
+				'start2' => self::minutesBefore($now, $windowMinutes),
+				'now' => $now,
+			);
+			$count = $this->db->quoteName('recovery_requests');
+			$since = $this->db->quoteName('recovery_since');
+			// the count first: MySQL evaluates the assignments in order, so the
+			// second one would see the new recovery_since (PostgreSQL uses the
+			// old values in both)
+			$query = $this->db->createQuery()
+				->update($this->db->quoteName(self::Table))
+				->set($count.' = CASE WHEN '.$since.' IS NULL OR '.$since.' < :start THEN 1 ELSE '.$count.' + 1 END')
+				->set($since.' = CASE WHEN '.$since.' IS NULL OR '.$since.' < :start2 THEN :now ELSE '.$since.' END')
+				->where($this->db->quoteName('id').' = :id');
+			$this->execute($query, $values);
+			$read = array('id' => $values['id']);
+			return $this->count($this->db->createQuery()
+				->select($count)
+				->from($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('id').' = :id'), $read);
+		}, 0);
+	}
+
+	/**
 	 * Adds a block.
 	 *
 	 * @return int the id of the block, -1 if it could not be added (fail-open:

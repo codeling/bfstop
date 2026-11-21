@@ -11,6 +11,7 @@ use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Repository\UnblockTokenRepository;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Factory;
 
@@ -535,6 +536,25 @@ class BlockedRequestTest extends IntegrationTestCase
 		// spelled the way Joomla's dispatcher understands it as well
 		$this->assertNotBlocked('option=com_users&task=Reset.Request');
 		$this->assertNotBlocked('option=com_users&controller=reset&task=request');
+	}
+
+	public function testPasswordRecoveryFormsCanBeSubmittedAFewTimesAnHour()
+	{
+		// they send mails: not as many as a blocked client likes
+		$this->configure();
+		$id = $this->block();
+		for ($i = 0; $i < BlockPolicy::RecoverySubmissionsPerHour; ++$i)
+		{
+			$this->assertNotBlocked('option=com_users&task=remind.remind');
+		}
+		$this->assertBlocked('option=com_users&task=remind.remind');
+		$this->assertBlocked('option=com_users&task=reset.request');
+		// the forms themselves can still be seen
+		$this->assertNotBlocked('option=com_users&view=reset');
+		// an hour later, the forms can be submitted again
+		$db = Factory::getContainer()->get(\Joomla\Database\DatabaseInterface::class);
+		$db->setQuery("UPDATE #__bfstop_bannedip SET recovery_since='".self::minutesAgo(61)."' WHERE id=".(int) $id)->execute();
+		$this->assertNotBlocked('option=com_users&task=reset.request');
 	}
 
 	public function testPasswordRecoveryViewIsNoPassForOtherTasks()

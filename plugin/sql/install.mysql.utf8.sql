@@ -26,6 +26,11 @@ CREATE TABLE IF NOT EXISTS #__bfstop_bannedip (
 -- latest one (issue #219); NULL = no attempt since the block started
 	attempts int unsigned NOT NULL DEFAULT 0,
 	last_attempt datetime NULL DEFAULT NULL,
+-- submissions of the password recovery forms while the block is active
+-- (issue #285): how many since recovery_since, the start of the hour they
+-- are counted in; NULL = none yet
+	recovery_requests int unsigned NOT NULL DEFAULT 0,
+	recovery_since datetime NULL DEFAULT NULL,
 	PRIMARY KEY (id),
 -- looked up for every request: addresses and networks are stored in
 -- canonical form (IpHelper::canonicalEntry())
