@@ -1,5 +1,18 @@
 2.0.0 (unreleased)
   - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Issue #294: the administrators' mail about a block lists the failed
+    logins which led to it, not every failed login of the address still
+    stored (for a permanent block: of ten years, including those of earlier
+    blocks); an IPv4 client which the web server reports as IPv4-mapped IPv6
+    (::ffff:203.0.113.5, a server listening on "[::]") is handled as the IPv4
+    address, so the IPv4 entries of the block and allow list and the trusted
+    proxies match it (entries typed in that form are stored as IPv4, and the
+    update converts those of the lists); "Minimum Allowed Attempts" above
+    the block threshold no longer raises the threshold for every client
+    (the settings page refuses it, a stored value is capped); the IP
+    information page looks up a blocked network by its network address
+    instead of showing nothing; taking entries out of the .htaccess file
+    needs core.admin as well as core.delete, as adding one does
   - Review fixes: an unblock mail is no longer sent with an empty token when
     the token can't be stored; failed logins typed with the email address or
     in another case get the account's unblock mail (none for a disabled

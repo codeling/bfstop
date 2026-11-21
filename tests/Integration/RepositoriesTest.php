@@ -72,10 +72,16 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertSame(4, $this->repos->failedLogins()->countUnhandledFromAddress(180, '203.0.113.5', $now));
 		$this->assertSame(4, $this->repos->failedLogins()->countUnhandledForUsername(60, 'bob', $now));
 		$this->assertSame(4, (int) $this->repos->failedLogins()->countInLastHour());
-		$list = $this->notifier->failedLoginList('203.0.113.5', $now, 60);
+		$entries = $this->repos->failedLogins()->listUnhandledFromAddress(60, '203.0.113.5', $now);
+		$this->assertCount(3, $entries);
+		$this->assertSame(array('bob', 'bob', 'bob'), array_column($entries, 'username'));
+		$this->assertLessThanOrEqual($entries[1]->logtime, $entries[0]->logtime, 'oldest first');
+		$list = $this->notifier->failedLoginList($entries);
 		$this->assertSame(3 + 2, substr_count($list, "\n"), "2 header lines + 3 entries:\n".$list);
 
 		$this->repos->failedLogins()->markHandled('203.0.113.5', 'bob');
+		$this->assertSame(array(), $this->repos->failedLogins()->listUnhandledFromAddress(60, '203.0.113.5', $now),
+			'handled');
 		$this->assertSame(0, $this->repos->failedLogins()->countUnhandledFromAddress(60, '203.0.113.5', $now));
 		$this->assertSame(1, $this->repos->failedLogins()->countUnhandledForUsername(60, 'bob', $now), 'other IP not handled');
 	}
@@ -585,7 +591,8 @@ class RepositoriesTest extends IntegrationTestCase
 	public function testLineBreaksInUsernamesDoNotForgeLinesInTheMailedList()
 	{
 		$this->failedLogin('203.0.113.5', "bob\n[forged] 203.0.113.99", 1);
-		$list = $this->notifier->failedLoginList('203.0.113.5', self::minutesAgo(0), 60);
+		$list = $this->notifier->failedLoginList(
+			$this->repos->failedLogins()->listUnhandledFromAddress(60, '203.0.113.5', self::minutesAgo(0)));
 		// header, separator and the one entry
 		$this->assertCount(3, array_filter(explode("\n", $list), 'strlen'));
 	}

@@ -278,16 +278,19 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function block($logEntry)
 	{
-		$block = $this->blocker->withLock($logEntry->ipaddress, function () use ($logEntry)
+		// the administrators' mail lists the failed logins the block is for,
+		// which the block marks handled: read before, if there may be a mail
+		$listFailedLogins = $this->notifier()->mailsBlocks($this->intParam('notifyBlockedNumber'));
+		$block = $this->blocker->withLock($logEntry->ipaddress, function () use ($logEntry, $listFailedLogins)
 		{
-			return $this->blocker->blockAsDecided($logEntry, $this->clientAddress, $this->policy);
+			return $this->blocker->blockAsDecided($logEntry, $this->clientAddress, $this->policy, $listFailedLogins);
 		});
 		// the next login of this address sees the block (or the failed logins
 		// counted) now: it needn't wait for the mails, see LoginTurn
 		$this->loginTurn->end();
 		if ($block !== null)
 		{
-			$this->notifyOfBlock($logEntry, $block['id'], $block['duration'], $block['targetedOtherAccounts']);
+			$this->notifyOfBlock($logEntry, $block['id'], $block['targetedOtherAccounts'], $block['failedLogins']);
 		}
 	}
 
@@ -295,10 +298,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 * The mails about the new block $id (after the lock: sending may take a
 	 * while).
 	 */
-	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
+	private function notifyOfBlock($logEntry, $id, $targetedOtherAccounts, array $failedLogins)
 	{
-		$this->notifier()->blockedNotifyAdmin($logEntry, BlockPolicy::realDuration($duration),
-			$this->intParam('notifyBlockedNumber'));
+		$this->notifier()->blockedNotifyAdmin($logEntry, $failedLogins, $this->intParam('notifyBlockedNumber'));
 		if (!$this->policy->notifiesBlockedUser())
 		{
 			return;

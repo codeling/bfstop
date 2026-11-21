@@ -112,23 +112,30 @@ class FailedLoginRepository extends Repository
 		}, 0);
 	}
 
+	// the most failed logins listUnhandledFromAddress() reads: those which
+	// count towards a block are about the block threshold (at most 25)
+	private const ListLimit = 100;
+
 	/**
-	 * The failed logins from $ipaddress in the $minutes up to $time.
-	 * Fail-open: none.
+	 * The failed logins from $ipaddress in the $minutes up to $time which
+	 * haven't been handled - those countUnhandledFromAddress() counts -
+	 * oldest first, at most ListLimit (the latest). Fail-open: none.
 	 *
 	 * @return object[]
 	 */
-	public function listFromAddress($ipaddress, $time, $minutes)
+	public function listUnhandledFromAddress($minutes, $ipaddress, $time)
 	{
-		return $this->failOpen('listFromAddress', function () use ($ipaddress, $time, $minutes)
+		return $this->failOpen('listUnhandledFromAddress', function () use ($minutes, $ipaddress, $time)
 		{
 			$values = array();
 			$query = $this->windowQuery(self::Table, 'logtime', $time, $minutes, $values)
 				->clear('select')
-				->select('*')
-				->where($this->db->quoteName('ipaddress').' = :ip');
+				->select($this->db->quoteName(array('id', 'ipaddress', 'logtime', 'username', 'origin')))
+				->where($this->db->quoteName('ipaddress').' = :ip')
+				->where($this->db->quoteName('handled').' = 0')
+				->order($this->db->quoteName('logtime').' DESC, '.$this->db->quoteName('id').' DESC');
 			$values['ip'] = (string) $ipaddress;
-			return $this->objects($query, $values);
+			return array_reverse($this->objects($query, $values, 0, self::ListLimit));
 		}, array());
 	}
 

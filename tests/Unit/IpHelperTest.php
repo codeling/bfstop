@@ -114,6 +114,47 @@ class IpHelperTest extends TestCase
 		$this->assertFalse(IpHelper::isTrustedProxy('192.0.2.1', array()));
 		// a malformed entry never matches
 		$this->assertFalse(IpHelper::isTrustedProxy('192.0.2.1', array('foo', '192.0.2.0/abc')));
+		// IPv4-mapped is IPv4, on either side
+		$this->assertTrue(IpHelper::isTrustedProxy('::ffff:192.0.2.1', $proxies));
+		$this->assertTrue(IpHelper::isTrustedProxy('::ffff:198.51.100.77', $proxies));
+		$this->assertTrue(IpHelper::isTrustedProxy('192.0.2.5', array('::ffff:192.0.2.5')));
+		$this->assertTrue(IpHelper::isTrustedProxy('192.0.2.5', array('::ffff:192.0.2.0/120')));
+		$this->assertFalse(IpHelper::isTrustedProxy('::ffff:192.0.2.2', $proxies));
+	}
+
+	public static function unmappedProvider()
+	{
+		return array(
+			'IPv4-mapped address' => array('::ffff:203.0.113.5', '203.0.113.5'),
+			'hexadecimal spelling' => array('::FFFF:CB00:7105', '203.0.113.5'),
+			'written out' => array('0:0:0:0:0:ffff:203.0.113.5', '203.0.113.5'),
+			'network' => array('::ffff:203.0.113.0/120', '203.0.113.0/24'),
+			'network /128' => array('::ffff:203.0.113.5/128', '203.0.113.5/32'),
+			'network /96' => array('::ffff:0.0.0.0/96', '0.0.0.0/0'),
+			'wider network stays' => array('::ffff:0.0.0.0/95', '::ffff:0.0.0.0/95'),
+			'malformed prefix stays' => array('::ffff:203.0.113.0/abc', '::ffff:203.0.113.0/abc'),
+			'prefix too long stays' => array('::ffff:203.0.113.0/129', '::ffff:203.0.113.0/129'),
+			'IPv4 stays' => array('203.0.113.5', '203.0.113.5'),
+			'IPv6 stays' => array('2001:db8::5', '2001:db8::5'),
+			'IPv4-compatible (deprecated) stays' => array('::203.0.113.5', '::203.0.113.5'),
+			'NAT64 stays' => array('64:ff9b::203.0.113.5', '64:ff9b::203.0.113.5'),
+			'garbage stays' => array('not-an-ip', 'not-an-ip'),
+			'empty' => array('', ''),
+		);
+	}
+
+	#[DataProvider('unmappedProvider')]
+	public function testUnmapped($value, $expected)
+	{
+		$this->assertSame($expected, IpHelper::unmapped($value));
+	}
+
+	public function testIsInSubnetComparesIpv4MappedAsIpv4()
+	{
+		$this->assertTrue(IpHelper::isInSubnet('::ffff:203.0.113.5', '203.0.113.0/24'));
+		$this->assertTrue(IpHelper::isInSubnet('203.0.113.5', '::ffff:203.0.113.0/120'));
+		$this->assertTrue(IpHelper::isInSubnet('::ffff:203.0.113.5', '::ffff:203.0.113.0/120'));
+		$this->assertFalse(IpHelper::isInSubnet('::ffff:203.0.114.5', '203.0.113.0/24'));
 	}
 
 	public static function forwardedHeaderProvider()
@@ -144,6 +185,8 @@ class IpHelperTest extends TestCase
 			'Forwarded element without for'     => array('HTTP_FORWARDED', 'for=203.0.113.5, proto=https', $proxy, null),
 			'only trusted proxies'              => array('HTTP_X_FORWARDED_FOR', '198.51.100.7, 198.51.100.7', $proxy, null),
 			'empty header'                      => array('HTTP_X_FORWARDED_FOR', '', $proxy, null),
+			'IPv4-mapped client is IPv4'        => array('HTTP_X_FORWARDED_FOR', '1.2.3.4, ::ffff:203.0.113.5', $proxy, '203.0.113.5'),
+			'IPv4-mapped trusted hop'           => array('HTTP_X_FORWARDED_FOR', '203.0.113.5, ::ffff:198.51.100.7', $proxy, '203.0.113.5'),
 		);
 	}
 
@@ -201,7 +244,7 @@ class IpHelperTest extends TestCase
 			'128 means per address'      => array('2001:db8:1:2::1', 128, '2001:db8:1:2::1'),
 			'0 means per address'        => array('2001:db8:1:2::1', 0, '2001:db8:1:2::1'),
 			'absurdly short prefix'      => array('2001:db8:1:2::1', 16, '2001:db8:1:2::1'),
-			'IPv4-mapped stays'          => array('::ffff:192.0.2.7', 64, '::ffff:192.0.2.7'),
+			'IPv4-mapped is IPv4'        => array('::ffff:192.0.2.7', 64, '192.0.2.7'),
 			'NAT64 stays (canonical form)' => array('64:ff9b::192.0.2.7', 64, '64:ff9b::c000:207'),
 			'6to4 stays'                 => array('2002:c000:207::1', 64, '2002:c000:207::1'),
 			'Teredo stays'               => array('2001:0:4136:e378:8000:63bf:3fff:fdd2', 64, '2001:0:4136:e378:8000:63bf:3fff:fdd2'),
@@ -241,7 +284,10 @@ class IpHelperTest extends TestCase
 			'IPv6 written out' => array('2001:0db8:0000:0000:0000:0000:0000:0001', '2001:db8::1'),
 			'IPv6 network' => array('2001:DB8:AB:1:2:3:4:5/48', '2001:db8:ab::/48'),
 			'IPv6 not on a border' => array('2001:db8:1:ff7f::1/56', '2001:db8:1:ff00::/56'),
-			'IPv4-mapped' => array('::FFFF:1.2.3.4', '::ffff:1.2.3.4'),
+			'IPv4-mapped is IPv4' => array('::FFFF:1.2.3.4', '1.2.3.4'),
+			'IPv4-mapped network' => array('::ffff:203.0.113.77/120', '203.0.113.0/24'),
+			'IPv4-mapped /96' => array('::ffff:1.2.3.4/96', '0.0.0.0/0'),
+			'wider than ::ffff:0:0/96 stays IPv6' => array('::ffff:1.2.3.4/80', '::/80'),
 			'surrounding space' => array(' 203.0.113.5 ', '203.0.113.5'),
 			'prefix too long' => array('203.0.113.0/33', null),
 			'prefix too long (IPv6)' => array('2001:db8::/129', null),
@@ -274,6 +320,9 @@ class IpHelperTest extends TestCase
 		}
 		$this->assertContains('203.0.113.0/25', $candidates);
 		$this->assertNotContains('203.0.113.128/25', $candidates);
+		// the client of a server listening on an IPv6 socket: as IPv4
+		$this->assertSame($candidates, IpHelper::lookupCandidates('::ffff:203.0.113.77'));
+		$this->assertSame($candidates, IpHelper::lookupCandidates('::FFFF:CB00:714D'));
 	}
 
 	public function testLookupCandidatesIPv6()
@@ -316,12 +365,13 @@ class IpHelperTest extends TestCase
 	{
 		$proxies = array('192.0.2.10', '198.51.100.0/24', '2001:db8:aa::/48', 'nonsense');
 		foreach (array('192.0.2.10', '192.0.2.0/24', '0.0.0.0/0', '198.51.100.77', '198.51.100.0/25',
-			'198.51.0.0/16', '2001:db8:aa:1::/64', '2001:db8:aa:1::5', '2001:db8::/32', '2001:DB8:AA::1') as $entry)
+			'198.51.0.0/16', '2001:db8:aa:1::/64', '2001:db8:aa:1::5', '2001:db8::/32', '2001:DB8:AA::1',
+			'::ffff:192.0.2.10', '::ffff:198.51.100.0/120') as $entry)
 		{
 			$this->assertTrue(IpHelper::overlapsTrustedProxy($entry, $proxies), $entry);
 		}
 		foreach (array('192.0.2.11', '192.0.2.12/31', '198.51.101.0/24', '203.0.113.5', '2001:db8:ab::/48',
-			'::ffff:192.0.2.10', 'nonsense', '') as $entry)
+			'::ffff:192.0.2.11', 'nonsense', '') as $entry)
 		{
 			$this->assertFalse(IpHelper::overlapsTrustedProxy($entry, $proxies), $entry);
 		}

@@ -11,6 +11,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Htblocklist;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Controller\HtblockController;
+use Codeling\Component\Bfstop\Administrator\Controller\HtblocklistController;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -42,7 +43,8 @@ class HtmlView extends BaseHtmlView
 		$user = Factory::getApplication()->getIdentity();
 		ToolbarHelper::title(Text::_('COM_BFSTOP_HEADING_HTACCESS_BLOCKLIST'), 'bfstop');
 		ToolbarHelper::divider();
-		if ($user->authorise('core.delete', 'com_bfstop'))
+		// the same rule as the task, see HtblocklistController::mayRemove()
+		if (HtblocklistController::mayRemove($user))
 		{
 			// batch unblock would require rewrite of unblock method to check
 			// for selected lines

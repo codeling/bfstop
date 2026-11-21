@@ -100,13 +100,16 @@ class BlockPolicy
 	 * trusted-looking attempt (negative score) gets a higher threshold, a
 	 * suspicious-looking one (positive score) a lower one. Floored at
 	 * riskMinBlockNumber so an extreme score can never reduce this to
-	 * 0-or-below and effectively instant-block a legitimate user.
+	 * 0-or-below and effectively instant-block a legitimate user. The floor
+	 * is at most blockNumber: it lowers how far the score may reduce the
+	 * threshold, it never raises the threshold of every client (the settings
+	 * page refuses such a floor, a value stored otherwise is capped here).
 	 */
 	public function effectiveBlockNumber($riskScore): int
 	{
 		$blockNumber = $this->intParam('blockNumber');
 		$reductionPerPoint = $this->intParam('riskBlockNumberReductionPerPoint');
-		$minBlockNumber = $this->intParam('riskMinBlockNumber');
+		$minBlockNumber = min($this->intParam('riskMinBlockNumber'), $blockNumber);
 		$effective = (int) round($blockNumber - $riskScore * $reductionPerPoint);
 		return max($minBlockNumber, $effective);
 	}

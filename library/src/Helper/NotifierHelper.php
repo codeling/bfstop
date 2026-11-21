@@ -129,12 +129,14 @@ class NotifierHelper
 	}
 
 	/**
-	 * The failed logins from $ipAddress in the $interval minutes up to
-	 * $curTime, as the table in the body of a mail.
+	 * The failed logins $entries (see
+	 * FailedLoginRepository::listUnhandledFromAddress()) as the table in the
+	 * body of a mail.
+	 *
+	 * @param object[] $entries
 	 */
-	public function failedLoginList($ipAddress, $curTime, $interval)
+	public function failedLoginList(array $entries)
 	{
-		$entries = $this->repositories->failedLogins()->listFromAddress($ipAddress, $curTime, $interval);
 		$result = str_pad(Text::_('PLG_SYSTEM_BFSTOP_USERNAME'), 25)." ".
 				str_pad(Text::_('PLG_SYSTEM_BFSTOP_IPADDRESS'), 15)." ".
 				str_pad(Text::_('PLG_SYSTEM_BFSTOP_DATETIME'), 20)." ".
@@ -150,15 +152,18 @@ class NotifierHelper
 		return $result;
 	}
 
-	public function getBlockedBody($logEntry, $interval)
+	/**
+	 * The body of the administrators' mail about the block of the address of
+	 * $logEntry, which the failed logins $failedLogins led to.
+	 *
+	 * @param object[] $failedLogins
+	 */
+	public function getBlockedBody($logEntry, array $failedLogins)
 	{
 		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_BODY',
 			$logEntry->ipaddress,
 			self::siteAddress(),
-			$this->failedLoginList($logEntry->ipaddress,
-				$logEntry->logtime,
-				$interval
-			)
+			$this->failedLoginList($failedLogins)
 		);
 	}
 
@@ -226,14 +231,33 @@ class NotifierHelper
 		$this->sendMail($subject, $body, $this->notifyAddresses);
 	}
 
-	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
+	/**
+	 * Whether blocks may be mailed to the administrators at all, with at
+	 * most $maxNumber of them a day (see isNotificationAllowed()): there is
+	 * somebody to mail, and the limit isn't 0. For whoever has to collect
+	 * what the mail lists before it knows whether one is sent.
+	 */
+	public function mailsBlocks($maxNumber): bool
 	{
-		if (count($this->notifyAddresses) === 0 ||
+		return count($this->notifyAddresses) > 0 && $maxNumber != 0;
+	}
+
+	/**
+	 * Mails the block of the address of $logEntry to the administrators,
+	 * with the failed logins $failedLogins it was for (those it marked
+	 * handled - see BlockService::blockAsDecided() - not every failed login
+	 * of the address still stored, which may have led to earlier blocks).
+	 *
+	 * @param object[] $failedLogins
+	 */
+	public function blockedNotifyAdmin($logEntry, array $failedLogins, $maxNumber)
+	{
+		if (!$this->mailsBlocks($maxNumber) ||
 			!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
 		{
 			return;
 		}
-		$body = $this->getBlockedBody($logEntry, $interval);
+		$body = $this->getBlockedBody($logEntry, $failedLogins);
 		$subject = Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);

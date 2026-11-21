@@ -184,7 +184,9 @@ class NotifierMailTest extends IntegrationTestCase
 		$this->blocks(1, 0);
 		$notifier = $this->notifier('admin@example.org');
 		$entry = $this->entry();
-		$notifier->blockedNotifyAdmin($entry, 60, -1);
+		$failedLogins = (new Repositories($this->logger))->failedLogins()->listUnhandledFromAddress(60, self::Ip,
+			$entry->logtime);
+		$notifier->blockedNotifyAdmin($entry, $failedLogins, -1);
 
 		$this->assertCount(1, $notifier->mails);
 		$mail = $notifier->mails[0];
@@ -192,9 +194,9 @@ class NotifierMailTest extends IntegrationTestCase
 		$this->assertSame(Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$notifier->getSiteName(), self::Ip), $mail['subject']);
 		$this->assertStringContainsString(self::Ip, $mail['subject']);
-		$this->assertSame($notifier->getBlockedBody($entry, 60), $mail['body']);
+		$this->assertSame($notifier->getBlockedBody($entry, $failedLogins), $mail['body']);
 		// the table of the failed logins: 2 header lines and one line each
-		$list = $notifier->failedLoginList(self::Ip, $entry->logtime, 60);
+		$list = $notifier->failedLoginList($failedLogins);
 		$this->assertSame(3 + 2, substr_count($list, "\n"), "2 header lines + 3 entries:\n".$list);
 		$this->assertStringContainsString($list, $mail['body'], 'the failed logins of the address are listed');
 	}
@@ -203,10 +205,10 @@ class NotifierMailTest extends IntegrationTestCase
 	{
 		$this->blocks(3, 5);
 		$notifier = $this->notifier();
-		$notifier->blockedNotifyAdmin($this->entry(), 60, 0);
-		$notifier->blockedNotifyAdmin($this->entry(), 60, 2);
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 0);
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 2);
 		$this->assertSame(array(), $notifier->mails, 'off, and 3 blocks today where 2 are allowed');
-		$notifier->blockedNotifyAdmin($this->entry(), 60, 3);
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 3);
 		$this->assertCount(1, $notifier->mails);
 	}
 
@@ -229,7 +231,7 @@ class NotifierMailTest extends IntegrationTestCase
 		$id = $this->createUser('notifyuser');
 		$notifier = $this->notifier('admin@example.org', $id);
 		$this->assertSame(array('admin@example.org', 'notifyuser@example.org'), $notifier->getNotifyAddresses());
-		$notifier->blockedNotifyAdmin($this->entry(), 60, -1);
+		$notifier->blockedNotifyAdmin($this->entry(), array(), -1);
 		$this->assertSame(array('admin@example.org', 'notifyuser@example.org'), $notifier->mails[0]['to']);
 	}
 
@@ -263,7 +265,7 @@ class NotifierMailTest extends IntegrationTestCase
 		// notifications. Asking sendMail() to mail nobody logged an error with
 		// every block
 		$notifier = $this->notifier('');
-		$notifier->blockedNotifyAdmin($this->entry(), 60, 5);
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 5);
 		$notifier->failedLogin($this->entry(), -1);
 		$this->assertSame(array(), $notifier->mails);
 		$this->assertSame(array(), $this->logger->errors);

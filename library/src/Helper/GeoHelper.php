@@ -41,7 +41,9 @@ class GeoHelper
 	/**
 	 * Needs a GeoLite2-City-tier database (region/city/postal/lat-long are
 	 * not present in a Country-tier database). Used to restore the "click a
-	 * blocked IP" admin info view (#169).
+	 * blocked IP" admin info view (#169). $ipaddress may also be a network
+	 * (the block list has IPv6 clients by their network, see
+	 * IpHelper::trackedAddress()): it is looked up by its network address.
 	 */
 	public static function getCityDetails(LoggerHelper $logger, $dbPath, $ipaddress)
 	{
@@ -81,12 +83,15 @@ class GeoHelper
 			$logger->log('GeoHelper: GeoIP database file not readable: '.$dbPath, Log::WARNING);
 			return null;
 		}
+		// the reader takes addresses only: a network by its network address
+		$canonical = IpHelper::canonicalEntry($ipaddress);
+		$address = $canonical === null ? (string) $ipaddress : explode('/', $canonical)[0];
 		try
 		{
 			$reader = new Reader($dbPath);
 			try
 			{
-				$record = $reader->get($ipaddress);
+				$record = $reader->get($address);
 			}
 			finally
 			{
