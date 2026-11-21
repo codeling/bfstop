@@ -24,27 +24,17 @@ use Joomla\Registry\Registry;
  */
 class RiskHelper
 {
-	private static function getBoolParam(Registry $params, $paramName, $default)
-	{
-		return (bool) $params->get($paramName, $default);
-	}
-
-	private static function getIntParam(Registry $params, $paramName, $default)
-	{
-		return (int) $params->get($paramName, $default);
-	}
-
 	private static function knownIpScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $username)
 	{
-		if (!self::getBoolParam($params, 'riskKnownIpEnabled', true))
+		if (!Settings::bool($params, 'riskKnownIpEnabled'))
 		{
 			return 0;
 		}
 		try
 		{
-			if ($repositories->knownIps()->hasLoggedInFrom($ipaddress, $username, self::getIntParam($params, 'ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength'])))
+			if ($repositories->knownIps()->hasLoggedInFrom($ipaddress, $username, Settings::int($params, 'ipv6PrefixLength')))
 			{
-				return -self::getIntParam($params, 'riskKnownIpPoints', 5);
+				return -Settings::int($params, 'riskKnownIpPoints');
 			}
 		}
 		catch (\Throwable $e)
@@ -60,7 +50,7 @@ class RiskHelper
 	 */
 	public static function isCommonUsername(Registry $params, $username)
 	{
-		$list = (string) $params->get('riskCommonUsernames', Settings::Defaults['riskCommonUsernames']);
+		$list = Settings::string($params, 'riskCommonUsernames');
 		$candidates = array_filter(array_map('trim', explode("\n", str_replace("\r", '', $list))));
 		foreach ($candidates as $candidate)
 		{
@@ -74,25 +64,25 @@ class RiskHelper
 
 	private static function commonUsernameScore(Registry $params, $username)
 	{
-		if (!self::getBoolParam($params, 'riskCommonUsernameEnabled', true))
+		if (!Settings::bool($params, 'riskCommonUsernameEnabled'))
 		{
 			return 0;
 		}
 		return self::isCommonUsername($params, $username)
-			? self::getIntParam($params, 'riskCommonUsernamePoints', 2)
+			? Settings::int($params, 'riskCommonUsernamePoints')
 			: 0;
 	}
 
 	private static function userAgentScore(Registry $params)
 	{
-		if (!self::getBoolParam($params, 'riskUserAgentEnabled', true))
+		if (!Settings::bool($params, 'riskUserAgentEnabled'))
 		{
 			return 0;
 		}
 		$userAgent = array_key_exists('HTTP_USER_AGENT', $_SERVER) ? trim($_SERVER['HTTP_USER_AGENT']) : '';
 		if ($userAgent === '')
 		{
-			return self::getIntParam($params, 'riskUserAgentPoints', 2);
+			return Settings::int($params, 'riskUserAgentPoints');
 		}
 		return 0;
 	}
@@ -105,23 +95,23 @@ class RiskHelper
 	 */
 	private static function geoScore(LoggerHelper $logger, Registry $params, $ipaddress)
 	{
-		if (!self::getBoolParam($params, 'riskGeoEnabled', false))
+		if (!Settings::bool($params, 'riskGeoEnabled'))
 		{
 			return 0;
 		}
-		$dbPath = (string) $params->get('geoDbPath', '');
+		$dbPath = Settings::string($params, 'geoDbPath');
 		$countryCode = GeoHelper::getCountryCode($logger, $dbPath, $ipaddress);
 		if ($countryCode === null)
 		{
 			return 0;
 		}
-		$homeCountries = (string) $params->get('riskGeoHomeCountries', '');
+		$homeCountries = Settings::string($params, 'riskGeoHomeCountries');
 		$homeList = array_filter(array_map('trim', explode(',', strtoupper($homeCountries))));
 		if (empty($homeList) || in_array(strtoupper($countryCode), $homeList, true))
 		{
 			return 0;
 		}
-		return self::getIntParam($params, 'riskGeoPoints', 3);
+		return Settings::int($params, 'riskGeoPoints');
 	}
 
 	/**
@@ -135,7 +125,7 @@ class RiskHelper
 	 */
 	private static function reverseDnsScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $cacheKey)
 	{
-		if (!self::getBoolParam($params, 'riskReverseDnsEnabled', false))
+		if (!Settings::bool($params, 'riskReverseDnsEnabled'))
 		{
 			return 0;
 		}
@@ -155,7 +145,7 @@ class RiskHelper
 			}
 			if ($hostname === null)
 			{
-				return self::getIntParam($params, 'riskReverseDnsPoints', 2);
+				return Settings::int($params, 'riskReverseDnsPoints');
 			}
 		}
 		catch (\Throwable $e)

@@ -13,7 +13,6 @@ defined('_JEXEC') or die;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
-use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Settings;
@@ -49,20 +48,20 @@ class BlockPolicy
 		$this->logger = $logger;
 	}
 
-	private function intParam($name, $default): int
+	private function intParam($name): int
 	{
-		return (int) $this->params->get($name, $default);
+		return Settings::int($this->params, $name);
 	}
 
-	private function boolParam($name, $default): bool
+	private function boolParam($name): bool
 	{
-		return (bool) $this->params->get($name, $default);
+		return Settings::bool($this->params, $name);
 	}
 
 	/** "blockMode": full, loginonly, htaccess or off */
 	public function mode(): string
 	{
-		return (string) $this->params->get('blockMode', 'full');
+		return Settings::string($this->params, 'blockMode');
 	}
 
 	public function isOff(): bool
@@ -81,18 +80,18 @@ class BlockPolicy
 	/** The minutes within which the failed logins of an address count. */
 	public function checkInterval()
 	{
-		return self::realDuration($this->intParam('checkInterval', Settings::Defaults['checkInterval']));
+		return self::realDuration($this->intParam('checkInterval'));
 	}
 
 	/** The duration of a first block, in minutes (0: permanent). */
 	public function blockDuration(): int
 	{
-		return $this->intParam('blockDuration', NotifierHelper::OneDay);
+		return $this->intParam('blockDuration');
 	}
 
 	public function htaccessPath(): string
 	{
-		return HtaccessHelper::resolvePath((string) $this->params->get('htaccessPath', ''));
+		return HtaccessHelper::resolvePath(Settings::string($this->params, 'htaccessPath'));
 	}
 
 	/**
@@ -105,9 +104,9 @@ class BlockPolicy
 	 */
 	public function effectiveBlockNumber($riskScore): int
 	{
-		$blockNumber = $this->intParam('blockNumber', Settings::Defaults['blockNumber']);
-		$reductionPerPoint = $this->intParam('riskBlockNumberReductionPerPoint', 1);
-		$minBlockNumber = $this->intParam('riskMinBlockNumber', 2);
+		$blockNumber = $this->intParam('blockNumber');
+		$reductionPerPoint = $this->intParam('riskBlockNumberReductionPerPoint');
+		$minBlockNumber = $this->intParam('riskMinBlockNumber');
 		$effective = (int) round($blockNumber - $riskScore * $reductionPerPoint);
 		return max($minBlockNumber, $effective);
 	}
@@ -170,7 +169,7 @@ class BlockPolicy
 			'htaccessPath' => $this->htaccessPath(),
 			// has to be found out before blocking, which marks these failed
 			// logins as handled
-			'targetedOtherAccounts' => $this->boolParam('notifyBlockedUser', false) &&
+			'targetedOtherAccounts' => $this->boolParam('notifyBlockedUser') &&
 				$this->logins->hasFailedLoginsForOtherAccounts($this->checkInterval(),
 					$logEntry->ipaddress, $logEntry->username, $logEntry->logtime),
 		);
@@ -183,8 +182,8 @@ class BlockPolicy
 	 */
 	public function escalatedDuration($address, $duration)
 	{
-		$maxBlocksBefore = $this->intParam('maxBlocksBefore', Settings::Defaults['maxBlocksBefore']);
-		$progressiveEnabled = $this->boolParam('progressiveBlockDuration', false);
+		$maxBlocksBefore = $this->intParam('maxBlocksBefore');
+		$progressiveEnabled = $this->boolParam('progressiveBlockDuration');
 		if ($maxBlocksBefore <= 0 && !$progressiveEnabled)
 		{
 			return $duration;
@@ -245,7 +244,7 @@ class BlockPolicy
 	/** Whether blocked users may be sent an unblock link at all. */
 	public function notifiesBlockedUser(): bool
 	{
-		return $this->boolParam('notifyBlockedUser', false);
+		return $this->boolParam('notifyBlockedUser');
 	}
 
 	/**
@@ -269,15 +268,20 @@ class BlockPolicy
 	 * @param object      $logEntry              the failed login which led to the block
 	 * @param string|null $clientAddress         see decide()
 	 * @param bool        $targetedOtherAccounts see decide()
+	 * @param string|null $username              the username of the account the
+	 *                                           failed login was against, if not
+	 *                                           what it was typed with (an email
+	 *                                           address, another case)
 	 * @return string|null why no email is sent, null if it may be
 	 */
-	public function whyNoUnblockMail($logEntry, $clientAddress, $targetedOtherAccounts): ?string
+	public function whyNoUnblockMail($logEntry, $clientAddress, $targetedOtherAccounts, $username = null): ?string
 	{
+		$username = $username ?? $logEntry->username;
 		if ($targetedOtherAccounts)
 		{
 			return 'the failed logins from this address also targeted other accounts';
 		}
-		$mode = self::effectiveNotifyBlockedUser($this->intParam('notifyBlockedUser', 0), self::hasLiveSite());
+		$mode = self::effectiveNotifyBlockedUser($this->intParam('notifyBlockedUser'), self::hasLiveSite());
 		if ($mode === 0)
 		{
 			$this->logger->log('Unblock links need the site\'s address ($live_site in configuration.php): '.
@@ -286,12 +290,12 @@ class BlockPolicy
 		}
 		if ($mode === self::NotifyBlockedAnyAddress)
 		{
-			return $this->repositories->unblockTokens()->hasCurrentFor($logEntry->username)
+			return $this->repositories->unblockTokens()->hasCurrentFor($username)
 				? 'there already is an unblock link for this user which can be used'
 				: null;
 		}
 		return $this->repositories->knownIps()->hasLoggedInFrom($clientAddress ?? $logEntry->ipaddress,
-			$logEntry->username, $this->intParam('ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength']))
+			$username, $this->intParam('ipv6PrefixLength'))
 			? null
 			: 'the user has never logged in from this IP address';
 	}
@@ -354,19 +358,19 @@ class BlockPolicy
 	 */
 	private function accountThrottleDelay($logEntry): int
 	{
-		if (!$this->boolParam('accountThrottleEnabled', true))
+		if (!$this->boolParam('accountThrottleEnabled'))
 		{
 			return 0;
 		}
-		$checkInterval = $this->intParam('accountCheckInterval', 60);
-		$accountBlockNumber = $this->intParam('accountBlockNumber', 20);
+		$checkInterval = $this->intParam('accountCheckInterval');
+		$accountBlockNumber = $this->intParam('accountBlockNumber');
 		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledForUsername(
 			$checkInterval, $logEntry->username, $logEntry->logtime);
 		if ($numberOfFailedLogins < $accountBlockNumber)
 		{
 			return 0;
 		}
-		$throttleDelay = max(0, $this->intParam('accountThrottleDelay', 5));
+		$throttleDelay = max(0, $this->intParam('accountThrottleDelay'));
 		if ($throttleDelay > 0)
 		{
 			$this->logger->log('Account-level throttle triggered for username \''.
@@ -385,21 +389,20 @@ class BlockPolicy
 	 */
 	private function determineDelayDuration($riskScore)
 	{
-		$riskDelaySecondsPerPoint = $this->intParam('riskDelaySecondsPerPoint',
-			Settings::Defaults['riskDelaySecondsPerPoint']);
+		$riskDelaySecondsPerPoint = $this->intParam('riskDelaySecondsPerPoint');
 		return $this->determineBaseDelayDuration() + max(0, $riskScore) * $riskDelaySecondsPerPoint;
 	}
 
 	private function determineBaseDelayDuration()
 	{
-		$delayDuration = $this->intParam('delayDuration', 0);
-		if (!$this->boolParam('adaptiveDelay', false))
+		$delayDuration = $this->intParam('delayDuration');
+		if (!$this->boolParam('adaptiveDelay'))
 		{
 			return $delayDuration;
 		}
-		$maxDelay = $this->intParam('adaptiveDelayMax', Settings::Defaults['adaptiveDelayMax']);
-		$lowThreshold = $this->intParam('adaptiveDelayThresholdMin', Settings::Defaults['adaptiveDelayThresholdMin']);
-		$highThreshold = $this->intParam('adaptiveDelayThresholdMax', Settings::Defaults['adaptiveDelayThresholdMax']);
+		$maxDelay = $this->intParam('adaptiveDelayMax');
+		$lowThreshold = $this->intParam('adaptiveDelayThresholdMin');
+		$highThreshold = $this->intParam('adaptiveDelayThresholdMax');
 		if ($lowThreshold > $highThreshold)
 		{
 			$tmp = $lowThreshold;

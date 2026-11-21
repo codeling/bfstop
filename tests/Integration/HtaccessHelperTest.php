@@ -130,23 +130,6 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertSame(array('192.0.2.1', '192.0.2.2'), array_values($h->getDeniedIPs()));
 	}
 
-	public function test403Message()
-	{
-		$h = $this->helper();
-		$h->denyIP('203.0.113.5');
-		$this->assertNotFalse($h->edit403Message('Go away'));
-		$this->assertStringContainsString("ErrorDocument 403 \"Go away\"\n", $this->content());
-		$this->assertSame(array('203.0.113.5'), array_values($h->getDeniedIPs()));
-
-		$h->edit403Message('Changed');
-		$this->assertStringNotContainsString('Go away', $this->content());
-		$this->assertSame(1, substr_count($this->content(), 'ErrorDocument 403'));
-
-		$h->edit403Message('');
-		$this->assertStringNotContainsString('ErrorDocument 403', $this->content());
-		$this->assertSame(array('203.0.113.5'), array_values($h->getDeniedIPs()));
-	}
-
 	public static function invalidAddressProvider()
 	{
 		return array(
@@ -169,17 +152,6 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertSame($before, $this->content(), 'file must stay untouched');
 		$this->assertTrue($this->logger->hasMessage(Log::ERROR, 'Refusing to write'));
 		$this->logger->errors = array(); // expected
-	}
-
-	public function test403MessageIsSanitised()
-	{
-		$h = $this->helper();
-		$this->assertFalse($h->edit403Message("Go away\nSetHandler application/x-httpd-php"));
-		$this->assertFalse($h->edit403Message("Go away\r"));
-		$this->assertFileDoesNotExist($this->dir.'/.htaccess');
-		$this->logger->errors = array(); // expected
-		$this->assertNotFalse($h->edit403Message('Say "hi" \\ bye'));
-		$this->assertStringContainsString('ErrorDocument 403 "Say \"hi\" \\\\ bye"'."\n", $this->content());
 	}
 
 	public function testConcurrentChangesDontLoseEntries()
@@ -315,7 +287,6 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$h = $this->helper();
 		$h->denyIP('203.0.113.5');
 		$h->denyIP('2001:db8:1::/56');
-		$h->edit403Message('Blocked');
 		$content = $this->content();
 		$this->assertStringNotContainsString('Require all granted', $content);
 		$this->assertStringNotContainsString('RequireAll', $content);
@@ -338,6 +309,37 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$this->assertTrue($h->upgradeFormat(), 'nothing left to do');
 	}
 
+	public function testBlocksWrittenByHandAreKeptAsTheyAre()
+	{
+		// an <If> of somebody else's in the section is not one of the
+		// plugin's: neither its condition nor its lines are taken apart
+		$hand = array(
+			'<If "%{HTTP_HOST} == \'old.example.org\'">',
+			'Require all denied',
+			'</If>',
+			'<If "-R \'198.51.100.0/24\' && %{REQUEST_URI} =~ m#^/administrator#">',
+			'  <If "%{HTTP_COOKIE} =~ /staff=1/">',
+			'    Require all granted',
+			'  </If>',
+			'  Require all denied',
+			'</If>',
+			'<IfModule mod_headers.c>',
+			'Header set X-Hand 1',
+			'</IfModule>',
+		);
+		file_put_contents($this->dir.'/.htaccess', "# BEGIN BFStop Blocks\n".implode("\n", $hand)."\n# END BFStop Blocks\n");
+		$h = $this->helper();
+		$this->assertSame(array(), $h->getDeniedIPs(), 'the hand-written conditions name no blocks');
+		$this->assertTrue($h->denyIP('203.0.113.5'));
+		$this->assertTrue($h->denyIP('203.0.113.6'));
+		$this->assertTrue($h->undenyIP('203.0.113.5'));
+		$this->assertSame(array('203.0.113.6'), $h->getDeniedIPs());
+		$content = $this->content();
+		$this->assertStringContainsString(implode("\n", $hand)."\n# END BFStop Blocks", $content);
+		$this->assertStringContainsString(self::ifLine("-R '203.0.113.6'")."\nRequire all denied\n</If>\n", $content);
+		$this->assertSame(4, substr_count($content, '<If '), 'the three <If> written by hand and the one of the block');
+	}
+
 	public function testAnyChangeReplacesTheSectionOfEarlierVersions()
 	{
 		$legacy = "# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\nRequire not ip 192.0.2.1\n</RequireAll>\n# END BFStop Blocks\n";
@@ -345,8 +347,7 @@ class HtaccessHelperTest extends IntegrationTestCase
 			'deny'           => function ($h) { return $h->denyIP('192.0.2.2'); },
 			'undeny'         => function ($h) { return $h->undenyIP('192.0.2.1'); },
 			'undeny absent'  => function ($h) { return $h->undenyIP('198.51.100.1'); },
-			'403 message'    => function ($h) { return $h->edit403Message('Go away'); },
-			'no 403 message' => function ($h) { return $h->remove403Message(); },
+			'upgrade'        => function ($h) { return $h->upgradeFormat(); },
 		) as $what => $change)
 		{
 			file_put_contents($this->dir.'/.htaccess', $legacy);

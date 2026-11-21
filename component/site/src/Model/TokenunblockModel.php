@@ -115,22 +115,6 @@ class TokenunblockModel extends BaseDatabaseModel
 	}
 
 	/**
-	 * Unblocks with $token, from wherever (see process() for what a request
-	 * of the page has to show first).
-	 */
-	public function unblock($token, $logger)
-	{
-		$repositories = $this->repositories($logger);
-		$issued = $this->issuedFor($repositories, $token);
-		if ($issued === null)
-		{
-			$logger->log("com_bfstop-tokenunblock: Token not found.", Log::ERROR);
-			return false;
-		}
-		return $this->lift($repositories, $token, $issued['blockId'], $logger) === self::ResultUnblocked;
-	}
-
-	/**
 	 * The block $token was issued for, see UnblockTokenRepository::issuedFor().
 	 * The expired tokens are deleted first: a request of this page is where
 	 * they are seen.

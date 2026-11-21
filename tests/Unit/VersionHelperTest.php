@@ -29,6 +29,17 @@ class VersionHelperTest extends TestCase
 		$this->assertSame('', VersionHelper::getVersion('{}'));
 	}
 
+	public function testAnEmptyOrBrokenManifestCacheHasNoVersion()
+	{
+		// json_decode() gives null or no object for these: property_exists()
+		// threw a TypeError, which took down the settings page
+		foreach (array('', 'null', 'not json', '[]', '"2.1.3"', '{"version":{"x":1}}') as $cache)
+		{
+			$this->assertSame('', VersionHelper::getVersion($cache), $cache);
+		}
+		$this->assertSame('', VersionHelper::getVersion(null));
+	}
+
 	public static function sameMajorMinor()
 	{
 		return array(

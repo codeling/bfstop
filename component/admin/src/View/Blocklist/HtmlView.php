@@ -12,7 +12,6 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -37,8 +36,8 @@ class HtmlView extends BaseHtmlView
 		$this->sortDirection = (string) $state->get('list.direction');
 		// with .htaccess blocking, blocked requests never reach Joomla,
 		// so attempts can't be counted
-		$this->attemptsTracked = ParamHelper::get('blockMode', 'full') !== 'htaccess';
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Settings::Defaults['deleteOld']);
+		$this->attemptsTracked = ParamHelper::get('blockMode') !== 'htaccess';
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld');
 		// selecting a range of rows with shift-click, see grid.checkall in the head
 		$this->getDocument()->getWebAssetManager()->useScript('multiselect');
 		$this->addToolBar();
@@ -53,7 +52,7 @@ class HtmlView extends BaseHtmlView
 		}
 		else
 		{
-			if ($item->duration == 0)
+			if ($item->duration <= 0)
 			{
 				return Text::_('COM_BFSTOP_BLOCKED_PERMANENTLY');
 			}

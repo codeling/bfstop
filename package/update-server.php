@@ -50,8 +50,8 @@ function updateServerLines()
 		// requirements of 2.x)
 		1 => array('targetplatform' => '(4|5\.[0-3])\..*', 'php_minimum' => null),
 		// 2.x: package/script.php refuses anything older than Joomla! 5.4
-		// and PHP 8.1
-		2 => array('targetplatform' => '(5\.[4-9]|6)\..*', 'php_minimum' => '8.1'),
+		// and PHP 8.2
+		2 => array('targetplatform' => '(5\.[4-9]|6)\..*', 'php_minimum' => '8.2'),
 	);
 }
 

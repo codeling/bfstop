@@ -40,7 +40,9 @@ class LoginService
 	 * were counted against the user stop counting, and the address is one
 	 * the user has logged in from.
 	 *
-	 * @param object      $info           ipaddress (the client's address) and username
+	 * @param object      $info           ipaddress (the client's address), username
+	 *                                    and, if known, email (failed logins
+	 *                                    typed with it are the user's too)
 	 * @param string|null $trackedAddress the key this client is tracked by (see
 	 *                                    IpHelper::trackedAddress(): for IPv6 its
 	 *                                    network), if not its address. Failed
@@ -54,7 +56,8 @@ class LoginService
 	public function recordSuccessfulLogin($info, $trackedAddress = null, $trustedAddress = null)
 	{
 		$key = $trackedAddress ?? $info->ipaddress;
-		$this->repositories->failedLogins()->markHandled($key, $info->username);
+		$this->repositories->failedLogins()->markHandled($key,
+			array_filter(array((string) $info->username, (string) ($info->email ?? ''))));
 		$this->repositories->knownIps()->remember($trustedAddress ?? $key, $info->username);
 	}
 

@@ -37,11 +37,27 @@ of another, only those of the library.
   [releases](https://github.com/codeling/bfstop/releases). It contains the
   plugin and the component and installs both. Don't install them separately:
   they are released together, and need to have the same version.
-- Requirements: Joomla! 5.4 or 6, PHP 8.1 or newer, and MySQL, MariaDB or
+- Requirements: Joomla! 5.4 or 6, PHP 8.2 or newer, and MySQL, MariaDB or
   PostgreSQL. Sites still on Joomla! 4 stay with BFStop 1.5.
 - The plugin is enabled when it is installed. Configure BFStop under
   *Components → Brute Force Stop → Settings*.
 - Joomla! offers updates through its update manager.
+
+### What the delays can and can't do
+
+Blocking is what protects the login: an address (an IPv6 client: its
+network) gets only so many failed logins. The delays - the delay of the
+response to a failed login, the adaptive delay, the account throttle and the
+delay per point of the risk score - only slow down a client which waits for
+one answer before it sends the next attempt. Each delayed response holds a
+PHP worker for as long as it is delayed, so at most "delayMaxConcurrent"
+responses are delayed at the same time (and none longer than 60 seconds);
+any further failed login is answered at once. An attacker who sends many
+attempts in parallel, from many addresses, therefore gets most answers
+without delay: the account throttle in particular doesn't stop a distributed
+attack on one account, it only makes it a little slower. Holding many
+connections open cheaply is something only the web server or a proxy in
+front of it can do (e.g. nginx's `limit_req`).
 
 ## Resources
 

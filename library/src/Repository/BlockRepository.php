@@ -16,7 +16,8 @@ use Joomla\Database\ParameterType;
 
 /**
  * The blocks (#__bfstop_bannedip) and their lifting (#__bfstop_unblock).
- * A block is active while its duration (in minutes, 0 for ever) hasn't run
+ * A block is active while its duration (in minutes, 0 - or less, see
+ * BlockPolicy::realDuration() - for ever) hasn't run
  * out and it hasn't been lifted.
  */
 class BlockRepository extends AddressTableRepository
@@ -50,7 +51,7 @@ class BlockRepository extends AddressTableRepository
 	// SQL for "the block t is active at :now"; names of columns and tables only
 	private function activeCondition($block, $lifted)
 	{
-		return '('.$block.'.duration = 0 OR '.
+		return '('.$block.'.duration <= 0 OR '.
 			$this->addMinutesSql($block.'.crdate', $block.'.duration').' >= :now)'.
 			' AND NOT EXISTS (SELECT 1 FROM #__bfstop_unblock '.$lifted.' WHERE '.$block.'.id = '.$lifted.'.block_id)';
 	}
@@ -230,7 +231,7 @@ class BlockRepository extends AddressTableRepository
 				$query = $this->db->createQuery()
 					->select($this->db->quoteName(array('id', 'ipaddress', 'crdate')))
 					->from($this->db->quoteName(self::Table))
-					->where($this->db->quoteName('duration').' != 0')
+					->where($this->db->quoteName('duration').' > 0')
 					->where($this->addMinutesSql('crdate', 'duration').' < :date')
 					->order($this->db->quoteName('id'));
 				$ended = $this->objects($query, array('date' => (string) $date), 0, self::PurgeBatch);

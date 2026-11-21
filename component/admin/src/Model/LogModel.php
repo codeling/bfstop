@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Log\Log;
 use Joomla\CMS\MVC\Model\ListModel;
 
 /**
@@ -89,12 +90,12 @@ class LogModel extends ListModel
 		{
 			// the order needs every entry
 			$entries = array_filter(array_map(array($this, 'parseLine'), $lines));
-			// the sort is stable: entries of the same priority stay in the order of the file
-			usort($entries, fn ($a, $b) => strcmp($a->priority, $b->priority));
-			if ($descending)
-			{
-				$entries = array_reverse($entries);
-			}
+			// by severity, the most severe first in ascending order (as Joomla
+			// numbers the priorities: EMERGENCY 1 ... DEBUG 128), not by the
+			// name; the sort is stable: entries of the same priority stay in
+			// the order of the file - also descending
+			$direction = $descending ? -1 : 1;
+			usort($entries, fn ($a, $b) => $direction * (self::severity($a->priority) <=> self::severity($b->priority)));
 			return array_slice($entries, $start, $count > 0 ? $count : null);
 		}
 		// by date, which is the order of the file
@@ -104,6 +105,18 @@ class LogModel extends ListModel
 		}
 		$page = array_slice($lines, $start, $count > 0 ? $count : null);
 		return array_values(array_filter(array_map(array($this, 'parseLine'), $page)));
+	}
+
+	/**
+	 * The value of a priority as the log file names it (Log::ERROR for
+	 * "ERROR"); a name which is none sorts after DEBUG.
+	 */
+	public static function severity($priority): int
+	{
+		$names = array('EMERGENCY' => Log::EMERGENCY, 'ALERT' => Log::ALERT, 'CRITICAL' => Log::CRITICAL,
+			'ERROR' => Log::ERROR, 'WARNING' => Log::WARNING, 'NOTICE' => Log::NOTICE, 'INFO' => Log::INFO,
+			'DEBUG' => Log::DEBUG);
+		return $names[strtoupper(trim((string) $priority))] ?? PHP_INT_MAX;
 	}
 
 	protected function populateState($ordering = null, $direction = null)

@@ -112,6 +112,12 @@ run):
 - a release of a **newer minor/major line** (e.g. 6.2 when the matrix has 6.1)
   only gets an issue: whether to support it is a decision.
 
+The database images of the matrix are pinned by their digest (`"digest"`, the
+same for every entry of an image; the lint checks it), as the actions are:
+what runs in CI is the image that was looked at. Neither Dependabot nor the
+weekly job update them; when raising one, take the digest from Docker Hub (or
+`docker buildx imagetools inspect <image>`).
+
 For the pull requests, the repository setting "Allow GitHub Actions to create
 and approve pull requests" has to be on. The planning and the edits are
 `tests/ci/joomla-updates.php` (unit-tested in `tests/Unit/JoomlaUpdatesTest.php`).

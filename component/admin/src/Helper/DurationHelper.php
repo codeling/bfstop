@@ -36,7 +36,8 @@ class DurationHelper
 	 */
 	public static function toReadable($duration)
 	{
-		$duration = (int) $duration;
+		// 0 or less: for ever, see BlockPolicy::realDuration()
+		$duration = max(0, (int) $duration);
 		if (array_key_exists($duration, self::Named))
 		{
 			return Text::_(self::Named[$duration]);

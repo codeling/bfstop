@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Log;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -42,8 +41,8 @@ class HtmlView extends BaseHtmlView
 		$state            = $this->getModel()->getState();
 		$this->sortColumn = (string) $state->get('list.ordering');
 		$this->sortDirection = (string) $state->get('list.direction');
-		$this->keepDays = (int) ParamHelper::get('logKeepDays', LoggerHelper::DefaultKeepDays);
-		$this->maxSizeMB = max(1, (int) ParamHelper::get('logMaxSize', LoggerHelper::DefaultMaxSizeMB));
+		$this->keepDays = (int) ParamHelper::get('logKeepDays');
+		$this->maxSizeMB = max(1, (int) ParamHelper::get('logMaxSize'));
 		$this->canDelete = (bool) Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canDelete)
 		{

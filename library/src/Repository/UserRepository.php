@@ -34,24 +34,46 @@ class UserRepository extends Repository
 	}
 
 	/**
-	 * The email address of the account with the username $username, null if
-	 * there is none. Fail-open: null (no mail is sent).
+	 * The enabled account whose username or email address is $login - what a
+	 * failed login was typed with, see accountExists(), so matched the same
+	 * way: whatever the case, and also by the email address. Null if there is
+	 * no such account, or it is disabled (it can't log in, so an unblock link
+	 * is of no use to it). If $login is the username of one account and the
+	 * email address of another, the one whose username it is wins.
+	 *
+	 * Fail-open: null (so no mail is sent).
+	 *
+	 * @return array{username: string, email: string}|null
 	 */
-	public function emailByUsername($username)
+	public function accountByLogin($login)
 	{
-		return $this->failOpen('emailByUsername', function () use ($username)
+		$login = (string) $login;
+		if ($login === '')
 		{
+			return null;
+		}
+		return $this->failOpen('accountByLogin', function () use ($login)
+		{
+			$values = array('u0' => $login, 'e0' => $login, 'o0' => $login);
 			$query = $this->db->createQuery()
-				->select($this->db->quoteName('email'))
+				->select($this->db->quoteName(array('username', 'email')))
 				->from($this->db->quoteName('#__users'))
-				->where($this->db->quoteName('username').' = :username');
-			$values = array('username' => (string) $username);
-			return $this->scalar($query, $values, 0, 1);
+				->where('('.$this->loginCondition(array('u0'), array('e0')).')')
+				->where($this->db->quoteName('block').' = 0')
+				->order('CASE WHEN '.$this->loginCondition(array('o0'), array()).' THEN 0 ELSE 1 END')
+				->order($this->db->quoteName('id'));
+			$row = $this->row($query, $values, 0, 1);
+			if (!is_array($row) || (string) $row['email'] === '')
+			{
+				return null;
+			}
+			return array('username' => (string) $row['username'], 'email' => (string) $row['email']);
 		}, null);
 	}
 
 	/**
-	 * The email addresses of the members of the user group $groupId.
+	 * The email addresses of the enabled members of the user group $groupId
+	 * (not those of its sub-groups): a disabled account gets no mails.
 	 * Fail-open: none.
 	 *
 	 * @return string[]
@@ -63,9 +85,10 @@ class UserRepository extends Repository
 			$query = $this->db->createQuery()
 				->select($this->db->quoteName('u.email'))
 				->from($this->db->quoteName('#__users', 'u'))
-				->join('LEFT', $this->db->quoteName('#__user_usergroup_map', 'g').
+				->innerJoin($this->db->quoteName('#__user_usergroup_map', 'g').
 					' ON '.$this->db->quoteName('u.id').' = '.$this->db->quoteName('g.user_id'))
-				->where($this->db->quoteName('g.group_id').' = :group');
+				->where($this->db->quoteName('g.group_id').' = :group')
+				->where($this->db->quoteName('u.block').' = 0');
 			$values = array('group' => (int) $groupId);
 			return $this->column($query, $values);
 		}, array());
@@ -116,18 +139,11 @@ class UserRepository extends Repository
 
 	/**
 	 * Whether one of $logins (at most LookupChunk) is the username or email
-	 * address of an account, by the indexes of both columns.
-	 *
-	 * Joomla looks an account up case-insensitively on login. MySQL and
-	 * MariaDB compare the columns that way themselves (their collation,
-	 * utf8mb4_unicode_ci, is the one Joomla creates them with), and, unlike
-	 * LOWER(), by index: with LOWER() every failed login read the whole table
-	 * of accounts. PostgreSQL compares exactly, so there both sides are lowered
-	 * (Joomla has no index on the lowered columns there).
+	 * address of an account, by the indexes of both columns (see
+	 * loginCondition()).
 	 */
 	private function accountAmong(array $logins): bool
 	{
-		$lower = $this->db->getServerType() === 'postgresql';
 		$values = array();
 		$usernames = array();
 		$emails = array();
@@ -135,18 +151,43 @@ class UserRepository extends Repository
 		{
 			$values['u'.$i] = $login;
 			$values['e'.$i] = $login;
-			$usernames[] = $lower ? 'LOWER(:u'.$i.')' : ':u'.$i;
-			$emails[] = $lower ? 'LOWER(:e'.$i.')' : ':e'.$i;
+			$usernames[] = 'u'.$i;
+			$emails[] = 'e'.$i;
 		}
-		$username = $this->db->quoteName('username');
-		$email = $this->db->quoteName('email');
-		$condition = $lower
-			? 'LOWER('.$username.') IN ('.implode(', ', $usernames).') OR LOWER('.$email.') IN ('.implode(', ', $emails).')'
-			: $username.' IN ('.implode(', ', $usernames).') OR '.$email.' IN ('.implode(', ', $emails).')';
 		$query = $this->db->createQuery()
 			->select('1')
 			->from($this->db->quoteName('#__users'))
-			->where('('.$condition.')');
+			->where('('.$this->loginCondition($usernames, $emails).')');
 		return $this->scalar($query, $values, 0, 1) !== null;
+	}
+
+	/**
+	 * SQL for "the username is one of the parameters $usernames, or the email
+	 * address one of $emails" (names of parameters, without the colon), as
+	 * Joomla looks an account up on login: case-insensitively. MySQL and
+	 * MariaDB compare the columns that way themselves (their collation,
+	 * utf8mb4_unicode_ci, is the one Joomla creates them with), and, unlike
+	 * LOWER(), by index: with LOWER() every failed login read the whole table
+	 * of accounts. PostgreSQL compares exactly, so there both sides are lowered
+	 * (Joomla has no index on the lowered columns there).
+	 */
+	private function loginCondition(array $usernames, array $emails): string
+	{
+		$lower = $this->db->getServerType() === 'postgresql';
+		$parts = array();
+		foreach (array('username' => $usernames, 'email' => $emails) as $column => $parameters)
+		{
+			if (count($parameters) === 0)
+			{
+				continue;
+			}
+			$placeholders = array_map(function ($name) use ($lower)
+			{
+				return $lower ? 'LOWER(:'.$name.')' : ':'.$name;
+			}, $parameters);
+			$quoted = $this->db->quoteName($column);
+			$parts[] = ($lower ? 'LOWER('.$quoted.')' : $quoted).' IN ('.implode(', ', $placeholders).')';
+		}
+		return implode(' OR ', $parts);
 	}
 }

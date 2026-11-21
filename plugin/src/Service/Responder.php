@@ -10,7 +10,6 @@ namespace Codeling\Plugin\System\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Codeling\Library\Bfstop\Settings;
@@ -57,10 +56,9 @@ class Responder
 	 */
 	public function showsRemainingAttempts(): bool
 	{
-		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
-			Settings::Defaults['notifyUsePasswordReminder']);
+		$passwordReminder = Settings::int($this->params, 'notifyUsePasswordReminder');
 		return !$this->isApi() &&
-			((bool) $this->params->get('notifyRemainingAttempts', false) ||
+			(Settings::bool($this->params, 'notifyRemainingAttempts') ||
 				$passwordReminder == -1 || $passwordReminder > 0);
 	}
 
@@ -75,9 +73,8 @@ class Responder
 			$this->logger->log('Remaining attempts below zero ('.$attemptsLeft.'), that should not happen. ', Log::ERROR);
 			return;
 		}
-		$passwordReminder = (int) $this->params->get('notifyUsePasswordReminder',
-			Settings::Defaults['notifyUsePasswordReminder']);
-		if ((bool) $this->params->get('notifyRemainingAttempts', false) && $attemptsLeft > 0)
+		$passwordReminder = Settings::int($this->params, 'notifyUsePasswordReminder');
+		if (Settings::bool($this->params, 'notifyRemainingAttempts') && $attemptsLeft > 0)
 		{
 			$this->app->enqueueMessage(Text::sprintf('PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT', $attemptsLeft), 'warning');
 		}
@@ -94,7 +91,7 @@ class Responder
 	 */
 	public function refuseBlocked($ipaddress)
 	{
-		$status = self::blockedResponseCode((bool) $this->params->get('useHttpError', true));
+		$status = self::blockedResponseCode(Settings::bool($this->params, 'useHttpError'));
 		if ($status !== null)
 		{
 			http_response_code($status);
@@ -103,8 +100,8 @@ class Responder
 		{
 			header($header);
 		}
-		$message = $this->params->get('blockedMessage', Text::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE'));
-		if ((bool) $this->params->get('blockedMsgShowIP', false))
+		$message = Settings::string($this->params, 'blockedMessage') ?: Text::_('PLG_SYSTEM_BFSTOP_BLOCKED_IP_MESSAGE');
+		if (Settings::bool($this->params, 'blockedMsgShowIP'))
 		{
 			$message .= ' '.Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_CLIENT_IP', $ipaddress);
 		}
@@ -197,11 +194,10 @@ class Responder
 	 */
 	public static function delaySlotFiles($count)
 	{
-		$site = LockHelper::siteHash();
 		$files = array();
 		for ($i = 0; $i < max(1, (int) $count); ++$i)
 		{
-			$files[] = HtaccessHelper::lockDirectory().'/bfstop-delay-'.$site.'-'.$i.'.lock';
+			$files[] = LockHelper::file('delay', $i);
 		}
 		return $files;
 	}
@@ -240,8 +236,7 @@ class Responder
 		{
 			return false;
 		}
-		$maxConcurrent = max(1, (int) $this->params->get('delayMaxConcurrent',
-			Settings::Defaults['delayMaxConcurrent']));
+		$maxConcurrent = max(1, Settings::int($this->params, 'delayMaxConcurrent'));
 		$opened = false;
 		foreach (self::delaySlotFiles($maxConcurrent) as $file)
 		{
@@ -271,7 +266,7 @@ class Responder
 		// not delaying is what keeps the server available
 		$this->logger->log($opened
 			? 'Not delaying the response: '.$maxConcurrent.' response(s) are being delayed already'
-			: 'Not delaying the response: could not create the lock files in '.HtaccessHelper::lockDirectory(),
+			: 'Not delaying the response: could not create the lock files in '.LockHelper::directory(),
 			$opened ? Log::INFO : Log::WARNING);
 		return false;
 	}

@@ -15,15 +15,14 @@ use Codeling\Library\Bfstop\Settings;
 class ParamHelper
 {
 	/**
-	 * A setting as it is stored now (see the library's Settings, and
-	 * Settings::Defaults for the defaults). Costs no query: Joomla has the
-	 * params of the components loaded.
+	 * A setting as it is stored now, or its default (see the library's
+	 * Settings::get()). Costs no query: Joomla has the params of the
+	 * components loaded.
 	 *
-	 * @param string $name         the name of the setting
-	 * @param mixed  $defaultValue what is returned if the setting isn't stored
+	 * @param string $name the name of the setting
 	 */
-	public static function get($name, $defaultValue)
+	public static function get($name)
 	{
-		return Settings::stored()->get($name, $defaultValue);
+		return Settings::get(Settings::stored(), $name);
 	}
 }

@@ -13,6 +13,7 @@ use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Installer\InstallerScript;
 use Joomla\CMS\Installer\InstallerScriptInterface;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Log\Log;
 use Joomla\CMS\Router\Route;
 use Joomla\Database\DatabaseInterface;
 
@@ -26,7 +27,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	// InstallerScript::preflight() refuses to install on anything older (and
 	// to replace a newer version of the plugin with an older one)
 	protected $minimumJoomla = '5.4.0';
-	protected $minimumPhp = '8.1.0';
+	protected $minimumPhp = '8.2.0';
 
 	// the version this update replaces, null for an installation
 	private $previousVersion = null;
@@ -34,6 +35,9 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	// the .htaccess file whose block section of an earlier version could not
 	// be replaced, see replaceLegacyHtaccessSection()
 	private $htaccessNotRewritten = null;
+
+	// why update() could not migrate the settings and data, if it couldn't
+	private $updateFailure = null;
 
 	// the bit of the "enabledForOrigin" setting for the Web Services API
 	// (Origin::Api - the class of the version being replaced may be the
@@ -263,6 +267,15 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 
 	public function postflight(string $type, InstallerAdapter $adapter): bool
 	{
+		if ($this->updateFailure !== null)
+		{
+			Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+			Factory::getApplication()->enqueueMessage(
+				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_MIGRATION_FAILED', htmlspecialchars($this->updateFailure, ENT_QUOTES, 'UTF-8'),
+					Route::_('index.php?option=com_bfstop&view=settings', false)),
+				'error'
+			);
+		}
 		if ($this->htaccessNotRewritten !== null)
 		{
 			Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
@@ -415,8 +428,13 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		}
 		catch (\Throwable $e)
 		{
-			// if the extension row can't be found/updated, there's nothing we can do
-//			Log::add("Update ERROR: ".$e->getMessage(), Log::ERROR, 'Update');
+			// the update itself goes on (the files are new, the plugin works
+			// with its defaults), but the administrator has to know: the
+			// settings may not have been moved or converted. Logged, and
+			// told by postflight()
+			$this->updateFailure = $e->getMessage();
+			Log::add('Brute Force Stop: the update could not migrate the settings and data: '.$e->getMessage(),
+				Log::ERROR, 'jerror');
 		}
 		return true;
 	}
@@ -627,6 +645,18 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	}
 
 	/**
+	 * Whether $line is the <If> of a block the plugin writes: a condition of
+	 * nothing but addresses, with the exception of the unblock page or
+	 * without (a copy of HtaccessHelper's, see htaccessFile() for why).
+	 */
+	private static function isBlockCondition($line)
+	{
+		$terms = "-R '[^']*'(?: \\|\\| -R '[^']*')*";
+		$unblockPage = " && !\\(%\\{REQUEST_URI\\} == '[^']*' && %\\{QUERY_STRING\\} =~ /[^/]*/\\)";
+		return preg_match('#^<If "(?:'.$terms.'|\\('.$terms.'\\)'.$unblockPage.')">$#', $line) === 1;
+	}
+
+	/**
 	 * The first and the last line of the block section of the .htaccess file
 	 * with the lines $lines (its markers), or two nulls if it has none.
 	 *
@@ -700,9 +730,30 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		for ($i = $begin + 1; $i < $end; ++$i)
 		{
 			$line = trim($lines[$i]);
-			if ($line === '' || strpos($line, '<If ') === 0 || strpos($line, 'Require not ip ') === 0 ||
-				strpos($line, 'ErrorDocument 403 ') === 0 ||
-				in_array($line, array('Require all denied', '</If>', '<RequireAll>', 'Require all granted', '</RequireAll>'), true))
+			if (self::isBlockCondition($line) && trim($lines[$i + 1] ?? '') === 'Require all denied' &&
+				trim($lines[$i + 2] ?? '') === '</If>' && $i + 2 < $end)
+			{
+				// a block the plugin wrote
+				$i += 2;
+				continue;
+			}
+			if (preg_match('/^<If[\s>]/i', $line))
+			{
+				// one somebody wrote by hand: kept, up to the </If> which closes it
+				for ($depth = 0; $i < $end; ++$i)
+				{
+					$inner = trim($lines[$i]);
+					$depth += (preg_match('/^<If[\s>]/i', $inner) ? 1 : 0) - (strcasecmp($inner, '</If>') === 0 ? 1 : 0);
+					$other[] = rtrim($lines[$i], "\r");
+					if ($depth <= 0)
+					{
+						break;
+					}
+				}
+				continue;
+			}
+			if ($line === '' || strpos($line, 'Require not ip ') === 0 || strpos($line, 'ErrorDocument 403 ') === 0 ||
+				in_array($line, array('<RequireAll>', 'Require all granted', '</RequireAll>'), true))
 			{
 				continue;
 			}

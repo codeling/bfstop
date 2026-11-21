@@ -91,30 +91,6 @@ parameters:
 			path: component/admin/src/Model/SettingsModel.php
 
 		-
-			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\EmaillistRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
-			identifier: return.type
-			count: 1
-			path: component/admin/src/Rule/EmaillistRule.php
-
-		-
-			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\GeodbpathRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
-			identifier: return.type
-			count: 1
-			path: component/admin/src/Rule/GeodbpathRule.php
-
-		-
-			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\HtaccesspathRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
-			identifier: return.type
-			count: 1
-			path: component/admin/src/Rule/HtaccesspathRule.php
-
-		-
-			message: '#^Method Codeling\\Component\\Bfstop\\Administrator\\Rule\\ProxylistRule\:\:test\(\) should return bool but returns UnexpectedValueException\.$#'
-			identifier: return.type
-			count: 1
-			path: component/admin/src/Rule/ProxylistRule.php
-
-		-
 			message: '#^Call to an undefined method Joomla\\CMS\\MVC\\Model\\BaseDatabaseModel\:\:getForm\(\)\.$#'
 			identifier: method.notFound
 			count: 1

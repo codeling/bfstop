@@ -93,7 +93,7 @@ class DisplayController extends BaseController
 	 */
 	public function warnIfUnblockLinksNeedLiveSite()
 	{
-		$setting = (int) ParamHelper::get('notifyBlockedUser', 0);
+		$setting = (int) ParamHelper::get('notifyBlockedUser');
 		if (BlockPolicy::effectiveNotifyBlockedUser($setting, BlockPolicy::hasLiveSite()) !== $setting)
 		{
 			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_NOTIFY_ANY_WITHOUT_LIVE_SITE',
@@ -103,7 +103,7 @@ class DisplayController extends BaseController
 
 	public function checkWhetherProxyConfigured()
 	{
-		$useProxy = (bool) ParamHelper::get('useProxy', false);
+		$useProxy = (bool) ParamHelper::get('useProxy');
 		if ($useProxy)
 		{
 			return;

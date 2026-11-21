@@ -39,7 +39,21 @@ class BlockTable extends Table
 		{
 			$this->ipaddress = $canonical;
 		}
+		// minutes, 0 for ever: the list names some, but a block may last any
+		// number of them (see BlockModel::addDurationOption()) - just not fewer
+		// than none
+		if (!is_numeric($this->duration) || (int) $this->duration < 0 || (string) (int) $this->duration !== trim((string) $this->duration))
+		{
+			$this->setError(\Joomla\CMS\Language\Text::_('COM_BFSTOP_BLOCK_DURATION_INVALID'));
+			return false;
+		}
+		$this->duration = (int) $this->duration;
 		$this->crdate = self::startTime((string) $this->crdate, $this->storedStartTime(), date('Y-m-d H:i:s'));
+		if (\DateTime::createFromFormat('!Y-m-d H:i:s', $this->crdate) === false)
+		{
+			$this->setError(\Joomla\CMS\Language\Text::_('COM_BFSTOP_BLOCK_START_INVALID'));
+			return false;
+		}
 		return parent::check();
 	}
 

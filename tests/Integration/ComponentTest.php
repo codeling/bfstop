@@ -108,9 +108,10 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertTrue($helper->blocks()->isBlocked('203.0.113.5'));
 
 		$model = $this->model(TokenunblockModel::class);
-		$this->assertFalse((bool) $model->unblock('expired', $this->logger), 'expired token must not unblock');
-		$this->logger->errors = array(); // expected: "token not found" error
-		$this->assertTrue((bool) $model->unblock('valid', $this->logger));
+		$this->assertSame(TokenunblockModel::ResultNotFound, $model->process('expired', true, '203.0.113.5', $this->logger),
+			'expired token must not unblock');
+		$this->logger->errors = array(); // expected: "no block found" error
+		$this->assertSame(TokenunblockModel::ResultUnblocked, $model->process('valid', true, '203.0.113.5', $this->logger));
 
 		$this->assertFalse($helper->blocks()->isBlocked('203.0.113.5'));
 		$this->assertSame(1, (int) $this->queryValue('SELECT source FROM #__bfstop_unblock WHERE block_id='.$blockId));
@@ -279,14 +280,8 @@ class ComponentTest extends IntegrationTestCase
 		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
 		$app->getMessageQueue(true);
 		$evil = '<script>alert(1)</script>';
-		$this->assertFalse(IpValidateHelper::validIPRange($evil));
-		$this->assertFalse(IpValidateHelper::validIPRange('203.0.113.0/'.$evil));
-		IpValidateHelper::validIPRange('10.0.0.1'); // private: a warning with the address
-		$messages = '';
-		foreach ($app->getMessageQueue(true) as $message)
-		{
-			$messages .= $message['message'];
-		}
+		$messages = IpValidateHelper::rangeError($evil).IpValidateHelper::rangeError('203.0.113.0/'.$evil).
+			IpValidateHelper::currentIpError($evil);
 		$this->assertStringNotContainsString('<script>', $messages);
 		$this->assertStringContainsString('&lt;script&gt;', $messages);
 	}
@@ -472,6 +467,41 @@ class ComponentTest extends IntegrationTestCase
 			$this->assertSame(TokenunblockModel::ResultUnblocked,
 				$this->model(TokenunblockModel::class)->process('valid6', true, '2001:db8:6:9::1', $this->logger));
 			$this->assertSame(array('203.0.113.61', '203.0.113.63'), $htaccess->getDeniedIPs());
+		}
+		finally
+		{
+			$this->setSettings($params);
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	public function testHtaccessBlockListPagesIncludingAll()
+	{
+		$dir = sys_get_temp_dir().'/bfstop-htlist-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		$params = $this->getSettings();
+		try
+		{
+			$this->setSettings(json_encode(array('blockMode' => 'htaccess', 'htaccessPath' => $dir)));
+			$htaccess = new HtaccessHelper($dir, $this->logger);
+			foreach (array('203.0.113.3', '203.0.113.1', '203.0.113.2') as $ip)
+			{
+				$htaccess->denyIP($ip);
+			}
+			$items = function ($start, $limit)
+			{
+				$model = $this->model(HtblocklistModel::class);
+				$model->getState(); // populated now, not over what is set below
+				$model->setState('list.direction', 'ASC');
+				$model->setState('list.start', $start);
+				$model->setState('list.limit', $limit);
+				return $model->getItems();
+			};
+			// "All" is a limit of 0: every entry, not none
+			$this->assertSame(array('203.0.113.1', '203.0.113.2', '203.0.113.3'), $items(0, 0));
+			$this->assertSame(array('203.0.113.1', '203.0.113.2'), $items(0, 2));
+			$this->assertSame(array('203.0.113.3'), $items(2, 2));
 		}
 		finally
 		{
@@ -731,6 +761,23 @@ class ComponentTest extends IntegrationTestCase
 		return $model->getForm();
 	}
 
+	public function testBlocksNeedADurationOfNoneOrMoreMinutesAndAStartTime()
+	{
+		foreach (array('-5', 'abc', '1.5', '') as $duration)
+		{
+			$model = $this->model(BlockModel::class);
+			$this->assertFalse($model->save(array('id' => '', 'ipaddress' => '203.0.113.81', 'crdate' => '',
+				'duration' => $duration)), "duration '$duration'");
+		}
+		$model = $this->model(BlockModel::class);
+		$this->assertFalse($model->save(array('id' => '', 'ipaddress' => '203.0.113.81', 'crdate' => 'tomorrow',
+			'duration' => '60')), 'no time');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+		$this->assertGreaterThan(0, $this->saveNew(BlockModel::class,
+			array('ipaddress' => '203.0.113.81', 'crdate' => '', 'duration' => '43200')));
+		$this->assertSame(DurationHelper::toReadable(0), DurationHelper::toReadable(-5), 'an older entry of less than none is for ever');
+	}
+
 	public function testEditingABlockKeepsADurationTheListDoesNotName()
 	{
 		// the edit form's list only goes up to a day, but the settings offer a
@@ -849,11 +896,21 @@ class ComponentTest extends IntegrationTestCase
 
 	public function testFailedLoginListNamesTheOrigins()
 	{
-		$view = (new \ReflectionClass(\Codeling\Component\Bfstop\Administrator\View\Failedloginlist\HtmlView::class))
-			->newInstanceWithoutConstructor();
-		$this->assertSame('Frontend', $view->getOriginName(0));
-		$this->assertSame('Backend', $view->getOriginName('1'));
-		$this->assertSame('API', $view->getOriginName(3));
+		// by the library's names, as the mails and the log have them
+		$body = file_get_contents(BFSTOP_COMPONENT_ROOT.'/admin/tmpl/failedloginlist/default_body.php');
+		$this->assertStringContainsString('Origin::name($item->origin)', $body);
+		$this->assertSame('Frontend', \Codeling\Library\Bfstop\Origin::name(0));
+		$this->assertSame('Backend', \Codeling\Library\Bfstop\Origin::name('1'));
+		$this->assertSame('API', \Codeling\Library\Bfstop\Origin::name(3));
+	}
+
+	public function testIpInfoLinksAndRangesOfTheLists()
+	{
+		$this->assertSame('index.php?option=com_bfstop&view=ipinfo&ipaddress=2001%3Adb8%3A%3A%2F56',
+			\Codeling\Component\Bfstop\Administrator\Helper\LinkHelper::getIpInfoLink('2001:db8::/56'));
+		// an entry which is no network, typed into the table by hand, shows no range
+		$this->assertSame(array('', ''), \Codeling\Component\Bfstop\Administrator\Helper\IpRangeHelper::cidrToRange('192.0.2.0/abc/1'));
+		$this->assertSame(array('', ''), \Codeling\Component\Bfstop\Administrator\Helper\IpRangeHelper::cidrToRange('nonsense/24'));
 	}
 
 	public function testListOrderingIsAnIdentifierFromTheFilterFields()
@@ -1008,6 +1065,40 @@ class ComponentTest extends IntegrationTestCase
 		};
 	}
 
+	public function testTheLogSortsByTheSeverityOfThePriority()
+	{
+		$files = \Codeling\Library\Bfstop\Helper\LoggerHelper::getLogFiles();
+		$kept = array_map(fn ($file) => is_file($file) ? file_get_contents($file) : null, $files);
+		file_put_contents($files[0], "#<?php die('Forbidden.'); ?>\n".
+			"2026-01-01T00:00:01+00:00 INFO first info\n2026-01-01T00:00:02+00:00 ERROR an error\n".
+			"2026-01-01T00:00:03+00:00 WARNING a warning\n2026-01-01T00:00:04+00:00 DEBUG some debug\n".
+			"2026-01-01T00:00:05+00:00 INFO second info\n");
+		@unlink($files[1]);
+		try
+		{
+			$messages = function ($direction)
+			{
+				$model = $this->model(\Codeling\Component\Bfstop\Administrator\Model\LogModel::class);
+				$model->getState();
+				$model->setState('list.ordering', 'priority');
+				$model->setState('list.direction', $direction);
+				$model->setState('list.start', 0);
+				$model->setState('list.limit', 0);
+				return array_map(fn ($entry) => $entry->message, $model->getItems());
+			};
+			// not alphabetically (DEBUG, ERROR, INFO, WARNING)
+			$this->assertSame(array('an error', 'a warning', 'first info', 'second info', 'some debug'), $messages('ASC'));
+			$this->assertSame(array('some debug', 'first info', 'second info', 'a warning', 'an error'), $messages('DESC'));
+		}
+		finally
+		{
+			foreach ($files as $i => $file)
+			{
+				$kept[$i] === null ? @unlink($file) : file_put_contents($file, $kept[$i]);
+			}
+		}
+	}
+
 	public function testOnlyWhoMayReadTheLogMayClearIt()
 	{
 		// the log view needs core.admin: who may only delete entries of the
@@ -1037,6 +1128,27 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$app->loadIdentity($original);
 			@unlink($logFile);
+		}
+	}
+
+	public function testListControllersOfferOnlyTheirOwnTasks()
+	{
+		// AdminController's tasks call methods a list model hasn't got: an
+		// error page for "task=allowlist.publish" and the like
+		$app = Factory::getApplication();
+		$own = array('Allowlist' => 'remove', 'Blocklist' => 'unblock', 'Failedloginlist' => 'purge',
+			'Htblocklist' => 'unblock', 'Usernamestats' => 'purge');
+		foreach ($own as $name => $task)
+		{
+			$class = '\\Codeling\\Component\\Bfstop\\Administrator\\Controller\\'.$name.'Controller';
+			$controller = new $class(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop', 'option' => 'com_bfstop'),
+				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
+			$tasks = array_map('strtolower', $controller->getTasks());
+			$this->assertContains(strtolower($task), $tasks, $name);
+			foreach (array('publish', 'unpublish', 'delete', 'checkin', 'saveorder', 'reorder', 'archive', 'trash') as $inherited)
+			{
+				$this->assertNotContains($inherited, $tasks, "$name: $inherited");
+			}
 		}
 	}
 
@@ -1074,6 +1186,12 @@ class ComponentTest extends IntegrationTestCase
 	 */
 	private function saveHtaccessBlock($dir, $ipaddress, array $actions)
 	{
+		// where the backend's forms are, as in a request of the backend
+		if (!defined('JPATH_COMPONENT'))
+		{
+			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		}
+		\Joomla\CMS\Form\Form::addFormPath(BFSTOP_COMPONENT_ROOT.'/admin/forms');
 		$app = Factory::getApplication();
 		$original = $app->getIdentity();
 		$input = $app->getInput();
@@ -1144,6 +1262,15 @@ class ComponentTest extends IntegrationTestCase
 				'core.create is still needed');
 			$this->assertSame(array('192.0.2.0/24'),
 				$this->saveHtaccessBlock($dir, '192.0.2.0/24', array('core.manage', 'core.create', 'core.admin')));
+			// in the spelling of the block list, which the entries are compared with
+			$this->assertSame(array('192.0.2.0/24', '2001:db8::1'),
+				$this->saveHtaccessBlock($dir, '2001:DB8:0::1', array('core.manage', 'core.create', 'core.admin')));
+			// the toolbars offer "Save" and "New" by the same rule
+			$mayAdd = \Codeling\Component\Bfstop\Administrator\Controller\HtblockController::class.'::mayAdd';
+			$this->assertFalse($mayAdd(self::userWith(array('core.manage', 'core.create'))));
+			$this->assertFalse($mayAdd(self::userWith(array('core.manage', 'core.admin'))));
+			$this->assertTrue($mayAdd(self::userWith(array('core.manage', 'core.create', 'core.admin'))));
+			$this->assertFalse($mayAdd(null));
 		}
 		finally
 		{
@@ -1378,8 +1505,10 @@ class ComponentTest extends IntegrationTestCase
 		{
 			$this->setSettings(json_encode(array('blockNumber' => 21)));
 			$this->assertSame(21, \Codeling\Library\Bfstop\Settings::stored()->get('blockNumber'));
-			$this->assertSame(21, \Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('blockNumber', 10));
-			$this->assertSame('x', \Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('notStored', 'x'));
+			$this->assertSame(21, \Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('blockNumber'));
+			// not stored: the default of Settings::Defaults
+			$this->assertSame(\Codeling\Library\Bfstop\Settings::Defaults['maxBlocksBefore'],
+				\Codeling\Component\Bfstop\Administrator\Helper\ParamHelper::get('maxBlocksBefore'));
 			// a copy: changing it changes nothing stored
 			\Codeling\Library\Bfstop\Settings::stored()->set('blockNumber', 99);
 			$this->assertSame(21, \Codeling\Library\Bfstop\Settings::stored()->get('blockNumber'));

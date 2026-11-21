@@ -10,10 +10,8 @@ namespace Codeling\Plugin\System\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 
 /**
@@ -54,17 +52,15 @@ class LoginTurn
 	/**
 	 * The lock file for the logins of a client, by the key it is tracked
 	 * under (IpHelper::trackedAddress()), one set of files per site (see
-	 * Responder::delaySlotFiles()). A fixed number of files, not one per
-	 * address: a visitor with many addresses must not be able to fill the
-	 * directory. Which one an address gets depends on the site's secret, so
-	 * nobody can pick addresses which share the file of somebody else's.
+	 * LockHelper::file()). A fixed number of files, not one per address: a
+	 * visitor with many addresses must not be able to fill the directory.
+	 * Which one an address gets depends on the site's secret (see
+	 * LockHelper::slot()), so nobody can pick addresses which share the file
+	 * of somebody else's.
 	 */
 	public static function file($trackedAddress)
 	{
-		$app = Factory::getApplication();
-		$slot = hexdec(substr(hash_hmac('sha256', (string) $trackedAddress, (string) $app->get('secret', '')), 0, 7))
-			% self::Slots;
-		return HtaccessHelper::lockDirectory().'/bfstop-login-'.LockHelper::siteHash().'-'.$slot.'.lock';
+		return LockHelper::file('login', LockHelper::slot($trackedAddress, self::Slots));
 	}
 
 	/**

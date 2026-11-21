@@ -10,15 +10,11 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 
 defined('_JEXEC') or die;
 
-use Joomla\CMS\Factory;
-
 class LinkHelper
 {
 	public static function getIpInfoLink($ipaddress)
 	{
-		$input = Factory::getApplication()->getInput();
-		$menuId = $input->get('Itemid', 0, 'INTEGER');
-		$link = 'index.php?option=com_bfstop&Itemid='.$menuId.'&view=ipinfo&ipaddress='.rawurlencode($ipaddress);
-		return $link;
+		// a page of the backend, which has no menu items
+		return 'index.php?option=com_bfstop&view=ipinfo&ipaddress='.rawurlencode((string) $ipaddress);
 	}
 }

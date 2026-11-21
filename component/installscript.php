@@ -25,7 +25,7 @@ class com_bfstopInstallerScript extends InstallerScript implements InstallerScri
 	// InstallerScript::preflight() refuses to install on anything older (and
 	// to replace a newer version of the component with an older one)
 	protected $minimumJoomla = '5.4.0';
-	protected $minimumPhp = '8.1.0';
+	protected $minimumPhp = '8.2.0';
 
 	// InstallerScript's checks, with the return type InstallerScriptInterface
 	// has (InstallerScript's own preflight() has none)

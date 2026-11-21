@@ -35,6 +35,60 @@ class LockHelper
 	}
 
 	/**
+	 * Where lock files go: Joomla's own temporary directory if there is one
+	 * we can use, not the system's: that one is shared with other users of
+	 * the machine on many hosts, who could then hold the lock (or plant a
+	 * link under its name).
+	 */
+	public static function directory(): string
+	{
+		try
+		{
+			$tmp = (string) \Joomla\CMS\Factory::getApplication()->get('tmp_path');
+			if ($tmp !== '' && is_dir($tmp) && is_writable($tmp))
+			{
+				return rtrim($tmp, '/\\');
+			}
+		}
+		catch (\Throwable $e)
+		{
+			// no application (e.g. in a script): use the system's
+		}
+		return sys_get_temp_dir();
+	}
+
+	/**
+	 * The file of a lock (or a stamp) of this site: what it is for
+	 * ($purpose: "block", "login", ...), and which of them ($part: a slot,
+	 * see slot(); null if there is only one). One place for the names, so
+	 * that two kinds of lock never share a file by accident.
+	 */
+	public static function file(string $purpose, $part = null, string $extension = 'lock'): string
+	{
+		return self::directory().'/bfstop-'.$purpose.'-'.self::siteHash().
+			($part !== null ? '-'.$part : '').'.'.$extension;
+	}
+
+	/**
+	 * Which of $count slots (lock files) the key $key gets: always the same
+	 * one, and - as it depends on the site's secret - none somebody could
+	 * choose keys for to share the slot of somebody else's.
+	 */
+	public static function slot($key, int $count): int
+	{
+		$secret = '';
+		try
+		{
+			$secret = (string) \Joomla\CMS\Factory::getApplication()->get('secret', '');
+		}
+		catch (\Throwable $e)
+		{
+			// no application: no secret
+		}
+		return hexdec(substr(hash_hmac('sha256', (string) $key, $secret), 0, 7)) % max(1, $count);
+	}
+
+	/**
 	 * Takes the exclusive lock on $file, creating the file if need be.
 	 *
 	 * @param string $file

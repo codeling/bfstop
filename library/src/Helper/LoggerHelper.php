@@ -53,8 +53,8 @@ class LoggerHelper
 	public static function fromSettings(\Joomla\Registry\Registry $params)
 	{
 		return new self(
-			(int) $params->get('logLevel', Settings::Defaults['logLevel']),
-			self::maxBytesFromMegabytes($params->get('logMaxSize', self::DefaultMaxSizeMB)));
+			Settings::int($params, 'logLevel'),
+			self::maxBytesFromMegabytes(Settings::get($params, 'logMaxSize')));
 	}
 
 	/**

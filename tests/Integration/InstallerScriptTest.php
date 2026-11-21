@@ -7,6 +7,7 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Factory;
@@ -164,6 +165,33 @@ class InstallerScriptTest extends IntegrationTestCase
 		}
 	}
 
+	public function testAnUpdateWhichCannotMigrateTellsTheAdministrator()
+	{
+		// it used to swallow the exception without a trace
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$original = $this->getSettings();
+		$table = $this->db->quoteName('#__bfstop_state');
+		$away = $this->db->quoteName('#__bfstop_state_away');
+		$this->db->setQuery('ALTER TABLE '.$table.' RENAME TO '.$away)->execute();
+		try
+		{
+			$this->setInstalledVersion('2.0.0');
+			list($script, $adapter) = $this->script();
+			$this->assertTrue($script->preflight('update', $adapter));
+			$this->assertTrue($script->update($adapter), 'the update itself goes on');
+			$script->postflight('update', $adapter);
+			$failed = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_MIGRATION_FAILED', '', ''));
+			$shown = array_filter($this->messages(), fn ($message) =>
+				str_starts_with(strip_tags($message), substr($failed, 0, 40)));
+			$this->assertCount(1, $shown, 'the administrator is told');
+		}
+		finally
+		{
+			$this->db->setQuery('ALTER TABLE '.$away.' RENAME TO '.$table)->execute();
+			$this->setSettings($original);
+		}
+	}
+
 	public function testUpdateFromBefore200ProtectsTheApi()
 	{
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
@@ -233,6 +261,25 @@ class InstallerScriptTest extends IntegrationTestCase
 			$this->assertSame(IpHelper::canonicalEntry($sample), \PlgsystembfstopInstallerScript::canonicalAddress($sample),
 				"'$sample'");
 		}
+	}
+
+	public function testTheInstallerTellsThePluginsBlocksAsTheHelperDoes()
+	{
+		// a copy too, for the uninstallation: what is the plugin's block, what
+		// was written by hand
+		$page = " && !(%{REQUEST_URI} == '/index.php' && %{QUERY_STRING} =~ /".HtaccessHelper::UnblockQueryPattern."/)";
+		$samples = array(
+			"<If \"-R '192.0.2.1'\">", "<If \"-R '192.0.2.1' || -R '2001:db8::/56'\">",
+			"<If \"(-R '192.0.2.1')".$page."\">", "<If \"(-R '192.0.2.1' || -R '192.0.2.2')".$page."\">",
+			"<If \"%{HTTP_HOST} == 'x'\">", "<If \"-R '192.0.2.1' && %{REQUEST_URI} =~ m#^/a#\">",
+			"<If \"-R '192.0.2.1' || %{HTTP_HOST} == 'x'\">", "<IfModule mod_headers.c>", "Require all denied", '');
+		$helper = new \ReflectionMethod(HtaccessHelper::class, 'blockConditionAddresses');
+		$installer = new \ReflectionMethod(\PlgsystembfstopInstallerScript::class, 'isBlockCondition');
+		foreach ($samples as $sample)
+		{
+			$this->assertSame($helper->invoke(null, $sample) !== null, $installer->invoke(null, $sample), $sample);
+		}
+		$this->assertSame(array('192.0.2.1', '192.0.2.2'), $helper->invoke(null, $samples[3]));
 	}
 
 	public function testStoredAddressesAreConvertedInBatches()
@@ -436,6 +483,15 @@ class InstallerScriptTest extends IntegrationTestCase
 			$this->assertSame("Options -Indexes\n# BEGIN BFStop Blocks\nHeader set X-Test 1\n# END BFStop Blocks\n",
 				file_get_contents($dir.'/.htaccess'));
 			$this->assertNotContains($notRemoved, array_map('strip_tags', $this->messages()));
+
+			// and so does an <If> somebody wrote into it, all of it - and the
+			// plugin's blocks of the current form go
+			$hand = "<If \"%{HTTP_HOST} == 'old.example.org'\">\nRequire all denied\n</If>\n";
+			$current = "<If \"(-R '192.0.2.1') && !(%{REQUEST_URI} == '/index.php' && %{QUERY_STRING} =~ /".
+				\Codeling\Library\Bfstop\Helper\HtaccessHelper::UnblockQueryPattern."/)\">\nRequire all denied\n</If>\n";
+			file_put_contents($dir.'/.htaccess', "# BEGIN BFStop Blocks\n".$current.$hand."# END BFStop Blocks\n");
+			$uninstall();
+			$this->assertSame("# BEGIN BFStop Blocks\n".$hand."# END BFStop Blocks\n", file_get_contents($dir.'/.htaccess'));
 
 			// no file, no section: nothing to do
 			$this->assertTrue(\PlgsystembfstopInstallerScript::removeHtaccessSection($dir.'/none/.htaccess'));

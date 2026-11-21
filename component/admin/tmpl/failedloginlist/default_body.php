@@ -8,6 +8,7 @@
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LinkHelper;
+use Codeling\Library\Bfstop\Origin;
 
 foreach ($this->items as $i => $item): ?>
 <tr>
@@ -15,6 +16,6 @@ foreach ($this->items as $i => $item): ?>
 	<td><a href="<?php echo $this->escape(LinkHelper::getIpInfoLink($item->ipaddress));?>"><?php echo $this->escape($item->ipaddress); ?></a></td>
 	<td><?php echo $this->escape($item->logtime); ?></td>
 	<td><?php echo $this->escape($item->username); ?></td>
-	<td><?php echo $this->getOriginName($item->origin); ?></td>
+	<td><?php echo $this->escape(Origin::name($item->origin)); ?></td>
 </tr>
 <?php endforeach;

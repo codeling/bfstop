@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Htblock;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Controller\HtblockController;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -27,8 +28,7 @@ class HtmlView extends BaseHtmlView
 		$this->form = $this->getModel()->getForm();
 		$this->item = $this->getModel()->getItem();
 
-		$user = Factory::getApplication()->getIdentity();
-		$this->canSave = (bool) ($user && $user->authorise('core.create', 'com_bfstop'));
+		$this->canSave = HtblockController::mayAdd(Factory::getApplication()->getIdentity());
 
 		$this->addToolbar();
 		// the stylesheet is in the component's template folder, not in media/: a

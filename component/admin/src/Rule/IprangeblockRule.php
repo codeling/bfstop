@@ -11,14 +11,30 @@ namespace Codeling\Component\Bfstop\Administrator\Rule;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
+use Joomla\CMS\Factory;
 use Joomla\CMS\Form\Form;
 use Joomla\CMS\Form\FormRule;
 use Joomla\Registry\Registry;
 
+/**
+ * A block: an address or a network, which must not
+ * hold the address of whoever enters it. The error is returned, for Joomla to show
+ * instead of its own; a private or reserved range is no error, only noted.
+ */
 class IprangeblockRule extends FormRule
 {
 	public function test(\SimpleXMLElement $element, $value, $group = null, ?Registry $input = null, ?Form $form = null)
 	{
-		return (IpValidateHelper::validIPRange($value) && !IpValidateHelper::matchesCurrentIP($value));
+		$error = IpValidateHelper::rangeError($value) ?? IpValidateHelper::currentIpError($value);
+		if ($error !== null)
+		{
+			return new \UnexpectedValueException($error);
+		}
+		$note = IpValidateHelper::privateRangeNote($value);
+		if ($note !== null)
+		{
+			Factory::getApplication()->enqueueMessage($note, 'warning');
+		}
+		return true;
 	}
 }

@@ -1,15 +1,15 @@
 {
-  "_": "Matrix of the integration jobs in .github/workflows/ci.yml. The Joomla versions need a SHA-256 in tests/ci/joomla-checksums.sha256 (checked by tests/lint/check-joomla-checksums.php). .github/workflows/joomla-versions.yml raises the patch versions; keep one entry per line.",
+  "_": "Matrix of the integration jobs in .github/workflows/ci.yml. Each database image is pinned by its digest (the same for every entry of an image; Dependabot can't update them here: look them up on Docker Hub, docker buildx imagetools inspect <image>, when raising one). The Joomla versions need a SHA-256 in tests/ci/joomla-checksums.sha256 (checked by tests/lint/check-joomla-checksums.php). .github/workflows/joomla-versions.yml raises the patch versions; keep one entry per line.",
   "include": [
-    { "joomla": "5.4.10", "php": "8.2", "db": "mysql:8.0" },
-    { "joomla": "5.4.10", "php": "8.2", "db": "mariadb:10.11" },
-    { "joomla": "5.4.10", "php": "8.2", "db": "postgres:12" },
-    { "joomla": "6.1.4", "php": "8.4", "db": "mysql:8.4" },
-    { "joomla": "6.1.4", "php": "8.4", "db": "mariadb:11.4" },
-    { "joomla": "6.1.4", "php": "8.4", "db": "postgres:17" },
-    { "joomla": "6.2.0", "php": "8.4", "db": "mysql:8.4" },
-    { "joomla": "6.2.0", "php": "8.4", "db": "mariadb:11.4" },
-    { "joomla": "6.2.0", "php": "8.4", "db": "postgres:17" },
-    { "joomla": "6.2.0", "php": "8.5", "db": "mysql:8.4" }
+    { "joomla": "5.4.10", "php": "8.2", "db": "mysql:8.0", "digest": "sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b" },
+    { "joomla": "5.4.10", "php": "8.2", "db": "mariadb:10.11", "digest": "sha256:e5fe75b2b9de0eb9f6f9a4d9c97272fb3a7480e389ccd487a786bab2a12cc0d7" },
+    { "joomla": "5.4.10", "php": "8.2", "db": "postgres:15", "digest": "sha256:10f9e886f772e9d6484350b043bcf990ead67ae5d9988ddce265d72a299055d5" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "mysql:8.4", "digest": "sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "mariadb:11.4", "digest": "sha256:a8992b5e5404d11e03c54a31d0c1bdea3fd116d283aa6d1a627551f29045309b" },
+    { "joomla": "6.1.4", "php": "8.4", "db": "postgres:17", "digest": "sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c" },
+    { "joomla": "6.2.0", "php": "8.4", "db": "mysql:8.4", "digest": "sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902" },
+    { "joomla": "6.2.0", "php": "8.4", "db": "mariadb:11.4", "digest": "sha256:a8992b5e5404d11e03c54a31d0c1bdea3fd116d283aa6d1a627551f29045309b" },
+    { "joomla": "6.2.0", "php": "8.4", "db": "postgres:17", "digest": "sha256:b60e90042aa6b8dbecd58e224b3e36114dbf8ad754465264c2476ad58a86e45c" },
+    { "joomla": "6.2.0", "php": "8.5", "db": "mysql:8.4", "digest": "sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902" }
   ]
 }

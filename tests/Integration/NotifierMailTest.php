@@ -92,11 +92,11 @@ class NotifierMailTest extends IntegrationTestCase
 		}
 	}
 
-	private function createUser($username, $groupId = null)
+	private function createUser($username, $groupId = null, $block = 0)
 	{
 		$id = $this->insert('#__users', array('name' => $username, 'username' => $username,
 			'email' => $username.'@example.org', 'password' => '', 'registerDate' => self::minutesAgo(0),
-			'params' => '{}'), 'id');
+			'params' => '{}', 'block' => $block), 'id');
 		$this->createdUsers[] = $id;
 		if ($groupId !== null)
 		{
@@ -245,6 +245,28 @@ class NotifierMailTest extends IntegrationTestCase
 
 		$off = $this->notifier('', -1, $registered, false);
 		$this->assertSame(array(), $off->getNotifyAddresses());
+	}
+
+	public function testDisabledMembersOfTheGroupAreNotNotified()
+	{
+		$registered = 2;
+		$this->createUser('enabledmember', $registered);
+		$this->createUser('disabledmember', $registered, 1);
+		$addresses = $this->notifier('', -1, $registered, true)->getNotifyAddresses();
+		$this->assertContains('enabledmember@example.org', $addresses);
+		$this->assertNotContains('disabledmember@example.org', $addresses);
+	}
+
+	public function testWithoutAnAddressNothingIsCountedOrMailedOrLoggedAsAnError()
+	{
+		// the default: no address, no user, no group - but a limit of 5 block
+		// notifications. Asking sendMail() to mail nobody logged an error with
+		// every block
+		$notifier = $this->notifier('');
+		$notifier->blockedNotifyAdmin($this->entry(), 60, 5);
+		$notifier->failedLogin($this->entry(), -1);
+		$this->assertSame(array(), $notifier->mails);
+		$this->assertSame(array(), $this->logger->errors);
 	}
 
 	public function testAnAddressWhichIsGivenTwiceIsMailedOnce()

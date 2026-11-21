@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\View\Failedloginlist;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
-use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -36,7 +35,7 @@ class HtmlView extends BaseHtmlView
 		$this->sortColumn = (string) $state->get('list.ordering');
 		$this->sortDirection = (string) $state->get('list.direction');
 		$this->filterUsername = (string) $state->get('filter.username', '');
-		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld', Settings::Defaults['deleteOld']);
+		$this->autoPurgeWeeks = (int) ParamHelper::get('deleteOld');
 		$this->canPurge   = (bool) Factory::getApplication()->getIdentity()->authorise('core.delete', 'com_bfstop');
 		if ($this->canPurge)
 		{
@@ -44,20 +43,6 @@ class HtmlView extends BaseHtmlView
 		}
 		$this->addToolBar();
 		parent::display($tpl);
-	}
-
-	public function getOriginName($origin)
-	{
-		// the client id of the application: site 0, administrator 1, api 3
-		switch ((int) $origin)
-		{
-			case 0:
-				return 'Frontend';
-			case 3:
-				return 'API';
-			default:
-				return 'Backend';
-		}
 	}
 
 	protected function addToolBar()

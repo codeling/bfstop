@@ -39,8 +39,7 @@ class BlockService
 	 */
 	public function withLock($key, callable $decision)
 	{
-		$stripe = hexdec(substr(md5((string) $key), 0, 4)) % self::LockStripes;
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-block-'.LockHelper::siteHash().'-'.$stripe.'.lock';
+		$lockFile = LockHelper::file('block', LockHelper::slot($key, self::LockStripes));
 		// not for ever: see LockHelper
 		$handle = LockHelper::acquire($lockFile, HtaccessHelper::LockWaitSeconds);
 		if (!$handle)
