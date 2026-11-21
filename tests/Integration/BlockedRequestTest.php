@@ -134,6 +134,27 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertBlocked();
 	}
 
+	public function testBackendAndApiAreRefusedBeforeRouting()
+	{
+		// no exemption of a blocked client is a page of the backend or the
+		// API: "Full Site" refuses them already in onAfterInitialise
+		$this->configure();
+		$this->block();
+		$output = $this->request('', self::Ip, false, '');
+		$this->assertStringContainsString(self::BlockedMessage, $output, 'backend');
+		$output = $this->request('', self::Ip, false, null, array('--api'));
+		$this->assertStringNotContainsString('NOT BLOCKED', $output, 'API');
+		$this->assertStringContainsString('"errors"', $output, 'API');
+		$this->assertStringContainsString('NOT BLOCKED', $this->request('', '203.0.113.42', false, ''), 'not blocked');
+		// the site waits for the router (see testBlockIsEnforcedOnlyAfterRouting),
+		// and so does "Login Only", which has to know whether it is a login
+		$this->configure(array('blockMode' => 'loginonly'));
+		$this->assertStringContainsString('NOT BLOCKED', $this->request('', self::Ip, false, ''), 'Login Only');
+		$this->assertStringContainsString('NOT BLOCKED',
+			$this->request('option=com_login&task=login', self::Ip, false, ''), 'Login Only, before routing');
+		$this->assertBlocked('option=com_login&task=login', self::Ip, '');
+	}
+
 	private function knownIps()
 	{
 		$this->db->setQuery('SELECT ipaddress FROM #__bfstop_knownip ORDER BY ipaddress');

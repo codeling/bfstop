@@ -14,6 +14,10 @@
     file), LiteSpeed gets a warning of its own, and the warnings about the
     .htaccess file only show where it is used; the release zips get a build
     provenance attestation
+  - Issue #285: in "Full Site" mode, a blocked address's requests to the
+    backend and the API are refused before Joomla routes them (none of the
+    pages a blocked address may reach is there), with the queries of that
+    check not repeated after routing
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier
