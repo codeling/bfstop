@@ -89,16 +89,21 @@ class HtmlView extends BaseHtmlView
 		// kept by caches, passed on to other sites in the Referer header of
 		// requests for resources the template loads from them, or indexed.
 		$app->allowCache(false);
-		$app->setHeader('Referrer-Policy', 'no-referrer', true);
-		$app->setHeader('X-Robots-Tag', 'noindex, nofollow', true);
 		// Its form unblocks with one click: no other site may show it in a
 		// frame (clickjacking), and its type is not for the browser to guess.
 		// X-Frame-Options, not a Content-Security-Policy: that would replace
 		// the policy the site may send already (Joomla's HTTP headers plugin);
 		// a frame-ancestors of that policy takes precedence in browsers which
 		// know it.
-		$app->setHeader('X-Frame-Options', 'DENY', true);
-		$app->setHeader('X-Content-Type-Options', 'nosniff', true);
+		foreach (array(
+			'Referrer-Policy' => 'no-referrer',
+			'X-Robots-Tag' => 'noindex, nofollow',
+			'X-Frame-Options' => 'DENY',
+			'X-Content-Type-Options' => 'nosniff',
+		) as $name => $value)
+		{
+			$app->setHeader($name, $value, true);
+		}
 		parent::display($tpl);
 	}
 }

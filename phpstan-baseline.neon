@@ -243,7 +243,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Joomla\\CMS\\Application\\CMSApplicationInterface\:\:setHeader\(\)\.$#'
 			identifier: method.notFound
-			count: 3
+			count: 2
 			path: component/site/src/View/Tokenunblock/HtmlView.php
 
 		-

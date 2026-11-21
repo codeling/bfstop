@@ -11,9 +11,9 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 defined('_JEXEC') or die;
 
 use Joomla\CMS\Component\ComponentHelper;
-use Joomla\CMS\Extension\MVCFactoryServiceInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
+use Joomla\CMS\MVC\Factory\MVCFactoryServiceInterface;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Database\ParameterType;
 
