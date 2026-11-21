@@ -11,6 +11,7 @@ namespace Codeling\Library\Bfstop\Service;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
@@ -216,6 +217,15 @@ class BlockPolicy
 			return $newDuration;
 		}
 		return $duration;
+	}
+
+	/**
+	 * The nginx deny file the blocks go into (see NginxDenyFile), if the
+	 * settings name one and the blocking mode is "Full Site".
+	 */
+	public function nginxDenyFile(): ?NginxDenyFile
+	{
+		return $this->mode() === 'full' ? NginxDenyFile::forSettings($this->params, $this->logger) : null;
 	}
 
 	/**

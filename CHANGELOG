@@ -38,6 +38,14 @@
     and once with that one, and removes it again. It tells whether the
     section works, is ignored (AllowOverride, or not Apache), breaks the site
     (status 500), or why it couldn't be checked
+  - Issue #285: for sites behind nginx (which doesn't read .htaccess
+    files), the new setting "nginx Deny File" names a *.conf file in which
+    BFStop keeps the active blocks as "deny" lines, for the site's nginx
+    configuration to include, with "Full Site". It is written from the
+    block list on each block, unblock and change of a block, and by the
+    daily maintenance; entries overlapping the allow list or a trusted
+    proxy are left out, and only a file BFStop wrote is ever overwritten.
+    nginx reads it when it is reloaded, which the server has to arrange
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

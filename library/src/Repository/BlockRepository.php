@@ -118,6 +118,28 @@ class BlockRepository extends AddressTableRepository
 	}
 
 	/**
+	 * The addresses and networks of the active blocks, those of the newest
+	 * blocks first: for blocking through the web server's configuration.
+	 *
+	 * @return string[]|null null (unknown) if the block list could not be read
+	 */
+	public function activeAddresses()
+	{
+		return $this->unknown('activeAddresses', function ()
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName('t.ipaddress'))
+				->select('MAX('.$this->db->quoteName('t.id').') AS newest')
+				->from($this->db->quoteName(self::Table, 't'))
+				->where($this->activeCondition('t', 'u'))
+				->group($this->db->quoteName('t.ipaddress'))
+				->order('newest DESC');
+			$values = array('now' => self::now());
+			return $this->column($query, $values);
+		});
+	}
+
+	/**
 	 * Every address and network of the block list, whether its block is
 	 * active or not.
 	 *

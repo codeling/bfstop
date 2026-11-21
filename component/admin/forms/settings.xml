@@ -217,6 +217,12 @@
 				validate="htaccesspath"
 				label="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_LABEL"
 				description="PLG_SYSTEM_BFSTOP_HTACCESS_PATH_DESC" />
+			<!-- with "Full Site": the active blocks as "deny" lines for nginx,
+				which doesn't read .htaccess files (see NginxDenyFile) -->
+			<field name="nginxDenyFile" type="text" default="" showon="blockMode:full"
+				validate="nginxdenyfile"
+				label="COM_BFSTOP_SETTINGS_NGINX_DENY_FILE_LABEL"
+				description="COM_BFSTOP_SETTINGS_NGINX_DENY_FILE_DESC" />
 		</fieldset>
 		<fieldset name="delay" label="PLG_SYSTEM_BFSTOP_DELAY_FIELDSET_LABEL">
 			<field name="delayDuration" type="integer" validate="options"

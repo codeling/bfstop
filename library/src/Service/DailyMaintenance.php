@@ -13,6 +13,7 @@ defined('_JEXEC') or die;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Log\Log;
@@ -106,6 +107,8 @@ class DailyMaintenance
 		// ago: without them, their entries couldn't be told from those
 		// added by hand
 		$this->tidyHtaccess();
+		// the blocks which ran out leave the nginx deny file
+		NginxDenyFile::syncForSettings($this->settings, $this->repositories);
 		$maintenance = new Maintenance($this->repositories);
 		$purgeAge = Settings::int($this->settings, 'deleteOld');
 		if ($purgeAge > 0)

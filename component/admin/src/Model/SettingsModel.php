@@ -13,6 +13,7 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
@@ -174,12 +175,29 @@ class SettingsModel extends AdminModel
 			return false;
 		}
 		$this->tidyFormerHtaccessFile($stored, $data['params']);
+		self::syncNginxDenyFiles($stored, is_array($data['params']) ? $data['params'] : array());
 		$changed = self::changedSettings($stored, is_array($data['params']) ? $data['params'] : array());
 		if (count($changed) > 0)
 		{
 			ActionLogHelper::log('settings_changed', array('settings' => $changed));
 		}
 		return true;
+	}
+
+	/**
+	 * Writes the nginx deny file of the settings $params from the block list
+	 * (see NginxDenyFile); the one of the settings $stored, if it is another
+	 * one, gets no entries: nginx would go on blocking with it.
+	 */
+	public static function syncNginxDenyFiles(array $stored, array $params): void
+	{
+		$logger = LogHelper::getLogger();
+		$former = trim((string) ($stored['nginxDenyFile'] ?? ''));
+		if ($former !== '' && $former !== trim((string) ($params['nginxDenyFile'] ?? '')) && is_file($former))
+		{
+			(new NginxDenyFile($former, $logger))->write(array());
+		}
+		NginxDenyFile::syncForSettings(new Registry($params), new Repositories($logger));
 	}
 
 	/**

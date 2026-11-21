@@ -11,7 +11,9 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
 use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Log\Log;
 
 class UnblockHelper
@@ -33,8 +35,11 @@ class UnblockHelper
 	public static function removeLiftedHtaccessBlocks($logger)
 	{
 		$htaccess = new HtaccessHelper(self::getHtaccessPath(), $logger);
-		$htaccess->removeStaleBlocks((new Repositories($logger))->blocks(),
+		$repositories = new Repositories($logger);
+		$htaccess->removeStaleBlocks($repositories->blocks(),
 			ParamHelper::get('blockMode') === 'htaccess');
+		// the same for nginx's file, which is written from the block list
+		NginxDenyFile::syncForSettings(Settings::stored(), $repositories);
 	}
 
 	public static function unblockHtaccess($ips, $logger)

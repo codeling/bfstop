@@ -135,6 +135,7 @@ final class Settings
 		'deleteOld' => 4,
 		// empty: the root of the site
 		'htaccessPath' => '',
+		'nginxDenyFile' => '',
 		// delay
 		'delayDuration' => 0,
 		'adaptiveDelay' => 0,

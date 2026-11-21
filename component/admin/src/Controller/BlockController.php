@@ -11,7 +11,11 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Helper\NginxDenyFile;
+use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\MVC\Model\BaseDatabaseModel;
 use Joomla\CMS\MVC\Controller\FormController;
 
@@ -61,6 +65,8 @@ class BlockController extends FormController
 	{
 		$id = (int) $model->getState($model->getName().'.id');
 		$addresses = ActionLogHelper::addresses('#__bfstop_bannedip', array($id));
+		// a block made or changed by hand goes into the nginx deny file as well
+		NginxDenyFile::syncForSettings(Settings::stored(), new Repositories(LogHelper::getLogger()));
 		ActionLogHelper::log($model->getState($model->getName().'.new') ? 'block_added' : 'block_changed', array(
 			'id' => $id,
 			'ipaddress' => $addresses[$id] ?? (string) ($validData['ipaddress'] ?? ''),
