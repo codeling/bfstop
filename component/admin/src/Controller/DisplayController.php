@@ -95,7 +95,8 @@ class DisplayController extends BaseController
 		{
 			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_HTACCESS_LITESPEED', ...$modes), 'warning');
 		}
-		// TODO: add check whether .htaccess actually is effective!
+		// whether the web server honours the section takes requests to find
+		// out: the settings page has a button for it (settings.checkHtaccess)
 		if (!in_array($req['server'], array(HtaccessHelper::ServerApache, HtaccessHelper::ServerLiteSpeed), true) ||
 			!$req['found'] ||
 			!$req['readable'] ||

@@ -31,6 +31,13 @@
     own log can be cleared by the people it should hold to account. The
     installation adds "Brute Force Stop" to the extensions the User Actions
     Log records (its option "Events To Log"), where it can be unticked
+  - Issue #285: the settings page has a button which checks whether the web
+    server honours the block section of the .htaccess file: it makes a test
+    directory next to the file, with a .htaccess of the same form which
+    refuses one particular query, requests its file once with another query
+    and once with that one, and removes it again. It tells whether the
+    section works, is ignored (AllowOverride, or not Apache), breaks the site
+    (status 500), or why it couldn't be checked
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

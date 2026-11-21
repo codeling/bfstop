@@ -15,6 +15,8 @@
 #   denied/    - closed by the server configuration
 #   open/      - nothing else
 # and each is requested from 127.0.0.1, with that address blocked and not.
+# So is the probe with which the settings page checks that the web server
+# honours the section (HtaccessHelper::writeProbe()).
 # The section lets the link of an unblock email through to the site's
 # index.php - and nothing else: it is written into the document root too, as
 # for a site at the root of the server.
@@ -124,6 +126,15 @@ expect "blocked, the unblock page with a task" 403 "$url/index.php?$unblock&task
 expect "blocked, the unblock page with another token" 403 "$url/index.php?option=com_bfstop&view=tokenunblock&token=x"
 expect "blocked, the unblock query elsewhere" 403 "$url/template.css?$unblock"
 expect "blocked, the unblock query in open/" 403 "$url/open/?$unblock"
+
+# the probe of the settings page's check (HtaccessHelper::writeProbe()): its
+# .htaccess turns away the request with its query, and only that one
+probe_token="fedcba9876543210fedcba9876543210"
+setup ""
+php "$plugin_root/tests/Integration/fixtures/htaccess_probe.php" "$work/www/open/bfstop-probe" "$probe_token"
+expect "probe, another query" 200 "$url/open/bfstop-probe/probe.html?allow=$probe_token"
+expect "probe, its query" 403 "$url/open/bfstop-probe/probe.html?deny=$probe_token"
+expect "probe, its query with more" 200 "$url/open/bfstop-probe/probe.html?deny=$probe_token&x"
 
 if grep -q 'AH0[0-9]*: .*\(Syntax\|syntax error\|Invalid\)' "$work/error.log"; then
 	echo "FAIL the error log reports configuration errors:"

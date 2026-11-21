@@ -10,6 +10,7 @@ namespace Codeling\Bfstop\Tests\Integration;
 use Codeling\Component\Bfstop\Administrator\Controller\DisplayController;
 use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\HtaccessCheckHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Model\AllowModel;
@@ -728,6 +729,68 @@ class ComponentTest extends IntegrationTestCase
 		finally
 		{
 			$this->restoreActionLogsState($state);
+		}
+	}
+
+	public function testTheHtaccessCheckTriesAProbe()
+	{
+		$root = sys_get_temp_dir().'/bfstop-check-'.bin2hex(random_bytes(4));
+		mkdir($root.'/sub', 0755, true);
+		try
+		{
+			$check = HtaccessCheckHelper::class;
+			$this->assertSame('https://example.org', $check::urlOf($root, $root, 'https://example.org/'));
+			$this->assertSame('https://example.org/site/sub', $check::urlOf($root.'/sub', $root, 'https://example.org/site/'));
+			$this->assertNull($check::urlOf(dirname($root), $root, 'https://example.org/'), 'outside the site');
+			$this->assertNull($check::urlOf($root.'-other', $root, 'https://example.org/'), 'a name which only starts the same');
+
+			// a server which answers like Apache honouring the probe's .htaccess
+			$requests = array();
+			$server = function ($deny, $allow = 200, $body = null) use ($root, &$requests)
+			{
+				return function ($url) use ($root, $deny, $allow, $body, &$requests)
+				{
+					$requests[] = $url;
+					$this->assertMatchesRegularExpression('#^https://example\.org/sub/bfstop-check-[0-9a-f]{32}/probe\.html\?(allow|deny)=[0-9a-f]{32}$#', $url);
+					preg_match('#/(bfstop-check-[0-9a-f]{32})/probe\.html\?(allow|deny)=#', $url, $m);
+					$dir = $root.'/sub/'.$m[1];
+					$this->assertFileExists($dir.'/.htaccess', 'the probe is there while it is requested');
+					return $m[2] === 'deny' ? array($deny, 'Forbidden') : array($allow, $body ?? file_get_contents($dir.'/probe.html'));
+				};
+			};
+			$run = fn ($fetch) => $check::run($root.'/sub', $fetch, $root, 'https://example.org/');
+			$this->assertSame(array($check::Effective, '403'), $run($server(403)));
+			$this->assertCount(2, $requests);
+			$this->assertSame(array($check::Ignored, '200'), $run($server(200)));
+			$this->assertSame(array($check::Broken, '500'), $run($server(500)));
+			$this->assertSame(array($check::Broken, '500'), $run($server(403, 500)), 'the first request already');
+			$this->assertSame(array($check::Unknown, '401'), $run($server(403, 401)), 'something else in the way');
+			$this->assertSame(array($check::Unknown, '200'), $run($server(403, 200, 'a login page')), 'not the probe');
+			$this->assertSame(array($check::Unknown, 'request'), $run(fn ($url) => null));
+			$this->assertSame(array($check::Unknown, 'outside'), $check::run(dirname($root), $server(403), $root, 'https://example.org/'));
+			// the probe is gone again, whatever the outcome
+			$this->assertSame(array(), glob($root.'/sub/bfstop-check-*'));
+
+			Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+			$controller = \Codeling\Component\Bfstop\Administrator\Controller\SettingsController::class;
+			list($message, $type) = $controller::htaccessCheckMessage(array($check::Effective, '403'), '/var/www/<site>');
+			$this->assertSame('message', $type);
+			$this->assertStringContainsString('/var/www/&lt;site&gt;', $message);
+			list($message, $type) = $controller::htaccessCheckMessage(array($check::Unknown, '404'), '/var/www');
+			$this->assertSame('warning', $type);
+			$this->assertStringContainsString('404', $message);
+			$this->assertStringNotContainsString('COM_BFSTOP_', $message, 'translated');
+			list($message) = $controller::htaccessCheckMessage(array($check::Unknown, 'outside'), '/var/www');
+			$this->assertStringNotContainsString('COM_BFSTOP_', $message);
+		}
+		finally
+		{
+			foreach (glob($root.'/sub/bfstop-check-*') ?: array() as $dir)
+			{
+				HtaccessHelper::removeProbe($dir);
+			}
+			@rmdir($root.'/sub');
+			@rmdir($root);
 		}
 	}
 

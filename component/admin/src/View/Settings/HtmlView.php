@@ -139,5 +139,11 @@ class HtmlView extends BaseHtmlView
 		ToolbarHelper::cancel('settings.cancel');
 		ToolbarHelper::custom('settings.testNotify', 'preview', '',
 			'COM_BFSTOP_TEST_NOTIFICATION', false);
+		if ($this->canSave)
+		{
+			// whether the web server honours the block section of .htaccess
+			ToolbarHelper::custom('settings.checkHtaccess', 'checkmark', '',
+				'COM_BFSTOP_HTACCESS_CHECK', false);
+		}
 	}
 }

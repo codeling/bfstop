@@ -84,6 +84,32 @@ class HtaccessHelperTest extends IntegrationTestCase
 		}
 	}
 
+	public function testProbe()
+	{
+		$token = str_repeat('0123456789abcdef', 2);
+		$this->assertSame(array("<If \"-R '192.0.2.1' || %{QUERY_STRING} == 'deny=$token'\">", 'Require all denied', '</If>'),
+			HtaccessHelper::probeLines($token));
+		$probe = $this->dir.'/probe';
+		$this->assertTrue(HtaccessHelper::writeProbe($probe, $token));
+		$this->assertSame(implode("\n", HtaccessHelper::probeLines($token))."\n", file_get_contents($probe.'/.htaccess'));
+		$this->assertSame($token, file_get_contents($probe.'/'.HtaccessHelper::ProbeFile));
+		$this->assertFalse(HtaccessHelper::writeProbe($probe, $token), 'not into a directory which exists');
+		HtaccessHelper::removeProbe($probe);
+		$this->assertDirectoryDoesNotExist($probe);
+		foreach (array('', 'xyz', "abc'def0123456789", str_repeat('a', 65)) as $bad)
+		{
+			try
+			{
+				HtaccessHelper::probeLines($bad);
+				$this->fail('taken: '.$bad);
+			}
+			catch (\InvalidArgumentException $e)
+			{
+				$this->assertStringContainsString('hex digits', $e->getMessage());
+			}
+		}
+	}
+
 	public function testNoFileMeansNoDeniedIPs()
 	{
 		$this->assertSame(array(), $this->helper()->getDeniedIPs());
