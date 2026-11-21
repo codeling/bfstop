@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -49,6 +50,7 @@ class FailedloginlistController extends BaseController
 		{
 			$deleted = $this->getModel('failedloginlist')->purgeOlderThan($age);
 			$logger->log("Manually purged $deleted failed login entries older than $age days", Log::INFO);
+			ActionLogHelper::log('failedlogins_purged', array('count' => $deleted, 'days' => $age));
 			$this->setRedirect($listUrl,
 				Text::plural('COM_BFSTOP_FAILEDLOGIN_PURGE_N_DELETED', $deleted, $age), 'message');
 		}

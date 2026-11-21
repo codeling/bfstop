@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\OrderingHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -50,6 +51,7 @@ class AllowlistModel extends ListModel
 		{
 			return Text::_('COM_BFSTOP_ALLOWLIST_NOTHING_REMOVED');
 		}
+		$addresses = ActionLogHelper::addresses('#__bfstop_allowlist', $ids);
 		try
 		{
 			$db = $this->getDatabase();
@@ -61,6 +63,7 @@ class AllowlistModel extends ListModel
 			$query->where($conditions);
 			$db->setQuery($query);
 			$db->execute();
+			ActionLogHelper::log('allow_removed', array('ipaddresses' => array_values($addresses)));
 			return Text::_('COM_BFSTOP_ALLOWLIST_REMOVED');
 		}
 		catch (\RuntimeException $e)

@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Origin;
@@ -173,7 +174,35 @@ class SettingsModel extends AdminModel
 			return false;
 		}
 		$this->tidyFormerHtaccessFile($stored, $data['params']);
+		$changed = self::changedSettings($stored, is_array($data['params']) ? $data['params'] : array());
+		if (count($changed) > 0)
+		{
+			ActionLogHelper::log('settings_changed', array('settings' => $changed));
+		}
 		return true;
+	}
+
+	/**
+	 * The names of the settings which differ between $before and $after (as
+	 * stored), for the User Actions Log: the names only, not the values.
+	 *
+	 * @return string[]
+	 */
+	public static function changedSettings(array $before, array $after): array
+	{
+		$changed = array();
+		foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $name)
+		{
+			$old = $before[$name] ?? null;
+			$new = $after[$name] ?? null;
+			// stored as JSON: 5 and "5" are the same setting
+			if (json_encode(is_scalar($old) ? (string) $old : $old) !== json_encode(is_scalar($new) ? (string) $new : $new))
+			{
+				$changed[] = (string) $name;
+			}
+		}
+		sort($changed);
+		return $changed;
 	}
 
 	/**

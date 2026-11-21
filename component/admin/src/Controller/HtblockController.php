@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
@@ -110,6 +111,7 @@ class HtblockController extends FormController
 		if ($result)
 		{
 			$logger->log("Added ipaddress '$ipaddress' to .htaccess from backend", Log::INFO);
+			ActionLogHelper::log('htaccess_added', array('ipaddress' => $ipaddress));
 			$this->setRedirect(
 				Route::_('index.php?option=com_bfstop&view=htblocklist', false)
 			);

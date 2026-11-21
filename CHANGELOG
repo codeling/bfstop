@@ -23,6 +23,14 @@
     10 times an hour; they send mails, and Joomla limits only the password
     reset (per account), not the reminder. The description of the password
     reminder setting recommends a captcha for these forms
+  - Issue #285: what administrators do with BFStop goes into Joomla's User
+    Actions Log - blocks added, changed and lifted, the allow list, the
+    .htaccess entries, the settings (the names of those changed), purging
+    failed logins or user name statistics, pruning and clearing BFStop's
+    log - as does lifting a block with the link of an unblock mail. BFStop's
+    own log can be cleared by the people it should hold to account. The
+    installation adds "Brute Force Stop" to the extensions the User Actions
+    Log records (its option "Events To Log"), where it can be unticked
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

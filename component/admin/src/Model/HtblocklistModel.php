@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Language\Text;
@@ -76,6 +77,7 @@ class HtblocklistModel extends ListModel
 	{
 		if (UnblockHelper::unblockHtaccess($ids, $logger))
 		{
+			ActionLogHelper::log('htaccess_removed', array('ipaddresses' => array_values(array_map('strval', (array) $ids))));
 			return Text::_("COM_BFSTOP_UNBLOCK_SUCCESS");
 		}
 		else

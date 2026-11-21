@@ -10,6 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -49,6 +50,7 @@ class UsernamestatsController extends BaseController
 		{
 			$deleted = $this->getModel('usernamestats')->purgeNotSeenFor($age);
 			$logger->log("Manually deleted statistics of $deleted usernames not seen for $age days", Log::INFO);
+			ActionLogHelper::log('usernamestats_purged', array('count' => $deleted, 'days' => $age));
 			$this->setRedirect($listUrl,
 				Text::plural('COM_BFSTOP_USERNAMESTATS_PURGE_N_DELETED', $deleted, $age), 'message');
 		}

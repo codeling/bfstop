@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Component\Bfstop\Administrator\Controller\DisplayController;
+use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
@@ -630,6 +631,115 @@ class ComponentTest extends IntegrationTestCase
 				@rmdir($dir);
 			}
 		}
+	}
+
+	/** com_actionlogs' params and whether the component is in its list of extensions */
+	private function actionLogsState(): array
+	{
+		return array(
+			$this->queryValue("SELECT params FROM #__extensions WHERE type='component' AND element='com_actionlogs'"),
+			(int) $this->queryValue("SELECT COUNT(*) FROM #__action_logs_extensions WHERE extension='com_bfstop'"),
+		);
+	}
+
+	private function restoreActionLogsState(array $state): void
+	{
+		$this->db->setQuery('UPDATE #__extensions SET params='.$this->db->quote((string) $state[0]).
+			" WHERE type='component' AND element='com_actionlogs'")->execute();
+		$this->db->setQuery("DELETE FROM #__action_logs_extensions WHERE extension='com_bfstop'")->execute();
+		if ($state[1] > 0)
+		{
+			$this->db->setQuery("INSERT INTO #__action_logs_extensions (extension) VALUES ('com_bfstop')")->execute();
+		}
+		$this->db->setQuery("DELETE FROM #__action_logs WHERE extension='com_bfstop'")->execute();
+		// ComponentHelper keeps the params it read
+		(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+	}
+
+	private function loggedExtensions(): array
+	{
+		$params = json_decode((string) $this->queryValue(
+			"SELECT params FROM #__extensions WHERE type='component' AND element='com_actionlogs'"), true) ?: array();
+		return (array) ($params['loggable_extensions'] ?? array());
+	}
+
+	public function testTheInstallationRegistersWithTheUserActionsLog()
+	{
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
+		$state = $this->actionLogsState();
+		try
+		{
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			$this->assertSame(0, $this->actionLogsState()[1]);
+			$this->assertNotContains('com_bfstop', $this->loggedExtensions());
+
+			$this->assertTrue(\com_bfstopInstallerScript::registerWithActionLogs($this->db), 'new to the list');
+			$this->assertSame(1, $this->actionLogsState()[1]);
+			$this->assertContains('com_bfstop', $this->loggedExtensions(), 'and recorded');
+			$this->assertContains('com_users', $this->loggedExtensions(), "Joomla's own stay");
+			$this->assertFalse(\com_bfstopInstallerScript::registerWithActionLogs($this->db), 'once');
+
+			// an administrator unticked it: an update leaves that as it is
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			$this->db->setQuery("INSERT INTO #__action_logs_extensions (extension) VALUES ('com_bfstop')")->execute();
+			$this->assertFalse(\com_bfstopInstallerScript::registerWithActionLogs($this->db));
+			$this->assertNotContains('com_bfstop', $this->loggedExtensions());
+		}
+		finally
+		{
+			$this->restoreActionLogsState($state);
+		}
+	}
+
+	public function testWhatAdministratorsDoGoesToTheUserActionsLog()
+	{
+		require_once BFSTOP_COMPONENT_ROOT.'/installscript.php';
+		$state = $this->actionLogsState();
+		$logged = function ()
+		{
+			$this->db->setQuery("SELECT message_language_key, message FROM #__action_logs WHERE extension='com_bfstop' ORDER BY id");
+			return $this->db->loadObjectList();
+		};
+		try
+		{
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			\com_bfstopInstallerScript::registerWithActionLogs($this->db);
+			(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+			$this->db->setQuery("DELETE FROM #__action_logs WHERE extension='com_bfstop'")->execute();
+			$this->assertTrue(ActionLogHelper::isEnabled());
+
+			$id = $this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.77',
+				'crdate' => self::minutesAgo(0), 'duration' => 60), 'id');
+			$this->model(BlocklistModel::class)->unblock(array($id), $this->logger);
+			$rows = $logged();
+			$this->assertCount(1, $rows);
+			$this->assertSame('COM_BFSTOP_ACTIONLOG_BLOCKS_LIFTED', $rows[0]->message_language_key);
+			$message = json_decode($rows[0]->message, true);
+			$this->assertSame('blocks_lifted', $message['action']);
+			$this->assertSame('203.0.113.77', $message['ipaddresses']);
+
+			// not among the extensions the User Actions Log records: nothing
+			\com_bfstopInstallerScript::unregisterFromActionLogs($this->db);
+			(new \ReflectionProperty(\Joomla\CMS\Component\ComponentHelper::class, 'components'))->setValue(null, array());
+			$this->assertFalse(ActionLogHelper::isEnabled());
+			ActionLogHelper::log('log_cleared');
+			$this->assertCount(1, $logged());
+		}
+		finally
+		{
+			$this->restoreActionLogsState($state);
+		}
+	}
+
+	public function testTheUserActionsLogNamesTheChangedSettings()
+	{
+		$this->assertSame(array('blockNumber', 'emailaddress', 'useProxy'), SettingsModel::changedSettings(
+			array('blockNumber' => 10, 'emailaddress' => 'a@example.org', 'useProxy' => '0', 'blockMode' => 'full'),
+			array('blockNumber' => '5', 'emailaddress' => 'b@example.org', 'blockMode' => 'full', 'useProxy' => '1')));
+		$this->assertSame(array(), SettingsModel::changedSettings(array('blockNumber' => 10), array('blockNumber' => '10')),
+			'5 and "5" are the same');
+		$this->assertSame(array('enabledForOrigin', 'new'), SettingsModel::changedSettings(
+			array('enabledForOrigin' => 7), array('new' => 'x')));
 	}
 
 	public function testInstallerScriptHintAndVersionCheck()
