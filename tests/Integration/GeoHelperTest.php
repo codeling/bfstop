@@ -8,6 +8,7 @@
 
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Bfstop\Tests\Support\MmdbBuilder;
 use Codeling\Library\Bfstop\Helper\GeoHelper;
 use Joomla\CMS\Log\Log;
 
@@ -37,6 +38,32 @@ class GeoHelperTest extends IntegrationTestCase
 			$logger = $this->logger;
 			$this->assertNull(GeoHelper::getCountryCode($logger, $file, '203.0.113.5'));
 			$this->assertTrue($logger->hasMessage(Log::WARNING, 'lookup failed'));
+		}
+		finally
+		{
+			unlink($file);
+		}
+	}
+
+	public function testNetworksAreLookedUpByTheirNetworkAddress()
+	{
+		// the block list links a client tracked by its network (an IPv6
+		// /56, say) to the information page with the network
+		$file = tempnam(sys_get_temp_dir(), 'bfstop-geo');
+		file_put_contents($file, MmdbBuilder::build(array(
+			'203.0.113.0/24' => array('country' => array('iso_code' => 'DE', 'names' => array('en' => 'Germany')),
+				'city' => array('names' => array('en' => 'Berlin'))),
+		)));
+		try
+		{
+			$details = GeoHelper::getCityDetails($this->logger, $file, '203.0.113.0/24');
+			$this->assertNotNull($details);
+			$this->assertSame('203.0.113.0/24', $details->ip, 'shown as given');
+			$this->assertSame('Berlin', $details->city);
+			$this->assertSame('DE', GeoHelper::getCountryCode($this->logger, $file, '203.0.113.77/25'), 'not masked yet');
+			$this->assertSame('DE', GeoHelper::getCountryCode($this->logger, $file, '::ffff:203.0.113.5'), 'IPv4-mapped');
+			$this->assertNull(GeoHelper::getCountryCode($this->logger, $file, '192.0.2.0/24'));
+			$this->assertFalse($this->logger->hasMessage(Log::WARNING, 'lookup failed'));
 		}
 		finally
 		{

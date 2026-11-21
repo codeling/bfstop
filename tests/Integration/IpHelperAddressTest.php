@@ -75,6 +75,20 @@ class IpHelperAddressTest extends IntegrationTestCase
 		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger));
 	}
 
+	public function testIpv4MappedAddressesAreIpv4()
+	{
+		// a web server listening on an IPv6 socket which takes IPv4
+		// connections too reports an IPv4 client as ::ffff:a.b.c.d
+		$this->configure(array('useProxy' => 0));
+		$_SERVER['REMOTE_ADDR'] = '::ffff:203.0.113.5';
+		$this->assertSame('203.0.113.5', IpHelper::getAddress($this->logger));
+		// the proxy as well as the client behind it
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));
+		$_SERVER['REMOTE_ADDR'] = '::ffff:198.51.100.7';
+		$_SERVER['HTTP_X_FORWARDED_FOR'] = '1.2.3.4, ::ffff:203.0.113.6';
+		$this->assertSame('203.0.113.6', IpHelper::getAddress($this->logger));
+	}
+
 	public function testProxyEnabledButRequestNotFromProxyIgnoresHeader()
 	{
 		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '192.0.2.1'));

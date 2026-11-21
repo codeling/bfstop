@@ -38,9 +38,14 @@ class IpHelper
 	 * that doesn't parse, IPv4 vs. IPv6 mismatch, or a prefix length that
 	 * isn't a plain number within range for the address family - never
 	 * matches, so a corrupted stored entry can't turn into a wildcard.
+	 * IPv4-mapped IPv6 addresses and networks are compared as IPv4, see
+	 * unmapped().
 	 */
 	public static function isInSubnet($ip, $subnet)
 	{
+		// an IPv4-mapped address is the IPv4 address, see unmapped()
+		$ip = self::unmapped($ip);
+		$subnet = self::unmapped($subnet);
 		$parts = explode('/', $subnet);
 		if (count($parts) !== 2 || !preg_match('/^[0-9]{1,3}\z/', $parts[1]))
 		{
@@ -106,18 +111,53 @@ class IpHelper
 		return str_pad($mask, $length, "\x00");
 	}
 
+	// the first 12 bytes of an IPv4-mapped IPv6 address, ::ffff:0:0/96
+	private const MappedPrefix = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff";
+
+	/**
+	 * $value - an address, or a network in CIDR notation - with an
+	 * IPv4-mapped IPv6 address (::ffff:203.0.113.5) as the IPv4 address it
+	 * stands for, and a network within ::ffff:0:0/96 as that IPv4 network
+	 * (::ffff:203.0.113.0/120 is 203.0.113.0/24). A web server listening on
+	 * an IPv6 socket which takes IPv4 connections too ("[::]") may report an
+	 * IPv4 client like that in REMOTE_ADDR: the client would match none of
+	 * the IPv4 entries of the block or allow list otherwise. Anything else
+	 * is returned as it is.
+	 */
+	public static function unmapped($value)
+	{
+		$value = (string) $value;
+		$parts = explode('/', $value, 2);
+		$bin = @inet_pton($parts[0]);
+		if ($bin === false || strlen($bin) !== 16 || substr($bin, 0, 12) !== self::MappedPrefix)
+		{
+			return $value;
+		}
+		$ipv4 = inet_ntop(substr($bin, 12));
+		if (count($parts) === 1)
+		{
+			return $ipv4;
+		}
+		if (!preg_match('/^[0-9]{1,3}\z/', $parts[1]) || (int) $parts[1] < 96 || (int) $parts[1] > 128)
+		{
+			return $value;
+		}
+		return $ipv4.'/'.((int) $parts[1] - 96);
+	}
+
 	/**
 	 * The one spelling in which addresses and networks are stored in the
 	 * block and allow list: an address in the compressed lower-case form of
 	 * inet_ntop(), a network as its masked network address and prefix length
-	 * ("2001:db8:1:2::/64", "203.0.113.0/24"). Lookups compare these strings
-	 * (see lookupCandidates()), so every writer has to use this form.
+	 * ("2001:db8:1:2::/64", "203.0.113.0/24"); an IPv4-mapped IPv6 address
+	 * or network as the IPv4 one (see unmapped()). Lookups compare these
+	 * strings (see lookupCandidates()), so every writer has to use this form.
 	 *
 	 * @return string|null null if $value is neither an address nor a network
 	 */
 	public static function canonicalEntry($value)
 	{
-		$value = trim((string) $value);
+		$value = self::unmapped(trim((string) $value));
 		if (!self::isValidIpOrSubnet($value))
 		{
 			return null;
@@ -140,11 +180,14 @@ class IpHelper
 	 * entries - how many there are depends on what visitors made the plugin
 	 * block, and a request from any visitor has to look.
 	 *
+	 * An IPv4-mapped address is looked up as the IPv4 address (see
+	 * unmapped()), which is how canonicalEntry() stores it.
+	 *
 	 * @return string[] empty if $ip is not an address
 	 */
 	public static function lookupCandidates($ip)
 	{
-		$bin = @inet_pton(trim((string) $ip));
+		$bin = @inet_pton(self::unmapped(trim((string) $ip)));
 		if ($bin === false)
 		{
 			return array();
@@ -359,7 +402,8 @@ class IpHelper
 	 */
 	public static function isTrustedProxy($ip, array $trustedProxies)
 	{
-		$ipBin = @inet_pton((string) $ip);
+		// an IPv4-mapped address is the IPv4 address, see unmapped()
+		$ipBin = @inet_pton(self::unmapped($ip));
 		if ($ipBin === false)
 		{
 			return false;
@@ -373,7 +417,7 @@ class IpHelper
 					return true;
 				}
 			}
-			elseif (@inet_pton($proxy) === $ipBin)
+			elseif (@inet_pton(self::unmapped($proxy)) === $ipBin)
 			{
 				return true;
 			}
@@ -456,7 +500,7 @@ class IpHelper
 			}
 			if (!self::isTrustedProxy($addresses[$i], $trustedProxies))
 			{
-				return $addresses[$i];
+				return self::unmapped($addresses[$i]);
 			}
 		}
 		return null;
@@ -474,7 +518,9 @@ class IpHelper
 	 */
 	public static function getAddress(LoggerHelper $logger)
 	{
-		$remoteAddr = array_key_exists('REMOTE_ADDR', $_SERVER) ? $_SERVER['REMOTE_ADDR'] : '';
+		// an IPv4 client of a server listening on an IPv6 socket may come
+		// as ::ffff:203.0.113.5: as the IPv4 address, see unmapped()
+		$remoteAddr = self::unmapped(array_key_exists('REMOTE_ADDR', $_SERVER) ? $_SERVER['REMOTE_ADDR'] : '');
 
 		$settings = self::proxySettings();
 		if (!$settings['useProxy'])

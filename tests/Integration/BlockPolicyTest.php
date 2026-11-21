@@ -12,6 +12,7 @@ use Codeling\Library\Bfstop\Helper\NotifierHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Service\BlockService;
 use Codeling\Library\Bfstop\Service\LoginService;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
@@ -175,6 +176,38 @@ class BlockPolicyTest extends IntegrationTestCase
 		$this->assertSame(6, $this->policy(array('riskBlockNumberReductionPerPoint' => 2) + $params)->effectiveBlockNumber(2));
 		$this->assertSame(5, $this->policy(array('riskMinBlockNumber' => 5) + $params)->effectiveBlockNumber(100));
 		$this->assertSame(10, $this->policy()->effectiveBlockNumber(0), 'the default');
+	}
+
+	public function testABlockListsTheFailedLoginsItIsForNotThoseOfEarlierBlocks()
+	{
+		// the administrators' mail lists them: a permanent block isn't for
+		// every failed login of the address still stored
+		$this->failedLogins(4, 2 * 24 * 60, 'old', self::Ip, 1);   // handled by an earlier block
+		$this->failedLogins(2, 30, 'eve');
+		$this->failedLogins(1, 10, 'other', '203.0.113.99');
+		$this->failedLogins(1, 2 * 60, 'outside');                 // before the check interval
+		$this->failedLogins(1, 0, 'bob');
+		$policy = $this->policy(array('blockDuration' => 0, 'checkInterval' => 60));
+		$block = (new BlockService($this->repos))->blockAsDecided($this->entry(), null, $policy, true);
+		$this->assertNotNull($block);
+		$this->assertSame(array('eve', 'eve', 'bob'), array_column($block['failedLogins'], 'username'));
+		$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0 AND ipaddress='".
+			self::Ip."' AND username<>'outside'"), 'and the block marked them handled');
+
+		// not read unless asked for (no mail)
+		$this->failedLogins(3, 0, 'bob', '203.0.113.8');
+		$block = (new BlockService($this->repos))->blockAsDecided($this->entry('bob', '203.0.113.8'), null, $policy);
+		$this->assertSame(array(), $block['failedLogins']);
+	}
+
+	public function testTheMinimumNeverRaisesTheThreshold()
+	{
+		// a floor above blockNumber (stored without the settings page, which
+		// refuses it) is capped at blockNumber
+		$policy = $this->policy(array('blockNumber' => 5, 'riskBlockNumberReductionPerPoint' => 1, 'riskMinBlockNumber' => 10));
+		$this->assertSame(5, $policy->effectiveBlockNumber(0));
+		$this->assertSame(5, $policy->effectiveBlockNumber(3));
+		$this->assertSame(8, $policy->effectiveBlockNumber(-3), 'a trustworthy attempt still gets more');
 	}
 
 	public function testAttemptsLeftCountsTheFailedLoginsOfTheAddressWithinTheInterval()

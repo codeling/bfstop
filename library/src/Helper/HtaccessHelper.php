@@ -312,11 +312,14 @@ class HtaccessHelper
 	/**
 	 * Whether the entry $entry of the file is one a block of $address put
 	 * there: $address itself, or the /64 of a client within it (see
-	 * entryFor()).
+	 * entryFor()). An IPv4-mapped entry is the IPv4 address: earlier
+	 * versions wrote the address of an IPv4 client in the form the web
+	 * server reported it, the block list has it as IPv4 now (see
+	 * IpHelper::unmapped()).
 	 */
 	public static function isEntryOf($entry, $address)
 	{
-		$entry = (string) $entry;
+		$entry = IpHelper::unmapped((string) $entry);
 		$address = (string) $address;
 		if ($entry === $address)
 		{
