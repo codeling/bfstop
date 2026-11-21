@@ -43,6 +43,7 @@ foreach (file($root.'/tests/ci/joomla-checksums.sha256') as $number => $line)
 }
 
 $used = array();
+$digests = array();
 $matrix = json_decode(file_get_contents($root.'/tests/ci/matrix.json'), true);
 if (!is_array($matrix) || !is_array($matrix['include'] ?? null) || count($matrix['include']) === 0)
 {
@@ -61,6 +62,23 @@ foreach ($matrix['include'] as $number => $entry)
 			++$errors;
 			continue 2;
 		}
+	}
+	// the database image runs in CI with the job's secrets around: pinned
+	// by its digest, like the actions (see check-workflows.php)
+	$digest = $entry['digest'] ?? null;
+	if (!is_string($digest) || !preg_match('/^sha256:[0-9a-f]{64}$/', $digest))
+	{
+		echo "ERROR: $where: the image {$entry['db']} has no \"digest\" (sha256:<64 hex digits>)\n";
+		++$errors;
+	}
+	elseif (isset($digests[$entry['db']]) && $digests[$entry['db']] !== $digest)
+	{
+		echo "ERROR: $where: the image {$entry['db']} has another digest than in an entry before\n";
+		++$errors;
+	}
+	else
+	{
+		$digests[$entry['db']] = $digest;
 	}
 	$version = $entry['joomla'];
 	if (!preg_match('/^\d+\.\d+\.\d+$/', $version))

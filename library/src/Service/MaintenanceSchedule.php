@@ -10,7 +10,6 @@ namespace Codeling\Library\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Repository\StateRepository;
 
@@ -44,7 +43,7 @@ class MaintenanceSchedule
 
 	public static function stampFile(): string
 	{
-		return HtaccessHelper::lockDirectory().'/bfstop-maintenance-'.LockHelper::siteHash().'.stamp';
+		return LockHelper::file('maintenance', null, 'stamp');
 	}
 
 	/**

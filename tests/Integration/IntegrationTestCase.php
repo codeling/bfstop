@@ -138,6 +138,13 @@ abstract class IntegrationTestCase extends TestCase
 		return $key ? (int) $object->$key : null;
 	}
 
+	/** Whether the unblock token $token (as the mail has it) is stored. */
+	protected function tokenStored($token)
+	{
+		return (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token WHERE token='.
+			$this->db->quote(UnblockTokenRepository::hash($token))) > 0;
+	}
+
 	protected function queryValue($sql)
 	{
 		$this->db->setQuery($sql);

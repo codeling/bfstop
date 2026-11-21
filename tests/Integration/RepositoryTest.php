@@ -76,10 +76,9 @@ class RepositoryTest extends IntegrationTestCase
 		foreach (self::Hostile as $value)
 		{
 			$this->assertFalse($users->accountExists($value), $value);
-			$this->assertNull($users->emailByUsername($value));
+			$this->assertNull($users->accountByLogin($value));
 			$this->assertFalse($known->hasLoggedInFrom('203.0.113.5', $value, 56));
 			$this->assertFalse($tokens->hasCurrentFor($value));
-			$this->assertFalse($tokens->exists($value));
 			$this->assertFalse($tokens->validForBlocks($value, array(1)));
 			$known->remember($value, $value);
 			$this->assertTrue($known->hasLoggedInFrom($value, $value, 56), $value);
@@ -129,8 +128,7 @@ class RepositoryTest extends IntegrationTestCase
 		$tokens = new UnblockTokenRepository($db, $this->logger);
 		$this->assertFalse($tokens->validForBlocks('abc', array(1)), 'no token is valid');
 		$this->assertTrue($tokens->hasCurrentFor('bob'), 'no further link is sent');
-		$this->assertFalse($tokens->exists('abc'));
-		$this->expectFailures(5);
+		$this->expectFailures(4);
 	}
 
 	public function testCountingAndBookkeepingFailOpen()

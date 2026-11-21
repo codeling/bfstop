@@ -110,24 +110,6 @@ class UnblockTokenRepository extends Repository
 	}
 
 	/**
-	 * Whether the token (any, expired or not) is stored.
-	 *
-	 * Fail-closed: no.
-	 */
-	public function exists($token)
-	{
-		return $this->failClosed('exists', function () use ($token)
-		{
-			$query = $this->db->createQuery()
-				->select($this->db->quoteName('token'))
-				->from($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('token').' = :token');
-			$values = array('token' => self::hash($token));
-			return $this->scalar($query, $values) != null;
-		}, false);
-	}
-
-	/**
 	 * The block an unexpired token was issued for: its id, and the address
 	 * (or network) it blocks, which is the only one the token may unblock
 	 * from. Null if there is no such token (it never existed, expired or was

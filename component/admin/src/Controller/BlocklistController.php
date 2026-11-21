@@ -12,10 +12,15 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Joomla\CMS\Language\Text;
-use Joomla\CMS\MVC\Controller\AdminController;
+use Joomla\CMS\MVC\Controller\BaseController;
 use Joomla\CMS\Router\Route;
 
-class BlocklistController extends AdminController
+/**
+ * The tasks of the list (see the toolbar of its view): a BaseController, not
+ * an AdminController, whose tasks (publish, delete, checkin, ...) call
+ * methods a list model hasn't got - an error page instead of an answer.
+ */
+class BlocklistController extends BaseController
 {
 	public function getModel($name = 'blocklist', $prefix = '', $config = [])
 	{

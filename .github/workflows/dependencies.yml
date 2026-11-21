@@ -11,30 +11,56 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
+  # runs composer (and with it whatever the packages bring) without any
+  # permission to write: the issue is opened by the job below
   geoip-reader:
     name: maxmind-db/reader is current and free of advisories
     runs-on: ubuntu-latest
+    outputs:
+      # what failed: only a finding of a check opens an issue, not a
+      # download that didn't work
+      finding: ${{ steps.vendored.outcome == 'failure' || steps.audit.outcome == 'failure' || steps.outdated.outcome == 'failure' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
         with:
           php-version: '8.4'
           coverage: none
       - run: composer install --no-interaction --no-progress
       - name: Vendored copy is the locked version
+        id: vendored
+        continue-on-error: true
         run: composer check-geoip
       - name: Security advisories
+        id: audit
+        continue-on-error: true
         run: composer audit
       - name: Newer release available?
+        id: outdated
+        continue-on-error: true
+        run: composer outdated --direct --strict maxmind-db/reader
+      - name: Result
+        if: steps.vendored.outcome == 'failure' || steps.audit.outcome == 'failure' || steps.outdated.outcome == 'failure'
         run: |
-          composer outdated --direct --strict maxmind-db/reader
-      - name: Open an issue
-        if: failure()
+          echo "::error::vendored copy: ${{ steps.vendored.outcome }}, advisories: ${{ steps.audit.outcome }}, newer release: ${{ steps.outdated.outcome }}"
+          exit 1
+
+  issue:
+    name: Open an issue
+    needs: geoip-reader
+    if: always() && needs.geoip-reader.outputs.finding == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue unless there is one
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           title="Update the vendored GeoIP reader (maxmind-db/reader)"
           if [ -z "$(gh issue list --state open --search "in:title $title" --json number --jq '.[0].number')" ]; then

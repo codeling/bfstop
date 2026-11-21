@@ -111,10 +111,10 @@ class SettingsController extends FormController
 				Text::_('COM_BFSTOP_NOT_AUTHORISED'), 'error');
 			return;
 		}
-		$emailAddress = ParamHelper::get('emailaddress', '');
-		$userID = (int) ParamHelper::get('userID', -1);
-		$userGroup = (int) ParamHelper::get('userGroup', -1);
-		$groupNotifEnabled = (bool) ParamHelper::get('groupNotificationEnabled', false);
+		$emailAddress = ParamHelper::get('emailaddress');
+		$userID = (int) ParamHelper::get('userID');
+		$userGroup = (int) ParamHelper::get('userGroup');
+		$groupNotifEnabled = (bool) ParamHelper::get('groupNotificationEnabled');
 		$logger = LogHelper::getLogger();
 		$notifier = new NotifierHelper($logger, new Repositories($logger),
 			$emailAddress,

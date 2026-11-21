@@ -10,7 +10,7 @@ namespace Codeling\Component\Bfstop\Administrator\View\Htblocklist;
 
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Helper\DurationHelper;
+use Codeling\Component\Bfstop\Administrator\Controller\HtblockController;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
@@ -37,35 +37,6 @@ class HtmlView extends BaseHtmlView
 		parent::display($tpl);
 	}
 
-	public function getBlockedState($item)
-	{
-		if ($item->unblocked != null)
-		{
-			return Text::sprintf('COM_BFSTOP_UNBLOCKED_STATE', $item->unblocked);
-		}
-		else
-		{
-			if ($item->duration == 0)
-			{
-				return Text::_('COM_BFSTOP_BLOCKED_PERMANENTLY');
-			}
-			else
-			{
-				$blockedUntil = strtotime($item->crdate);
-				$blockedUntil += $item->duration * 60;
-				$strDate = date('Y-m-d H:i:s', $blockedUntil);
-				return ($blockedUntil < time())
-					? Text::sprintf('COM_BFSTOP_BLOCK_EXPIRED_AT', $strDate)
-					: Text::sprintf('COM_BFSTOP_BLOCKED_UNTIL', $strDate);
-			}
-		}
-	}
-
-	public function convertDurationToReadable($duration)
-	{
-		return DurationHelper::toReadable($duration);
-	}
-
 	protected function addToolBar()
 	{
 		$user = Factory::getApplication()->getIdentity();
@@ -79,7 +50,7 @@ class HtmlView extends BaseHtmlView
 		}
 		// an entry is part of the web server's configuration, see
 		// HtblockController::save()
-		if ($user->authorise('core.create', 'com_bfstop') && $user->authorise('core.admin', 'com_bfstop'))
+		if (HtblockController::mayAdd($user))
 		{
 			ToolbarHelper::addNew('htblock.add');
 		}

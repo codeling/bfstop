@@ -22,7 +22,6 @@ langfiles="language"
 # the documentation of the repository, put at the top of the zip
 docs="CHANGELOG LICENSE.txt README.md"
 plgtype="system"
-langs="de-DE en-GB"
 version="$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$extname.xml" | head -n 1)"
 
 if [ "$1" == "zip" ]
@@ -46,7 +45,10 @@ fi
 
 cp -r $srcfiles $dstdir/plugins/$plgtype/$extname/
 
-for lang in $langs
+# every language the plugin has (the folders of language/)
+for dir in language/*/
 do
-	cp language/$lang/* $dstdir/administrator/language/$lang/
+	lang="$(basename "$dir")"
+	mkdir -p "$dstdir/administrator/language/$lang"
+	cp "$dir"*.ini "$dstdir/administrator/language/$lang/"
 done

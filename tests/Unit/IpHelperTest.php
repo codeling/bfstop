@@ -40,7 +40,7 @@ class IpHelperTest extends TestCase
 	/**
 	 * contains() with an address as the inner entry: what the component's
 	 * warning that a range holds the administrator's own address goes by
-	 * (IpValidateHelper::matchesCurrentIP(), which had a copy of the
+	 * (IpValidateHelper::currentIpError(), which had a copy of the
 	 * matching of its own, built on ip2long).
 	 */
 	public static function addressInEntryProvider()

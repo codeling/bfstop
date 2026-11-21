@@ -146,6 +146,18 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertFalse($this->repos->blocks()->isBlocked('192.0.2.200'));
 	}
 
+	public function testNonPositiveDurationIsForEverEverywhere()
+	{
+		// as BlockPolicy::realDuration() has it: the lookup used to take only
+		// 0 for ever, so a negative duration was a block which was never active
+		$negative = $this->block('203.0.113.12', 500000, -5);
+		$this->assertSame(array($negative), $this->activeBlocks('203.0.113.12'));
+		$this->assertNotContains('203.0.113.12', $this->repos->blocks()->addressesWithoutActiveBlock());
+		$this->repos->blocks()->purgeEndedBefore(self::minutesAgo(0));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip WHERE id='.$negative),
+			'a block for ever is not purged as ended');
+	}
+
 	public function testNumberOfPreviousBlocks()
 	{
 		$this->block('203.0.113.7', 500000, 0);
@@ -266,8 +278,8 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->insert('#__bfstop_unblock_token', array('token' => 'tokenOld', 'block_id' => 3,
 			'crdate' => self::minutesAgo(4 * 24 * 60), 'username' => 'Expired'));
 		$this->assertFalse($this->repos->unblockTokens()->hasCurrentFor('Expired'), 'an expired token is not current');
-		$this->assertTrue($this->repos->unblockTokens()->exists('tokenA'));
-		$this->assertFalse($this->repos->unblockTokens()->exists('tokenB'));
+		$this->assertTrue($this->tokenStored('tokenA'));
+		$this->assertFalse($this->tokenStored('tokenB'));
 	}
 
 	public function testUnblockTokenIsIssuedForItsBlock()
@@ -290,8 +302,8 @@ class RepositoriesTest extends IntegrationTestCase
 
 		$this->assertTrue($tokens->remove('tokenI'));
 		$this->assertNull($tokens->issuedFor('tokenI'), 'used up');
-		$this->assertFalse($tokens->exists('tokenI'));
-		$this->assertTrue($tokens->exists('tokenOld'), 'only the token used is deleted');
+		$this->assertFalse($this->tokenStored('tokenI'));
+		$this->assertTrue($this->tokenStored('tokenOld'), 'only the token used is deleted');
 	}
 
 	public function testLiftingABlock()
@@ -317,7 +329,7 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertNotSame($hash, UnblockTokenRepository::hash('abd'));
 		// a stored hash is no token which unblocks: it would be hashed again
 		$this->repos->unblockTokens()->add(1, 'tokenA');
-		$this->assertFalse($this->repos->unblockTokens()->exists(UnblockTokenRepository::hash('tokenA')));
+		$this->assertFalse($this->tokenStored(UnblockTokenRepository::hash('tokenA')));
 	}
 
 	public function testKnownIpUsername()
@@ -329,6 +341,22 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertFalse($this->repos->knownIps()->hasLoggedInFrom('203.0.113.5', 'eve', 64));
 		$this->assertFalse($this->repos->knownIps()->hasLoggedInFrom('203.0.113.6', 'bob', 64));
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+	}
+
+	public function testKnownIpRememberedTwiceAtTheSameTimeIsOneRow()
+	{
+		// both requests look and find nothing, both add the row: the second
+		// one must update it, not fail on the unique key
+		$racing = new class($this->db, $this->logger) extends \Codeling\Library\Bfstop\Repository\KnownIpRepository
+		{
+			protected function scalar(\Joomla\Database\QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
+			{
+				return null; // the row of the other request isn't there yet
+			}
+		};
+		$racing->remember('203.0.113.5', 'bob');
+		$racing->remember('203.0.113.5', 'bob');
+		$this->assertSame(array('203.0.113.5 bob'), $this->knownRows());
 	}
 
 	private function knownRows()
@@ -365,6 +393,65 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->failedLogin($net, 'eve', 0);
 		$this->logins->recordSuccessfulLogin((object) array('ipaddress' => '2001:db8:1:2::9', 'username' => 'bob'), $net);
 		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0"), 'only bob\'s');
+	}
+
+	public function testSuccessfulLoginHandlesFailuresTypedWithTheEmailOrInAnotherCase()
+	{
+		// what the user typed when failing is what is stored; Joomla matches
+		// the login whatever its case (and an authentication plugin may take
+		// the email address)
+		$this->failedLogin('203.0.113.5', 'BOB', 0);
+		$this->failedLogin('203.0.113.5', 'Bob@Example.org', 0);
+		$this->failedLogin('203.0.113.5', 'eve', 0);
+		$this->logins->recordSuccessfulLogin((object) array('ipaddress' => '203.0.113.5', 'username' => 'bob',
+			'email' => 'bob@example.org'));
+		$this->assertSame(array('eve'), $this->unhandledUsernames());
+		$this->failedLogin('203.0.113.6', 'eve', 0);
+		$this->logins->recordSuccessfulLogin((object) array('ipaddress' => '203.0.113.6', 'username' => '',
+			'email' => ''));
+		$this->assertSame(array('eve', 'eve'), $this->unhandledUsernames(), 'no name: nothing handled');
+	}
+
+	private function unhandledUsernames()
+	{
+		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin WHERE handled=0 ORDER BY id');
+		return $this->db->loadColumn();
+	}
+
+	public function testAccountByLogin()
+	{
+		$created = array();
+		$user = function ($username, $email, $block = 0) use (&$created)
+		{
+			$created[] = $this->insert('#__users', array('name' => $username, 'username' => $username,
+				'email' => $email, 'password' => '', 'registerDate' => self::minutesAgo(0), 'params' => '{}',
+				'block' => $block), 'id');
+		};
+		try
+		{
+			$user('carol', 'carol@example.org');
+			$user('dave', 'dave@example.org', 1);
+			// the email address of one account is the username of another
+			$user('erin', 'frank');
+			$user('frank', 'frank@example.org');
+			$users = $this->repos->users();
+			$carol = array('username' => 'carol', 'email' => 'carol@example.org');
+			$this->assertSame($carol, $users->accountByLogin('carol'));
+			$this->assertSame($carol, $users->accountByLogin('CAROL'));
+			$this->assertSame($carol, $users->accountByLogin('Carol@Example.org'));
+			$this->assertNull($users->accountByLogin('dave'), 'disabled: no unblock link');
+			$this->assertNull($users->accountByLogin('nobody'));
+			$this->assertNull($users->accountByLogin(''));
+			$this->assertSame('frank', $users->accountByLogin('frank')['username'], 'the username wins');
+		}
+		finally
+		{
+			foreach ($created as $id)
+			{
+				$this->db->setQuery('DELETE FROM #__users WHERE id='.(int) $id);
+				$this->db->execute();
+			}
+		}
 	}
 
 	public function testEarlierRecordingsAreStillRecognised()

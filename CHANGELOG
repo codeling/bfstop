@@ -1,4 +1,30 @@
 2.0.0 (unreleased)
+  - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Review fixes: an unblock mail is no longer sent with an empty token when
+    the token can't be stored; failed logins typed with the email address or
+    in another case get the account's unblock mail (none for a disabled
+    account) and are cleared by its successful login; "All" in the list of
+    the .htaccess file shows all entries instead of none; without a
+    notification address, blocks no longer log an error; group
+    notifications skip disabled accounts; a block's duration of less than 0
+    minutes counts as unlimited everywhere (and the block form takes 0 or
+    more, and a valid start); a broken manifest cache no longer breaks the
+    settings page; the list controllers no longer offer Joomla's publish,
+    delete, ... tasks, which ended in an error page; "Save" in the .htaccess
+    form is offered by the same permissions the save needs, and the form
+    validates with its own fields and stores the entry in canonical form;
+    an update that can't migrate the settings says so; known addresses of
+    two logins at the same time are one row; the log sorts by severity
+  - Hand-written <If> blocks in the .htaccess block section are kept intact
+    by every change and by the uninstallation
+  - Code clean-up: every setting's default is in Settings::Defaults (and
+    read with Settings::get()), lock files are named by LockHelper::file(),
+    form rules return their error instead of posting it, unused code removed
+    (the token unblock without confirmation, the 403 message of .htaccess,
+    DateRule, UnblockTokenRepository::exists()), duplicates of the library's
+    origin names and network masks removed
+  - CI: database images pinned by digest, PostgreSQL 15 instead of 12; the
+    weekly dependency check runs composer without write permissions
   - Code clean-up (issue #283): unblock tokens are 40 hex digits of
     random_bytes() without the weaker fallback generator; the notifier's
     "one day" is a constant; the log page of the component shows the newest

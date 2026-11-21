@@ -134,9 +134,9 @@ abstract class Repository
 		return $this->db->loadColumn();
 	}
 
-	protected function row(QueryInterface $query, array $values = array())
+	protected function row(QueryInterface $query, array $values = array(), $offset = 0, $limit = 0)
 	{
-		$this->prepare($query, $values);
+		$this->prepare($query, $values, $offset, $limit);
 		return $this->db->loadAssoc();
 	}
 

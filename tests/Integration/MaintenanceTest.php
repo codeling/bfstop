@@ -7,7 +7,6 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
-use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\DailyMaintenance;
@@ -146,7 +145,7 @@ class MaintenanceTest extends IntegrationTestCase
 		$settings = new Registry(array('deleteOld' => 4));
 		$maintenance = new DailyMaintenance($this->repos, $settings);
 		$this->staleEntry();
-		$lockFile = HtaccessHelper::lockDirectory().'/bfstop-maintenance-'.LockHelper::siteHash().'.lock';
+		$lockFile = LockHelper::file('maintenance');
 		$handle = LockHelper::acquire($lockFile, 0);
 		$this->assertIsResource($handle, 'the test is "the other request"');
 		try

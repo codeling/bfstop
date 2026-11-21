@@ -101,7 +101,7 @@ class UpdateServerTest extends TestCase
 		$this->assertSame(array('https://github.com/codeling/bfstop/releases/tag/2.0.1',
 			'https://github.com/codeling/bfstop/releases/tag/1.5.2'), self::values($xpath, '//update/infourl'));
 		// the php minimum is the one of 2.x; 1.x states none
-		$this->assertSame(array('8.1'), self::values($xpath, '//update/php_minimum'));
+		$this->assertSame(array('8.2'), self::values($xpath, '//update/php_minimum'));
 	}
 
 	public function testTheCollectionPointsAtTheDetailsAndNamesTheNewestVersion()

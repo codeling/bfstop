@@ -241,4 +241,18 @@ class LoginTurnTest extends IntegrationTestCase
 		$this->assertSame(LoginTurn::file('2001:db8:1:200::/56'), LoginTurn::file('2001:db8:1:200::/56'));
 		$this->assertStringStartsWith(Factory::getApplication()->get('tmp_path'), LoginTurn::file(self::Ip));
 	}
+
+	public function testLockFilesOfOneSiteAreNamedInOnePlace()
+	{
+		$site = LockHelper::siteHash();
+		$tmp = rtrim(Factory::getApplication()->get('tmp_path'), '/');
+		$this->assertSame($tmp.'/bfstop-maintenance-'.$site.'.lock', LockHelper::file('maintenance'));
+		$this->assertSame($tmp.'/bfstop-maintenance-'.$site.'.stamp', LockHelper::file('maintenance', null, 'stamp'));
+		$this->assertSame($tmp.'/bfstop-delay-'.$site.'-3.lock', LockHelper::file('delay', 3));
+		$this->assertSame(LockHelper::file('login', LockHelper::slot(self::Ip, LoginTurn::Slots)), LoginTurn::file(self::Ip));
+		$slot = LockHelper::slot('2001:db8::/56', 64);
+		$this->assertSame($slot, LockHelper::slot('2001:db8::/56', 64), 'always the same');
+		$this->assertGreaterThanOrEqual(0, $slot);
+		$this->assertLessThan(64, $slot);
+	}
 }

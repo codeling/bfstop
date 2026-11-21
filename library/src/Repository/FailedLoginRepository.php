@@ -156,12 +156,15 @@ class FailedLoginRepository extends Repository
 
 	/**
 	 * Marks the unhandled failed logins from $ipaddress - and, with
-	 * $username, only those against it - as handled. Fail-open: they go on
-	 * counting.
+	 * $usernames (a username, or several: an account's username and email
+	 * address), only those against them, whatever their case, as Joomla
+	 * matches a login - as handled. Fail-open: they go on counting.
+	 *
+	 * @param string|string[]|null $usernames
 	 */
-	public function markHandled($ipaddress, $username = null)
+	public function markHandled($ipaddress, $usernames = null)
 	{
-		$this->failOpen('markHandled', function () use ($ipaddress, $username)
+		$this->failOpen('markHandled', function () use ($ipaddress, $usernames)
 		{
 			$query = $this->db->createQuery()
 				->update($this->db->quoteName(self::Table))
@@ -169,10 +172,26 @@ class FailedLoginRepository extends Repository
 				->where($this->db->quoteName('ipaddress').' = :ip')
 				->where($this->db->quoteName('handled').' = 0');
 			$values = array('ip' => (string) $ipaddress);
-			if ($username !== null)
+			if ($usernames !== null)
 			{
-				$query->where($this->db->quoteName('username').' = :username');
-				$values['username'] = (string) $username;
+				$names = array_values(array_unique(array_filter(array_map('strval', (array) $usernames),
+					fn ($name) => $name !== '')));
+				if (count($names) === 0)
+				{
+					return;
+				}
+				// MySQL and MariaDB compare the column case-insensitively
+				// themselves (its collation); PostgreSQL exactly. The rows are
+				// found by the address, so LOWER() reads no more of them
+				$lower = $this->db->getServerType() === 'postgresql';
+				$column = $this->db->quoteName('username');
+				$placeholders = array();
+				foreach ($names as $i => $name)
+				{
+					$values['username'.$i] = $name;
+					$placeholders[] = $lower ? 'LOWER(:username'.$i.')' : ':username'.$i;
+				}
+				$query->where(($lower ? 'LOWER('.$column.')' : $column).' IN ('.implode(', ', $placeholders).')');
 			}
 			$this->execute($query, $values);
 		}, null);

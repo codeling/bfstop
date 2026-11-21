@@ -11,7 +11,7 @@ repository (with its history) for 2.0.0.
 
 - `pkg_bfstop.xml`: the package manifest.
 - `script.php`: the package's installer script; refuses Joomla! < 5.4 and
-  PHP < 8.1 before anything is installed (sites on Joomla! 4 stay with 1.5).
+  PHP < 8.2 before anything is installed (sites on Joomla! 4 stay with 1.5).
 - `update-server.php`: writes the files of the update server
   (`update.xml` and `update-pkg.xml` at `https://bfstop.de`, which
   installed sites ask) from the GitHub releases, see "The update server".

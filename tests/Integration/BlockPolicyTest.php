@@ -130,6 +130,17 @@ class BlockPolicyTest extends IntegrationTestCase
 		$this->assertFalse($policy->notifiesBlockedUser());
 	}
 
+	public function testSettingsAreReadWithTheirDefaults()
+	{
+		$params = new \Joomla\Registry\Registry(array('blockNumber' => '7', 'emailaddress' => ''));
+		$this->assertSame(7, Settings::int($params, 'blockNumber'));
+		$this->assertSame(Settings::Defaults['maxBlocksBefore'], Settings::int($params, 'maxBlocksBefore'), 'not stored');
+		$this->assertSame('', Settings::string($params, 'emailaddress'));
+		$this->assertTrue(Settings::bool($params, 'useHttpError'));
+		$this->expectException(\InvalidArgumentException::class);
+		Settings::get($params, 'blockNumbr');
+	}
+
 	public function testModeAndConfiguredValues()
 	{
 		$policy = $this->policy(array('blockMode' => 'off', 'blockDuration' => '90', 'checkInterval' => '30',

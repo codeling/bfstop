@@ -478,9 +478,9 @@ class FailedLoginTest extends IntegrationTestCase
 		return ((int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_unblock_token')) === 1;
 	}
 
-	private function blockedAfter(array $usernames)
+	private function blockedAfter(array $usernames, array $params = array())
 	{
-		$this->configure(array('blockNumber' => count($usernames), 'notifyBlockedUser' => 2));
+		$this->configure($params + array('blockNumber' => count($usernames), 'notifyBlockedUser' => 2));
 		foreach ($usernames as $username)
 		{
 			$this->failedLogin($username);
@@ -509,6 +509,51 @@ class FailedLoginTest extends IntegrationTestCase
 		$this->createUser('victim');
 		$this->blockedAfter(array('victim@example.org', 'victim@example.org', 'Admin'));
 		$this->assertFalse($this->unblockLinkIssued());
+	}
+
+	public function testUnblockLinkForALoginTypedWithTheEmailAddressOrInAnotherCase()
+	{
+		// accountExists() takes these for the account, so does the unblock mail
+		$this->createUser('victim');
+		$this->blockedAfter(array('Victim@Example.org', 'Victim@Example.org', 'Victim@Example.org'));
+		$this->assertTrue($this->unblockLinkIssued());
+		$this->assertSame('victim', $this->queryValue('SELECT username FROM #__bfstop_unblock_token'),
+			'the link is counted against the account');
+	}
+
+	public function testNoUnblockLinkForADisabledAccount()
+	{
+		$this->createUser('disabled');
+		$this->db->setQuery("UPDATE #__users SET block=1 WHERE username='disabled'");
+		$this->db->execute();
+		$this->blockedAfter(array('disabled', 'disabled', 'disabled'));
+		$this->assertFalse($this->unblockLinkIssued());
+	}
+
+	public function testNoUnblockMailIfItsTokenCannotBeStored()
+	{
+		// a link whose token isn't stored leads nowhere: it used to be sent
+		// with an empty token
+		$logFile = \Codeling\Library\Bfstop\Helper\LoggerHelper::getLogFiles()[0];
+		@unlink($logFile);
+		// lookups of the table still work, adding a token fails
+		$table = $this->db->quoteName('#__bfstop_unblock_token');
+		$this->db->setQuery('ALTER TABLE '.$table.' ADD CONSTRAINT bfstop_test_no_token CHECK (block_id < 0)');
+		$this->db->execute();
+		try
+		{
+			$this->blockedAfter(array('Admin', 'Admin', 'Admin'), array('logLevel' => 64)); // Log::INFO
+		}
+		finally
+		{
+			$this->db->setQuery('ALTER TABLE '.$table.' DROP CONSTRAINT bfstop_test_no_token');
+			$this->db->execute();
+		}
+		$this->assertFalse($this->unblockLinkIssued());
+		$log = (string) @file_get_contents($logFile);
+		$this->assertStringContainsString('unblock token could not be stored - not sending unblock instructions', $log);
+		$this->assertStringNotContainsString('sending unblock instructions', str_replace(
+			'not sending unblock instructions', '', $log));
 	}
 
 	public function testMistypedUsernamesDontPreventTheUnblockLink()

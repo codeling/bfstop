@@ -5,7 +5,8 @@
 # install-joomla.sh to $GITHUB_ENV (if set).
 #
 # Environment:
-#   DB_IMAGE   docker image, e.g. mysql:8.4, mariadb:11.4 or postgres:17
+#   DB_IMAGE   docker image, e.g. mysql:8.4, mariadb:11.4 or postgres:17, pinned
+#              by its digest in CI (postgres:17@sha256:...)
 #   DB_HOST, DB_PASS, DB_NAME
 set -euo pipefail
 

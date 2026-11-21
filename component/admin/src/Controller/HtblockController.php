@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
-use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
@@ -23,6 +22,18 @@ use Joomla\CMS\Router\Route;
 
 class HtblockController extends FormController
 {
+	/**
+	 * Whether $user may add an entry to the .htaccess file: it is part of the
+	 * web server's configuration, which turns addresses away before Joomla
+	 * runs, so nobody in it can lift it from within the site - core.admin as
+	 * well as core.create, like the settings (which choose the file) and the
+	 * allow list. The toolbars ask this too.
+	 */
+	public static function mayAdd($user): bool
+	{
+		return $user && $user->authorise('core.create', 'com_bfstop') && $user->authorise('core.admin', 'com_bfstop');
+	}
+
 	public function add()
 	{
 		$this->setRedirect(
@@ -46,13 +57,8 @@ class HtblockController extends FormController
 	{
 		$this->checkToken();
 		// this fully overrides FormController::save(), so it doesn't
-		// inherit the base class's automatic allowSave()/core.create check.
-		// An entry is part of the web server's configuration: it turns
-		// addresses away before Joomla runs, so nobody can lift it from
-		// within the site who is in it - core.admin as well, like the
-		// settings (which choose the file) and the allow list
-		$user = $this->app->getIdentity();
-		if (!$user || !$user->authorise('core.create', 'com_bfstop') || !$user->authorise('core.admin', 'com_bfstop'))
+		// inherit the base class's automatic allowSave()/core.create check
+		if (!self::mayAdd($this->app->getIdentity()))
 		{
 			$this->returnToFormWithMessage('', Text::_('COM_BFSTOP_NOT_AUTHORISED'));
 			return false;
@@ -60,8 +66,9 @@ class HtblockController extends FormController
 		$logger = LogHelper::getLogger();
 		$htaccessPath = UnblockHelper::getHtaccessPath();
 		$htaccess = new HtaccessHelper($htaccessPath, null);
-		$model = $this->getModel('block');
-		$form = $model->getForm(null, false);
+		// the form of the view, see HtblockModel
+		$model = $this->getModel('htblock');
+		$form = $model->getForm(array(), false);
 		$input = $this->input;
 		$data  = $input->post->get('jform', array(), 'array');
 		$validData = $model->validate($form, $data);
@@ -78,7 +85,9 @@ class HtblockController extends FormController
 			$this->returnToFormWithMessage(is_string($data['ipaddress'] ?? null) ? $data['ipaddress'] : '', $msg);
 			return false;
 		}
-		$ipaddress = $validData['ipaddress'];
+		// in the spelling the block list has it, which the file's entries
+		// are compared with (see HtaccessHelper::isEntryOf())
+		$ipaddress = IpHelper::canonicalEntry($validData['ipaddress']) ?? (string) $validData['ipaddress'];
 		$repositories = new Repositories($logger);
 		// the web server knows nothing of the allow list: a network in the
 		// file would also turn away the allowed addresses in it (and an

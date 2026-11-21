@@ -51,14 +51,14 @@ class LogController extends BaseController
 		{
 			return;
 		}
-		$keepDays = (int) ParamHelper::get('logKeepDays', LoggerHelper::DefaultKeepDays);
+		$keepDays = (int) ParamHelper::get('logKeepDays');
 		if ($keepDays < 1)
 		{
 			$this->setRedirect($listUrl, Text::sprintf('COM_BFSTOP_LOG_PRUNE_DISABLED',
 				Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
 			return;
 		}
-		$maxMB = (int) ParamHelper::get('logMaxSize', LoggerHelper::DefaultMaxSizeMB);
+		$maxMB = (int) ParamHelper::get('logMaxSize');
 		LoggerHelper::rotateIfTooBig(LoggerHelper::maxBytesFromMegabytes($maxMB));
 		$deleted = LoggerHelper::pruneByAge($keepDays);
 		LogHelper::getLogger()->log("Manually pruned $deleted log entries older than $keepDays days", Log::INFO);

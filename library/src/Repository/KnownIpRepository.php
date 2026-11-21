@@ -57,8 +57,19 @@ class KnownIpRepository extends Repository
 			}
 			else
 			{
-				$this->insert(self::Table, array('ipaddress' => $key, 'username' => $username,
-					'first_success' => $now, 'last_success' => $now));
+				// two logins at the same time may both have found none: the
+				// second one updates the row of the first (the unique key is
+				// the address and the username as it is spelt)
+				$sql = 'INSERT INTO '.$this->db->quoteName(self::Table).
+					' (ipaddress, username, first_success, last_success) VALUES (:ip, :username, :first, :last)';
+				$sql .= $this->db->getServerType() === 'postgresql'
+					? ' ON CONFLICT (ipaddress, username) DO UPDATE SET last_success = :last2'
+					: ' ON DUPLICATE KEY UPDATE last_success = :last2';
+				$insert = $this->db->createQuery();
+				$insert->setQuery($sql);
+				$insertValues = array('ip' => (string) $key, 'username' => (string) $username, 'first' => $now,
+					'last' => $now, 'last2' => $now);
+				$this->execute($insert, $insertValues);
 			}
 		}, null);
 	}

@@ -30,23 +30,19 @@ class IpValidateHelperTest extends IntegrationTestCase
 		return Factory::getApplication()->getMessageQueue(true);
 	}
 
-	public function testWarnsOfARangeHoldingTheCurrentAddress()
+	public function testARangeHoldingTheCurrentAddressIsAnError()
 	{
 		$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? null;
 		try
 		{
 			$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2::5';
-			$this->assertTrue(IpValidateHelper::matchesCurrentIP('2001:db8:1::/48'));
-			$messages = $this->messages();
-			$this->assertCount(1, $messages);
-			$this->assertSame('warning', $messages[0]['type']);
-			$this->assertStringContainsString('2001:db8:1:2::5', $messages[0]['message']);
-
-			$this->assertTrue(IpValidateHelper::matchesCurrentIP('2001:DB8:1:2:0::5'), 'the same address, spelt differently');
-			$this->messages();
-			$this->assertFalse(IpValidateHelper::matchesCurrentIP('2001:db8:2::/48'));
-			$this->assertFalse(IpValidateHelper::matchesCurrentIP('203.0.113.0/24'), 'the other family');
-			$this->assertSame(array(), $this->messages());
+			$error = IpValidateHelper::currentIpError('2001:db8:1::/48');
+			$this->assertNotNull($error);
+			$this->assertStringContainsString('2001:db8:1:2::5', $error);
+			$this->assertNotNull(IpValidateHelper::currentIpError('2001:DB8:1:2:0::5'), 'the same address, spelt differently');
+			$this->assertNull(IpValidateHelper::currentIpError('2001:db8:2::/48'));
+			$this->assertNull(IpValidateHelper::currentIpError('203.0.113.0/24'), 'the other family');
+			$this->assertSame(array(), $this->messages(), 'nothing is posted: the rule returns the error');
 		}
 		finally
 		{
@@ -78,7 +74,8 @@ class IpValidateHelperTest extends IntegrationTestCase
 	#[DataProvider('validRangeProvider')]
 	public function testValidPublicRange($range)
 	{
-		$this->assertTrue(IpValidateHelper::validIPRange($range));
+		$this->assertNull(IpValidateHelper::rangeError($range));
+		$this->assertNull(IpValidateHelper::privateRangeNote($range));
 		$this->assertSame(array(), $this->messages());
 	}
 
@@ -113,16 +110,15 @@ class IpValidateHelperTest extends IntegrationTestCase
 	#[DataProvider('tooLargeNetworkProvider')]
 	public function testTooLargeNetworkIsRefused($range)
 	{
-		$this->assertFalse(IpValidateHelper::validIPRange($range));
-		$this->assertSame(array(array('message' => Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE', $range,
-			IpValidateHelper::MinPrefixIPv4, IpValidateHelper::MinPrefixIPv6), 'type' => 'warning')), $this->messages());
+		$this->assertSame(Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE', $range,
+			IpValidateHelper::MinPrefixIPv4, IpValidateHelper::MinPrefixIPv6), IpValidateHelper::rangeError($range));
 	}
 
 	#[DataProvider('invalidRangeProvider')]
 	public function testInvalidRange($range, $expectedKey, $expectedArg)
 	{
-		$this->assertFalse(IpValidateHelper::validIPRange($range));
-		$this->assertSame(array(array('message' => Text::sprintf($expectedKey, $expectedArg), 'type' => 'warning')), $this->messages());
+		$this->assertSame(Text::sprintf($expectedKey, $expectedArg), IpValidateHelper::rangeError($range));
+		$this->assertSame(array(), $this->messages());
 	}
 
 	public static function privateRangeProvider()
@@ -131,10 +127,36 @@ class IpValidateHelperTest extends IntegrationTestCase
 	}
 
 	#[DataProvider('privateRangeProvider')]
-	public function testPrivateOrReservedRangeIsAcceptedWithWarning($range)
+	public function testPrivateOrReservedRangeIsAcceptedWithANote($range)
 	{
-		$this->assertTrue(IpValidateHelper::validIPRange($range));
+		$this->assertNull(IpValidateHelper::rangeError($range));
 		$ip = explode('/', $range)[0];
-		$this->assertSame(array(array('message' => Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', $ip), 'type' => 'warning')), $this->messages());
+		$this->assertSame(Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', $ip), IpValidateHelper::privateRangeNote($range));
+	}
+
+	public function testTheRulesReturnTheErrorAndPostOnlyTheNote()
+	{
+		// Joomla shows the error a rule returns instead of its own "invalid
+		// field"; the rules used to post theirs on top of it
+		$element = new \SimpleXMLElement('<field name="ipaddress"/>');
+		$rule = new \Codeling\Component\Bfstop\Administrator\Rule\IprangeRule();
+		$result = $rule->test($element, '203.0.113.0/33');
+		$this->assertInstanceOf(\UnexpectedValueException::class, $result);
+		$this->assertSame(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', '33'), $result->getMessage());
+		$this->assertSame(array(), $this->messages());
+		$this->assertTrue($rule->test($element, '10.0.0.1'));
+		$this->assertCount(1, $this->messages(), 'a private range is noted');
+		$remoteAddr = $_SERVER['REMOTE_ADDR'] ?? null;
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
+		try
+		{
+			$block = new \Codeling\Component\Bfstop\Administrator\Rule\IprangeblockRule();
+			$this->assertInstanceOf(\UnexpectedValueException::class, $block->test($element, '203.0.113.0/24'));
+			$this->assertTrue($block->test($element, '198.51.100.0/24'));
+		}
+		finally
+		{
+			$_SERVER['REMOTE_ADDR'] = $remoteAddr;
+		}
 	}
 }

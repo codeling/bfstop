@@ -23,7 +23,7 @@ use Joomla\CMS\Installer\InstallerScriptInterface;
 class pkg_bfstopInstallerScript extends InstallerScript implements InstallerScriptInterface
 {
 	protected $minimumJoomla = '5.4.0';
-	protected $minimumPhp = '8.1.0';
+	protected $minimumPhp = '8.2.0';
 
 	// InstallerScript's checks, with the return type InstallerScriptInterface
 	// has (InstallerScript's own preflight() has none)

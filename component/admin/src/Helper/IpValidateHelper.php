@@ -11,7 +11,6 @@ namespace Codeling\Component\Bfstop\Administrator\Helper;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Helper\IpHelper;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 
 class IpValidateHelper
@@ -35,58 +34,65 @@ class IpValidateHelper
 		return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8');
 	}
 
-	public static function validIPRange($address)
+	/**
+	 * What is wrong with $address as an entry of the block or allow list (an
+	 * address, or a network in CIDR notation), as a message to show (escaped:
+	 * it contains what was typed in); null if nothing is. The form rules
+	 * return it as their error, which Joomla shows instead of its own.
+	 */
+	public static function rangeError($address): ?string
 	{
+		$address = (string) $address;
 		$ip = $address;
-		$isSubNet = str_contains($address, "/");
-		if ($isSubNet)
+		if (str_contains($address, '/'))
 		{
-			$parts = explode("/", $ip, 2);
-			$subnet = $parts[1];
-			$ip = $parts[0];
+			list($ip, $subnet) = explode('/', $address, 2);
 			$maxBits = IpRangeHelper::isIPv6($ip) ? 128 : 32;
 			// digits only: is_numeric() would also accept "1e1", "0x8" or " 8",
 			// which don't mean what they look like in the places the range ends
 			// up (e.g. the web server's configuration)
 			if (preg_match('/^[0-9]{1,3}\z/', $subnet) !== 1 || (int) $subnet > $maxBits)
 			{
-				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', self::e($subnet)), 'warning');
-				return false;
+				return Text::sprintf('COM_BFSTOP_IP_INVALID_SUBNET', self::e($subnet));
 			}
 			$minBits = IpRangeHelper::isIPv6($ip) ? self::MinPrefixIPv6 : self::MinPrefixIPv4;
 			if ((int) $subnet < $minBits)
 			{
-				Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE',
-					self::e($address), self::MinPrefixIPv4, self::MinPrefixIPv6), 'warning');
-				return false;
+				return Text::sprintf('COM_BFSTOP_IP_NETWORK_TOO_LARGE', self::e($address),
+					self::MinPrefixIPv4, self::MinPrefixIPv6);
 			}
 		}
 		if (!filter_var($ip, FILTER_VALIDATE_IP))
 		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_INVALID_ADDRESS', self::e($ip)), 'warning');
-			return false;
+			return Text::sprintf('COM_BFSTOP_IP_INVALID_ADDRESS', self::e($ip));
 		}
-		if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE))
-		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', self::e($ip)), 'warning');
-		}
-		return true;
+		return null;
 	}
 
 	/**
-	 * Whether the current client's address is in $range (an address, or a
-	 * network in CIDR notation), with a warning if it is: a block of it would
-	 * shut out whoever is entering it. Matched by the library's IpHelper,
-	 * like the block and allow list themselves.
+	 * The note that $address (a valid entry, see rangeError()) is of a
+	 * private or reserved range - which can be meant, so it is no error - or
+	 * null if it isn't.
 	 */
-	public static function matchesCurrentIP($range)
+	public static function privateRangeNote($address): ?string
+	{
+		$ip = explode('/', (string) $address, 2)[0];
+		return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)
+			? null
+			: Text::sprintf('COM_BFSTOP_IP_PRIVATE_OR_RESERVED', self::e($ip));
+	}
+
+	/**
+	 * The error that $range (an address, or a network in CIDR notation)
+	 * holds the address of the current client - a block of it would shut out
+	 * whoever is entering it - or null if it doesn't. Matched by the
+	 * library's IpHelper, like the block and allow list themselves.
+	 */
+	public static function currentIpError($range): ?string
 	{
 		$curIP = IpHelper::getAddress(LogHelper::getLogger());
-		$result = IpHelper::contains($range, $curIP);
-		if ($result)
-		{
-			Factory::getApplication()->enqueueMessage(Text::sprintf('COM_BFSTOP_IP_BLOCKS_USER', self::e($range), self::e($curIP)), 'warning');
-		}
-		return $result;
+		return IpHelper::contains($range, $curIP)
+			? Text::sprintf('COM_BFSTOP_IP_BLOCKS_USER', self::e($range), self::e($curIP))
+			: null;
 	}
 }

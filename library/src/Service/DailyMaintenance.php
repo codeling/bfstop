@@ -43,7 +43,7 @@ class DailyMaintenance
 
 	private static function lockFile(): string
 	{
-		return HtaccessHelper::lockDirectory().'/bfstop-maintenance-'.LockHelper::siteHash().'.lock';
+		return LockHelper::file('maintenance');
 	}
 
 	/**
@@ -107,14 +107,14 @@ class DailyMaintenance
 		// added by hand
 		$this->tidyHtaccess();
 		$maintenance = new Maintenance($this->repositories);
-		$purgeAge = (int) $this->settings->get('deleteOld', Settings::Defaults['deleteOld']);
+		$purgeAge = Settings::int($this->settings, 'deleteOld');
 		if ($purgeAge > 0)
 		{
 			$maintenance->purgeOldEntries($purgeAge);
 		}
 		// regardless of the purge age setting: these are not deleted by age
 		$maintenance->keepWithinBounds();
-		LoggerHelper::pruneByAge((int) $this->settings->get('logKeepDays', LoggerHelper::DefaultKeepDays));
+		LoggerHelper::pruneByAge(Settings::int($this->settings, 'logKeepDays'));
 		$this->schedule->recordRun();
 	}
 
@@ -136,7 +136,7 @@ class DailyMaintenance
 	{
 		$logger = $this->repositories->logger();
 		$htaccess = new HtaccessHelper(
-			HtaccessHelper::resolvePath((string) $this->settings->get('htaccessPath', '')), $logger);
+			HtaccessHelper::resolvePath(Settings::string($this->settings, 'htaccessPath')), $logger);
 		if (!is_file($htaccess->getFileName()))
 		{
 			return;
@@ -148,7 +148,7 @@ class DailyMaintenance
 				'access controls of the directory, and without the current form, the links of unblock emails can\'t be '.
 				'followed', Log::ERROR);
 		}
-		$throughFile = (string) $this->settings->get('blockMode', 'full') === 'htaccess';
+		$throughFile = Settings::string($this->settings, 'blockMode') === 'htaccess';
 		if ($htaccess->removeStaleBlocks($this->repositories->blocks(), $throughFile) === false)
 		{
 			$logger->log('Could not take the addresses the plugin blocked out of '.$htaccess->getFileName().

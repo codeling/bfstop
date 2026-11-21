@@ -29,7 +29,7 @@ use Joomla\Database\DatabaseInterface;
 class PlgtaskbfstopInstallerScript extends InstallerScript implements InstallerScriptInterface
 {
 	protected $minimumJoomla = '5.4.0';
-	protected $minimumPhp = '8.1.0';
+	protected $minimumPhp = '8.2.0';
 
 	/** the routine of the plugin, see Codeling\Plugin\Task\Bfstop\Extension\Bfstop */
 	public const Routine = 'bfstop.maintenance';

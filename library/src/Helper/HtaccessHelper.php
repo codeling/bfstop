@@ -11,7 +11,6 @@ namespace Codeling\Library\Bfstop\Helper;
 defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Repository\BlockRepository;
-use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Uri\Uri;
 
@@ -53,6 +52,8 @@ class HtaccessHelper
 	private const DenyLine = 'Require all denied';
 	private const EndIfLine = '</If>';
 	private const ErrorDocumentPrefix = 'ErrorDocument 403 ';
+	// the start of an <If> section (not of <IfModule>, <IfDefine>, ...)
+	private const IfStart = '/^<If[\s>]/i';
 
 	/**
 	 * The query of the link of an unblock email (see TokenHelper::unblockLink()):
@@ -116,20 +117,54 @@ class HtaccessHelper
 	 * which somebody wrote into it by hand. Read from both the current and
 	 * the earlier form (see LegacyLines).
 	 *
+	 * Only the blocks the plugin writes count as its own: an <If> whose
+	 * condition is nothing but addresses (and, since the unblock page is let
+	 * through, the condition of that page - see renderSection()), followed by
+	 * "Require all denied" and "</If>". Any other <If> was written by hand
+	 * and is kept as it is, with all of its lines up to its own </If>.
+	 *
 	 * @param string[] $lines the lines of the section (see load())
 	 * @return array{addresses: string[], errorDocument: string|null, other: string[], legacy: bool}
 	 */
 	private static function parseSection(array $lines)
 	{
 		$section = array('addresses' => array(), 'errorDocument' => null, 'other' => array(), 'legacy' => false);
-		foreach ($lines as $line)
+		$lines = array_values($lines);
+		$count = count($lines);
+		for ($i = 0; $i < $count; ++$i)
 		{
+			$line = $lines[$i];
 			$trimmed = trim($line);
-			if ($trimmed === '' || $trimmed === self::DenyLine || $trimmed === self::EndIfLine)
+			if ($trimmed === '')
 			{
 				continue;
 			}
-			if (in_array($trimmed, self::LegacyLines, true))
+			$addresses = self::blockConditionAddresses($trimmed);
+			if ($addresses !== null &&
+				trim($lines[$i + 1] ?? '') === self::DenyLine && trim($lines[$i + 2] ?? '') === self::EndIfLine)
+			{
+				foreach ($addresses as $address)
+				{
+					$section['addresses'][] = $address;
+				}
+				$i += 2;
+			}
+			elseif (preg_match(self::IfStart, $trimmed))
+			{
+				// written by hand: kept, up to the </If> which closes it
+				$depth = 0;
+				for (; $i < $count; ++$i)
+				{
+					$inner = trim($lines[$i]);
+					$depth += (preg_match(self::IfStart, $inner) ? 1 : 0) - (strcasecmp($inner, self::EndIfLine) === 0 ? 1 : 0);
+					$section['other'][] = $lines[$i];
+					if ($depth <= 0)
+					{
+						break;
+					}
+				}
+			}
+			elseif (in_array($trimmed, self::LegacyLines, true))
 			{
 				$section['legacy'] = true;
 			}
@@ -137,14 +172,6 @@ class HtaccessHelper
 			{
 				$section['legacy'] = true;
 				$section['addresses'][] = substr($trimmed, strlen(self::BlockPrefix));
-			}
-			elseif (strpos($trimmed, '<If ') === 0)
-			{
-				preg_match_all("/-R '([^']*)'/", $trimmed, $matches);
-				foreach ($matches[1] as $address)
-				{
-					$section['addresses'][] = $address;
-				}
 			}
 			elseif (strpos($trimmed, self::ErrorDocumentPrefix) === 0)
 			{
@@ -157,6 +184,26 @@ class HtaccessHelper
 		}
 		$section['addresses'] = array_values(array_unique($section['addresses']));
 		return $section;
+	}
+
+	/**
+	 * The addresses of the condition of an <If> line the plugin writes (see
+	 * renderSection()) - "-R 'address'" terms joined by "||", in parentheses
+	 * and followed by the exception of the unblock page if it has one - or
+	 * null if $line is no such line.
+	 *
+	 * @return string[]|null
+	 */
+	private static function blockConditionAddresses($line)
+	{
+		$terms = "-R '[^']*'(?: \\|\\| -R '[^']*')*";
+		$unblockPage = " && !\\(%\\{REQUEST_URI\\} == '[^']*' && %\\{QUERY_STRING\\} =~ /[^/]*/\\)";
+		if (!preg_match('#^<If "(?:'.$terms.'|\\('.$terms.'\\)'.$unblockPage.')">$#', $line))
+		{
+			return null;
+		}
+		preg_match_all("/-R '([^']*)'/", $line, $matches);
+		return $matches[1];
 	}
 
 	/**
@@ -545,59 +592,6 @@ class HtaccessHelper
 	}
 
 	/**
-	 * Edit ErrorDocument 403 line in .htaccess.
-	 *
-	 * @param string $message
-	 * @return boolean
-	 */
-	public function edit403Message($message)
-	{
-		if (empty($message))
-		{
-			return $this->remove403Message();
-		}
-		// a line break would start a new directive
-		if (preg_match('/[\x00-\x1f\x7f]/', $message))
-		{
-			if (!is_null($this->logger))
-			{
-				$this->logger->log("Refusing to write a 403 message containing control characters to .htaccess!", Log::ERROR);
-			}
-			return false;
-		}
-
-		$line = self::ErrorDocumentPrefix.'"'.addcslashes($message, '"\\').'"';
-
-		return $this->locked(function () use ($line)
-		{
-			$file = $this->load();
-			$section = self::parseSection($file['section']);
-			$section['errorDocument'] = $line;
-			return $this->store($file, self::renderSection($section));
-		});
-	}
-
-	/**
-	 * Remove ErrorDocument 403 line from .htaccess.
-	 *
-	 * @return boolean
-	 */
-	public function remove403Message()
-	{
-		return $this->locked(function ()
-		{
-			$file = $this->load();
-			$section = self::parseSection($file['section']);
-			if ($section['errorDocument'] === null && !$section['legacy'])
-			{
-				return true;
-			}
-			$section['errorDocument'] = null;
-			return $this->store($file, self::renderSection($section));
-		});
-	}
-
-	/**
 	 * Runs a read-modify-write cycle of the .htaccess file while holding an
 	 * exclusive lock, so that concurrent requests (several clients getting
 	 * blocked at once is exactly when this happens) don't overwrite each
@@ -612,7 +606,8 @@ class HtaccessHelper
 	 */
 	private function locked(callable $change)
 	{
-		$lockFile = self::lockDirectory().'/bfstop-htaccess-'.md5($this->path).'.lock';
+		// by the file, not the site: sites which share a file share its lock
+		$lockFile = LockHelper::directory().'/bfstop-htaccess-'.md5($this->path).'.lock';
 		$handle = LockHelper::acquire($lockFile, self::LockWaitSeconds);
 		if (!$handle)
 		{
@@ -650,29 +645,6 @@ class HtaccessHelper
 	// changing the file takes milliseconds: who holds its lock for this long
 	// is not going to let go of it
 	public const LockWaitSeconds = 10;
-
-	/**
-	 * Where lock files go (also those of the plugin, see Bfstop): Joomla's own
-	 * temporary directory if there is one we can use, not the system's: that
-	 * one is shared with other users of the machine on many hosts, who could
-	 * then hold the lock (or plant a link under its name).
-	 */
-	public static function lockDirectory()
-	{
-		try
-		{
-			$tmp = (string) Factory::getApplication()->get('tmp_path');
-			if ($tmp !== '' && is_dir($tmp) && is_writable($tmp))
-			{
-				return rtrim($tmp, '/\\');
-			}
-		}
-		catch (\Throwable $e)
-		{
-			// no application (e.g. in a script): use the system's
-		}
-		return sys_get_temp_dir();
-	}
 
 	/**
 	 * Replaces the file as a whole: the new content is written next to it and

@@ -213,7 +213,9 @@ class NotifierHelper
 
 	public function failedLogin($logEntry, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber))
+		// nobody to notify (the default): neither count nor mail
+		if (count($this->notifyAddresses) === 0 ||
+			!$this->isNotificationAllowed($logEntry->logtime, $maxNumber))
 		{
 			return;
 		}
@@ -226,7 +228,8 @@ class NotifierHelper
 
 	public function blockedNotifyAdmin($logEntry, $interval, $maxNumber)
 	{
-		if (!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
+		if (count($this->notifyAddresses) === 0 ||
+			!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
 		{
 			return;
 		}

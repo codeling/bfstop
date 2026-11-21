@@ -32,7 +32,7 @@ class HtmlView extends BaseHtmlView
 		// this used to call the free freegeoip.net API, which was shut down
 		// in 2018 (see issue #169); a local lookup also avoids sending every
 		// blocked visitor's IP address to a third party.
-		$geoDbPath = ParamHelper::get('geoDbPath', '');
+		$geoDbPath = ParamHelper::get('geoDbPath');
 		$details = GeoHelper::getCityDetails(LogHelper::getLogger(), $geoDbPath, $this->ipAddress);
 
 		if ($details === null)

@@ -18,7 +18,7 @@ class UnblockHelper
 {
 	public static function getHtaccessPath()
 	{
-		return HtaccessHelper::resolvePath(ParamHelper::get('htaccessPath', ''));
+		return HtaccessHelper::resolvePath(ParamHelper::get('htaccessPath'));
 	}
 
 	/**
@@ -34,7 +34,7 @@ class UnblockHelper
 	{
 		$htaccess = new HtaccessHelper(self::getHtaccessPath(), $logger);
 		$htaccess->removeStaleBlocks((new Repositories($logger))->blocks(),
-			ParamHelper::get('blockMode', 'full') === 'htaccess');
+			ParamHelper::get('blockMode') === 'htaccess');
 	}
 
 	public static function unblockHtaccess($ips, $logger)

@@ -10,7 +10,6 @@ namespace Codeling\Component\Bfstop\Administrator\Model;
 
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Joomla\CMS\Language\Text;
@@ -45,11 +44,14 @@ class HtblocklistModel extends ListModel
 		return $this->cachedHtAccessLines;
 	}
 
+	/**
+	 * The entries of the page starting at $start, $count of them - all from
+	 * $start on if $count is 0, which is what the list's "All" sets.
+	 */
 	private function getPaginatedHtAccessLines($start, $count)
 	{
-		$direction = $this->getState('list.direction');
 		$items = $this->getHtAccessLines();
-		if (strtolower($direction) === 'asc')
+		if (strtolower((string) $this->getState('list.direction')) === 'asc')
 		{
 			sort($items);
 		}
@@ -57,29 +59,12 @@ class HtblocklistModel extends ListModel
 		{
 			rsort($items);
 		}
-		$current = 0;
-		$result = array();
-		foreach ($items as $entry)
-		{
-			if ($current >= $start)
-			{
-				if (($current - $start) >= $count)
-				{
-					break;
-				}
-				$result[] = $entry;
-			}
-			$current++;
-		}
-		return $result;
+		return array_slice($items, max(0, (int) $start), (int) $count > 0 ? (int) $count : null);
 	}
 
 	public function getItems()
 	{
-		$start = $this->getStart();
-		$count = $this->getState('list.limit');
-		$result = $this->getPaginatedHtAccessLines($start, $count);
-		return $result;
+		return $this->getPaginatedHtAccessLines($this->getStart(), $this->getState('list.limit'));
 	}
 
 	protected function populateState($ordering = null, $direction = null)

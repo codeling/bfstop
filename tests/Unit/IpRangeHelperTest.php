@@ -79,7 +79,8 @@ class IpRangeHelperTest extends TestCase
 	#[DataProvider('maskProvider')]
 	public function testIpv6Mask($bits, $expected)
 	{
-		$mask = IpRangeHelper::ipv6Mask($bits);
+		// the mask the component's ranges are computed with is the library's
+		$mask = \Codeling\Library\Bfstop\Helper\IpHelper::prefixMask($bits);
 		$this->assertSame(16, strlen($mask));
 		$this->assertSame(bin2hex($expected), bin2hex($mask));
 	}

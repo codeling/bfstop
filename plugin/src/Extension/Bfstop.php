@@ -89,9 +89,9 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		);
 	}
 
-	private function intParam($paramName, $default)
+	private function intParam($paramName): int
 	{
-		return (int) $this->params->get($paramName, $default);
+		return Settings::int($this->params, $paramName);
 	}
 
 	private function init()
@@ -128,23 +128,23 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		if ($this->notifier === null)
 		{
 			$this->notifier = new NotifierHelper($this->logger, $this->repositories,
-				$this->params->get('emailaddress', ''),
-				$this->intParam('userID', -1),
-				$this->intParam('userGroup', -1),
-				(bool) $this->params->get('groupNotificationEnabled', false));
+				Settings::get($this->params, 'emailaddress'),
+				$this->intParam('userID'),
+				$this->intParam('userGroup'),
+				Settings::bool($this->params, 'groupNotificationEnabled'));
 		}
 		return $this->notifier;
 	}
 
 	private function isEnabledForCurrentOrigin()
 	{
-		return Origin::isEnabled($this->params->get('enabledForOrigin', Settings::Defaults['enabledForOrigin']),
+		return Origin::isEnabled(Settings::get($this->params, 'enabledForOrigin'),
 			$this->getApplication());
 	}
 
 	private function trackedAddress($ipAddress)
 	{
-		return IpHelper::trackedAddress($ipAddress, $this->intParam('ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength']));
+		return IpHelper::trackedAddress($ipAddress, $this->intParam('ipv6PrefixLength'));
 	}
 
 	/**
@@ -153,7 +153,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function usernameForStorage($username)
 	{
-		$mode = (string) $this->params->get('unknownUsernameMode', UsernameHelper::ModeHash);
+		$mode = Settings::string($this->params, 'unknownUsernameMode');
 		$isReadable = ($mode !== UsernameHelper::ModePlain) &&
 			($this->isAccount($username) ||
 				RiskHelper::isCommonUsername($this->params, $username));
@@ -243,14 +243,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 
 		// $username is what was typed; the entry only holds a hash of it if
 		// it isn't an account (see usernameForStorage())
-		if ((bool) $this->params->get('notifyFailedOnlyExisting', false) &&
+		if (Settings::bool($this->params, 'notifyFailedOnlyExisting') &&
 			!$this->isAccount($username))
 		{
 			$this->logger->log('Not notifying of failed login: the username does not belong to an account', Log::DEBUG);
 		}
 		else
 		{
-			$this->notifier()->failedLogin($logEntry, $this->intParam('notifyFailedNumber', 0));
+			$this->notifier()->failedLogin($logEntry, $this->intParam('notifyFailedNumber'));
 		}
 
 		$delay = $this->policy->delaySeconds($logEntry, $riskScore);
@@ -298,26 +298,46 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function notifyOfBlock($logEntry, $id, $duration, $targetedOtherAccounts)
 	{
 		$this->notifier()->blockedNotifyAdmin($logEntry, BlockPolicy::realDuration($duration),
-			$this->intParam('notifyBlockedNumber', 5));
+			$this->intParam('notifyBlockedNumber'));
 		if (!$this->policy->notifiesBlockedUser())
 		{
 			return;
 		}
-		$userEmail = $this->repositories->users()->emailByUsername($logEntry->username);
-		if ($userEmail == null)
+		// the failed login may have been typed with the email address, or in
+		// another case: matched as Joomla matches a login (and accountExists())
+		$account = $this->repositories->users()->accountByLogin($logEntry->username);
+		if ($account === null)
 		{
 			$this->logger->log('Unknown user ('.$logEntry->username.') blocked, not sending any notifications', Log::DEBUG);
 			return;
 		}
-		$withheld = $this->policy->whyNoUnblockMail($logEntry, $this->clientAddress, $targetedOtherAccounts);
+		$userEmail = $account['email'];
+		$withheld = $this->policy->whyNoUnblockMail($logEntry, $this->clientAddress, $targetedOtherAccounts,
+			$account['username']);
 		if ($withheld !== null)
 		{
 			$this->logger->log("Existing user '".$logEntry->username."' was blocked, but ".$withheld.
 				' - not sending unblock instructions', Log::INFO);
 			return;
 		}
+		try
+		{
+			$token = TokenHelper::getToken();
+		}
+		catch (\Throwable $e)
+		{
+			// no source of randomness: no link rather than a weak one
+			$this->logger->log('Could not make an unblock token: '.$e->getMessage(), Log::ERROR);
+			return;
+		}
+		if ($this->repositories->unblockTokens()->add($id, $token, $account['username']) === null)
+		{
+			// a link whose token isn't stored would lead nowhere
+			$this->logger->log("Existing user '".$logEntry->username."' was blocked, but the unblock token ".
+				'could not be stored - not sending unblock instructions', Log::ERROR);
+			return;
+		}
 		$this->logger->log("Existing user '".$logEntry->username."' was blocked, sending unblock instructions", Log::INFO);
-		$token = $this->repositories->unblockTokens()->add($id, TokenHelper::getToken(), $logEntry->username);
 		$this->notifier()->sendUnblockMail($userEmail, TokenHelper::unblockLink($token));
 	}
 
@@ -342,11 +362,13 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info = new \stdClass();
 		$info->ipaddress = $ipAddress;
 		$info->username = (string) ($user['username'] ?? '');
+		// failed logins may have been typed with the email address
+		$info->email = (string) ($user['email'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
 		$this->logins->recordSuccessfulLogin($info, $this->trackedAddress($info->ipaddress),
 			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
-				$this->intParam('ipv6PrefixLength', Settings::Defaults['ipv6PrefixLength']))));
+				$this->intParam('ipv6PrefixLength'))));
 	}
 
 	public function onAfterInitialise($event)

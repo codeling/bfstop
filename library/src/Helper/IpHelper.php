@@ -92,7 +92,11 @@ class IpHelper
 			(int) $parts[1] <= (strpos($parts[0], ':') !== false ? 128 : 32);
 	}
 
-	private static function prefixMask($bits, $length = 16)
+	/**
+	 * The network mask of a prefix length of $bits, as a binary string of
+	 * $length bytes (16 for IPv6, 4 for IPv4).
+	 */
+	public static function prefixMask($bits, $length = 16)
 	{
 		$mask = str_repeat("\xff", intdiv($bits, 8));
 		if ($bits % 8 > 0)
@@ -244,9 +248,9 @@ class IpHelper
 		}
 		$settings = array('useProxy' => false, 'proxyIpAddress' => '',
 			'header' => 'HTTP_X_FORWARDED_FOR', 'trustedProxies' => array());
-		$settings['useProxy'] = (bool) $params->get('useProxy', false);
-		$settings['proxyIpAddress'] = (string) $params->get('proxyIpAddress', '');
-		$settings['header'] = (string) $params->get('proxyHeaderSource', 'HTTP_X_FORWARDED_FOR');
+		$settings['useProxy'] = Settings::bool($params, 'useProxy');
+		$settings['proxyIpAddress'] = Settings::string($params, 'proxyIpAddress');
+		$settings['header'] = Settings::string($params, 'proxyHeaderSource');
 		if ($settings['useProxy'])
 		{
 			$settings['trustedProxies'] = self::parseTrustedProxies($settings['proxyIpAddress']);
