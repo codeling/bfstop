@@ -94,16 +94,44 @@ class HtaccessHelper
 		return $this->path;
 	}
 
+	public const ServerApache = 'apache';
+	public const ServerLiteSpeed = 'litespeed';
+	public const ServerNginx = 'nginx';
+	public const ServerOther = 'other';
+
 	/**
-	 * Check if .htaccess file is found, readable and writeable.
+	 * Which web server the SERVER_SOFTWARE $serverSoftware names, as far as
+	 * the .htaccess file goes: Apache reads it; nginx never does (the blocks
+	 * in it do nothing); LiteSpeed reads it, but not every directive of
+	 * Apache - whether it honours the <If> sections the blocks are written
+	 * in depends on its edition and version. Anything else (or a server
+	 * which doesn't say) is "other".
+	 */
+	public static function webServer($serverSoftware): string
+	{
+		$software = strtolower((string) $serverSoftware);
+		foreach (array(self::ServerLiteSpeed, self::ServerNginx, self::ServerApache) as $server)
+		{
+			if (str_contains($software, $server))
+			{
+				return $server;
+			}
+		}
+		return self::ServerOther;
+	}
+
+	/**
+	 * Check if .htaccess file is found, readable and writeable, and which web
+	 * server the site runs on (see webServer()).
 	 *
 	 * @return array
 	 */
 	public function checkRequirements()
 	{
+		$server = self::webServer($_SERVER['SERVER_SOFTWARE'] ?? '');
 		$result = array(
-			'apacheserver' =>
-				strstr(preg_replace("/[^a-z]+/", "", strtolower($_SERVER['SERVER_SOFTWARE'] ?? '')), 'apache'),
+			'server'       => $server,
+			'apacheserver' => $server === self::ServerApache,
 			'found'		=> file_exists($this->path),
 			'readable'	=> is_readable($this->path),
 			'writeable'	=> is_writeable($this->path)

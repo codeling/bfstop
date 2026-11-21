@@ -67,9 +67,21 @@ class HtaccessHelperTest extends IntegrationTestCase
 		$_SERVER['SERVER_SOFTWARE'] = 'nginx/1.25';
 		$req = $this->helper()->checkRequirements();
 		$this->assertFalse($req['apacheserver']);
+		$this->assertSame(HtaccessHelper::ServerNginx, $req['server']);
 		$this->assertTrue($req['found']);
 		$this->assertTrue($req['readable']);
 		$this->assertTrue($req['writeable']);
+	}
+
+	public function testWebServer()
+	{
+		foreach (array('Apache/2.4.58 (Ubuntu)' => HtaccessHelper::ServerApache, 'Apache' => HtaccessHelper::ServerApache,
+			'nginx/1.25.4' => HtaccessHelper::ServerNginx, 'nginx' => HtaccessHelper::ServerNginx,
+			'LiteSpeed' => HtaccessHelper::ServerLiteSpeed, 'Microsoft-IIS/10.0' => HtaccessHelper::ServerOther,
+			'PHP 8.3.6 Development Server' => HtaccessHelper::ServerOther, '' => HtaccessHelper::ServerOther) as $software => $server)
+		{
+			$this->assertSame($server, HtaccessHelper::webServer($software), $software);
+		}
 	}
 
 	public function testNoFileMeansNoDeniedIPs()

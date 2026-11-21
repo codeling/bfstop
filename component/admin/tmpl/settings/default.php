@@ -26,6 +26,12 @@ use Joomla\CMS\Language\Text;
 						<?php echo Text::_($fieldset->description); ?>
 					</div>
 <?php endif; ?>
+<?php if ($fieldset->name === 'proxy' && $this->addressCheck !== ''): ?>
+					<div class="alert alert-info">
+						<h3 class="alert-heading h5"><?php echo Text::_('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_HEADING'); ?></h3>
+						<?php echo $this->addressCheck; ?>
+					</div>
+<?php endif; ?>
 					<div class="form-grid">
 						<?php echo $this->form->renderFieldset($fieldset->name); ?>
 					</div>

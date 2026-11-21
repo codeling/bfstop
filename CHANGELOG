@@ -1,5 +1,19 @@
 2.0.0 (unreleased)
   - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Hardening (issue #285): the page shown to a blocked address and the
+    unblock page may not be shown in another site's frame, and the unblock
+    page's type is not left to the browser to guess; with a proxy
+    configured, a request which didn't come through it is logged once an
+    hour for its address, not each time (anybody can send them, and push
+    the entries that matter out of the log); the proxy settings show where
+    the administrator's own request came from, its forwarding headers and
+    the address BFStop makes of them, and say that Client-Ip and
+    X-Cluster-Client-Ip are only safe if the proxy overwrites them; the
+    description of the blocking modes says which logins "Login Only" stops;
+    blocking through .htaccess is refused on nginx (which doesn't read the
+    file), LiteSpeed gets a warning of its own, and the warnings about the
+    .htaccess file only show where it is used; the release zips get a build
+    provenance attestation
   - Issue #294: the administrators' mail about a block lists the failed
     logins which led to it, not every failed login of the address still
     stored (for a permanent block: of ten years, including those of earlier

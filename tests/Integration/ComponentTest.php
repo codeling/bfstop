@@ -1027,6 +1027,72 @@ class ComponentTest extends IntegrationTestCase
 		$this->assertIsArray($valid);
 	}
 
+	public function testBlockingThroughHtaccessIsRefusedOnNginx()
+	{
+		// nginx never reads the file: the mode would only pretend to block
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+		$software = $_SERVER['SERVER_SOFTWARE'] ?? null;
+		$validate = function ($server, $mode)
+		{
+			$_SERVER['SERVER_SOFTWARE'] = $server;
+			$model = $this->model(SettingsModel::class);
+			$valid = $model->validate($this->settingsForm(), array('params' => array('enabledForOrigin' => array('1'),
+				'blockMode' => $mode)));
+			return array($valid, implode(' ', array_map('strval', $model->getErrors())));
+		};
+		try
+		{
+			list($valid, $errors) = $validate('nginx/1.25.4', 'htaccess');
+			$this->assertFalse($valid);
+			$this->assertStringContainsString('nginx', $errors);
+			$this->assertStringNotContainsString('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE', $errors);
+			list($valid) = $validate('nginx/1.25.4', 'full');
+			$this->assertIsArray($valid, 'another mode');
+			list($valid) = $validate('Apache/2.4.58 (Ubuntu)', 'htaccess');
+			$this->assertIsArray($valid, 'Apache');
+			list($valid) = $validate('LiteSpeed', 'htaccess');
+			$this->assertIsArray($valid, 'LiteSpeed reads the file: only a warning');
+		}
+		finally
+		{
+			if ($software === null)
+			{
+				unset($_SERVER['SERVER_SOFTWARE']);
+			}
+			else
+			{
+				$_SERVER['SERVER_SOFTWARE'] = $software;
+			}
+		}
+	}
+
+	public function testSettingsPageChecksTheClientAddress()
+	{
+		// where the administrator's request came from, the forwarding headers
+		// it carried and the address the plugin makes of it, for them to see
+		// whether the proxy settings fit
+		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');
+		$view = \Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView::class;
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7',
+			'HTTP_X_FORWARDED_FOR' => '203.0.113.5, <b>x</b>', 'HTTP_CLIENT_IP' => '', 'HTTP_HOST' => 'example.org'),
+			'203.0.113.5');
+		$this->assertStringContainsString('<code>198.51.100.7</code>', $check);
+		$this->assertStringContainsString('<code>X-Forwarded-For</code>', $check);
+		$this->assertStringContainsString('<code>203.0.113.5, &lt;b&gt;x&lt;/b&gt;</code>', $check, 'escaped');
+		$this->assertStringNotContainsString('Client-Ip', $check, 'an empty header is no header');
+		$this->assertStringContainsString('<strong><code>203.0.113.5</code></strong>', $check);
+		$this->assertStringNotContainsString('COM_BFSTOP_SETTINGS_ADDRESS_CHECK', $check, 'translated');
+
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7', 'HTTP_FORWARDED' => str_repeat('a', 500)),
+			'198.51.100.7');
+		$this->assertStringContainsString('<code>Forwarded</code>', $check);
+		$this->assertStringContainsString(str_repeat('a', 200).'…', $check, 'shortened');
+		$this->assertStringNotContainsString(str_repeat('a', 201), $check);
+
+		$check = $view::addressCheck(array('REMOTE_ADDR' => '198.51.100.7'), '198.51.100.7');
+		$this->assertStringContainsString(\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_NO_HEADER'), $check);
+	}
+
 	public function testSettingsPageProposesTheLiveSite()
 	{
 		Factory::getLanguage()->load('com_bfstop', BFSTOP_COMPONENT_ROOT.'/admin');

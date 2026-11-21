@@ -290,6 +290,9 @@ class BlockedRequestTest extends IntegrationTestCase
 		$this->assertContains('X-Robots-Tag: noindex, nofollow', $headers);
 		$this->assertContains('Content-Type: text/html; charset=utf-8', $headers);
 		$this->assertContains('X-Content-Type-Options: nosniff', $headers);
+		// and not shown in another site's frame
+		$this->assertContains("Content-Security-Policy: frame-ancestors 'none'", $headers);
+		$this->assertContains('X-Frame-Options: DENY', $headers);
 		foreach ($headers as $header)
 		{
 			$this->assertStringStartsNotWith('HTTP/', $header, 'the status is set with http_response_code()');

@@ -10,7 +10,9 @@ namespace Codeling\Component\Bfstop\Administrator\View\Settings;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
@@ -26,6 +28,7 @@ class HtmlView extends BaseHtmlView
 	protected bool $canSave = false;
 	protected string $pluginVersion = '';
 	protected string $componentVersion = '';
+	protected string $addressCheck = '';
 
 	public function display($tpl = null)
 	{
@@ -54,6 +57,8 @@ class HtmlView extends BaseHtmlView
 		$this->pluginVersion = (string) $versions['plugin'];
 		$this->componentVersion = (string) $versions['component'];
 
+		$this->addressCheck = self::addressCheck($_SERVER, IpHelper::getAddress(LogHelper::getLogger()));
+
 		if (!BlockPolicy::hasLiveSite())
 		{
 			Factory::getApplication()->enqueueMessage(self::liveSiteNote(), 'warning');
@@ -75,6 +80,52 @@ class HtmlView extends BaseHtmlView
 		$line = 'public $live_site = '.var_export(rtrim(Uri::root(), '/'), true).';';
 		return Text::sprintf('COM_BFSTOP_WARNING_NO_LIVE_SITE',
 			'<code>'.htmlspecialchars($line, ENT_QUOTES, 'UTF-8').'</code>');
+	}
+
+	// how much of a forwarding header the check shows at most
+	private const HeaderDisplayLength = 200;
+
+	/**
+	 * The check of the proxy settings on their tab: where the request of the
+	 * administrator's browser came from, the forwarding headers it carried
+	 * and which client address the plugin makes of that with the saved
+	 * settings. An address which is not the one of the administrator's
+	 * computer (the proxy's, one the browser can't have) shows that the
+	 * settings don't fit, before visitors get blocked for it.
+	 *
+	 * @param array  $server $_SERVER
+	 * @param string $used   IpHelper::getAddress() for the request
+	 * @return string HTML
+	 */
+	public static function addressCheck(array $server, $used)
+	{
+		$escape = fn ($value) => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+		$lines = array(Text::sprintf('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_REMOTE',
+			'<code>'.$escape($server['REMOTE_ADDR'] ?? '').'</code>'));
+		$headers = 0;
+		foreach (IpHelper::KnownProxyHeaders as $header)
+		{
+			if (!isset($server[$header]) || (string) $server[$header] === '')
+			{
+				continue;
+			}
+			// HTTP_X_FORWARDED_FOR: X-Forwarded-For
+			$name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($header, 5)))));
+			$value = (string) $server[$header];
+			if (mb_strlen($value, 'UTF-8') > self::HeaderDisplayLength)
+			{
+				$value = mb_substr($value, 0, self::HeaderDisplayLength, 'UTF-8').'…';
+			}
+			$lines[] = Text::sprintf('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_HEADER',
+				'<code>'.$escape($name).'</code>', '<code>'.$escape($value).'</code>');
+			++$headers;
+		}
+		if ($headers === 0)
+		{
+			$lines[] = Text::_('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_NO_HEADER');
+		}
+		$lines[] = Text::sprintf('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_USED', '<strong><code>'.$escape($used).'</code></strong>');
+		return '<ul class="mb-0"><li>'.implode('</li><li>', $lines).'</li></ul>';
 	}
 
 	protected function addToolbar()

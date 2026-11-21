@@ -154,7 +154,11 @@ class Responder
 	 * site either: not for search engines (it is what a crawler gets for
 	 * every address of the site while its own is blocked), and with its type
 	 * and character set named - the server's defaults are not necessarily
-	 * those of the message - and not to be guessed by the browser.
+	 * those of the message - and not to be guessed by the browser. Nor may
+	 * another site show it in a frame (it is echoed without the template, so
+	 * the headers the site's template or Joomla's HTTP headers plugin would
+	 * send are missing): frame-ancestors for current browsers, X-Frame-Options
+	 * for older ones.
 	 */
 	public static function blockedResponseHeaders()
 	{
@@ -163,6 +167,8 @@ class Responder
 			'Pragma: no-cache',
 			'Content-Type: text/html; charset=utf-8',
 			'X-Content-Type-Options: nosniff',
+			"Content-Security-Policy: frame-ancestors 'none'",
+			'X-Frame-Options: DENY',
 			'X-Robots-Tag: noindex, nofollow',
 		);
 	}

@@ -24,6 +24,26 @@ class LockHelperTest extends TestCase
 		@unlink($this->file);
 	}
 
+	public function testDueOnceInTheInterval()
+	{
+		$this->assertTrue(LockHelper::due($this->file, 3600), 'never done');
+		$this->assertFileExists($this->file, 'the stamp is written');
+		$this->assertFalse(LockHelper::due($this->file, 3600), 'done just now');
+		touch($this->file, time() - 3600);
+		$this->assertTrue(LockHelper::due($this->file, 3600), 'the interval is over');
+		$this->assertFalse(LockHelper::due($this->file, 3600));
+		// a stamp from the future (the clock was set back) doesn't silence it
+		touch($this->file, time() + 7200);
+		$this->assertTrue(LockHelper::due($this->file, 3600));
+	}
+
+	public function testDueWhereTheStampCantBeWritten()
+	{
+		$file = sys_get_temp_dir().'/bfstop-no-such-directory-'.bin2hex(random_bytes(6)).'/x.stamp';
+		$this->assertTrue(LockHelper::due($file, 3600));
+		$this->assertTrue(LockHelper::due($file, 3600), 'always: there is nothing to tell it was done');
+	}
+
 	public function testLockIsExclusiveUntilReleased()
 	{
 		$first = LockHelper::acquire($this->file, 0);

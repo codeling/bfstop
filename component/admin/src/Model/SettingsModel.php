@@ -120,6 +120,15 @@ class SettingsModel extends AdminModel
 			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
 			return false;
 		}
+		if (is_array($valid) && ($valid['params']['blockMode'] ?? '') === 'htaccess' &&
+			HtaccessHelper::webServer($_SERVER['SERVER_SOFTWARE'] ?? '') === HtaccessHelper::ServerNginx)
+		{
+			// nginx never reads the file: the mode would only pretend to block
+			// in the web server
+			$this->setError(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE',
+				Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS'), Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL')));
+			return false;
+		}
 		if (is_array($valid))
 		{
 			// the floor of the risk scoring is a floor of the threshold for
