@@ -8,7 +8,7 @@
 // Simulates a failed login with the username given as second argument from
 // the IP address given as first argument, as far as the plugin is concerned:
 // dispatches onUserLoginFailure to the plugin, which reads its settings from
-// the database as it does in a real request (and may delay or block). With
+// the database as it does in a real request (and may block). With
 // --api it is a failed login to the Web Services API (whose response holds
 // no username), --server=NAME=VALUE sets $_SERVER[NAME] (e.g. a header),
 // --live-site=URL the site's $live_site. --count-queries prints the queries

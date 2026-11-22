@@ -223,6 +223,57 @@ class InstallerScriptTest extends IntegrationTestCase
 		}
 	}
 
+	public function testTheUpdateRemovesTheDelaysAndTellsWhoUsedThem()
+	{
+		// 2.0.0 delays no response (a held response holds a PHP worker)
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$notice = strip_tags(\Joomla\CMS\Language\Text::_('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_DELAYS_REMOVED'));
+		$noticeShown = function () use ($notice)
+		{
+			return in_array($notice, array_map('strip_tags', $this->messages()), true);
+		};
+		$original = $this->getSettings();
+		try
+		{
+			$params = $this->update('1.5.2', array('blockEnabled' => '1', 'blockNumber' => '7', 'delayDuration' => '20',
+				'adaptiveDelay' => '0', 'adaptiveDelayMax' => '60', 'adaptiveDelayThresholdMin' => '50',
+				'adaptiveDelayThresholdMax' => '200'));
+			foreach (\PlgsystembfstopInstallerScript::RemovedDelaySettings as $name)
+			{
+				$this->assertArrayNotHasKey($name, $params, $name);
+			}
+			$this->assertSame('7', $params['blockNumber'], 'the other settings stay');
+			$this->assertTrue($noticeShown(), 'responses were delayed');
+
+			// the adaptive delay alone delayed them as well
+			$this->update('1.5.2', array('blockEnabled' => '1', 'delayDuration' => '0', 'adaptiveDelay' => '1',
+				'adaptiveDelayMax' => '30'));
+			$this->assertTrue($noticeShown());
+
+			// saved, but delaying nothing: removed without a notice
+			$params = $this->update('1.5.2', array('blockEnabled' => '1', 'delayDuration' => '0', 'adaptiveDelay' => '0'));
+			$this->assertArrayNotHasKey('delayDuration', $params);
+			$this->assertFalse($noticeShown());
+			$this->update('2.0.0', array('blockMode' => 'full'));
+			$this->assertFalse($noticeShown());
+		}
+		finally
+		{
+			$this->setSettings($original);
+		}
+	}
+
+	public function testRemovingTheDelaySettings()
+	{
+		$params = array('delayDuration' => '5', 'blockNumber' => '3');
+		$this->assertSame(array('delayed' => true), \PlgsystembfstopInstallerScript::removeDelaySettings($params));
+		$this->assertSame(array('blockNumber' => '3'), $params);
+		$this->assertNull(\PlgsystembfstopInstallerScript::removeDelaySettings($params), 'none left');
+		$params = array('adaptiveDelay' => '1', 'adaptiveDelayMax' => '0');
+		$this->assertSame(array('delayed' => false), \PlgsystembfstopInstallerScript::removeDelaySettings($params),
+			'adaptive, but up to 0 seconds');
+	}
+
 	public function testStoredAddressesAreConvertedByTheUpdateFromBefore200()
 	{
 		// entries of earlier versions, or typed by hand, are not in the canonical form

@@ -301,8 +301,8 @@ class ComponentTest extends IntegrationTestCase
 		$valid = array('enabledForOrigin' => array('1', '4'));
 		$form = $this->settingsForm();
 		$this->assertTrue($form->validate(array('params' => $valid + array('blockMode' => 'htaccess', 'blockNumber' => '10',
-			'delayDuration' => '20', 'emailaddress' => 'a@example.org; b@example.org'))));
-		foreach (array(array('blockMode', 'everything'), array('delayDuration', '100000'), array('blockNumber', '-3'),
+			'accountAttackPoints' => '3', 'emailaddress' => 'a@example.org; b@example.org'))));
+		foreach (array(array('blockMode', 'everything'), array('accountAttackPoints', '100000'), array('blockNumber', '-3'),
 			array('ipv6PrefixLength', '0'), array('unknownUsernameMode', 'x'), array('maxBlocksBefore', '7'),
 			array('enabledForOrigin', array('3')), array('enabledForOrigin', '')) as list($name, $value))
 		{

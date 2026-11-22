@@ -34,7 +34,7 @@ function curlHandle(string $url, array $o = [])
 	$id = ++$GLOBALS['reqid'];
 	$ch = curl_init($url);
 	// A browser-like User-Agent: the current plugin version scores requests without one as
-	// suspicious, and delays the answer to a failed login of such a request (riskDelaySecondsPerPoint)
+	// suspicious, which lowers the number of failed logins allowed before a block
 	$headers = array_merge(['User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0'],
 		$o['headers'] ?? [], ['X-Bench-Id: ' . $id]);
 	curl_setopt_array($ch, [
@@ -385,8 +385,8 @@ function scenarios(): array
 					$st = array('cookies' => tempnam(sys_get_temp_dir(), 'bfperf'), 'blocked' => false);
 					$st['token'] = fetchLoginToken($site, array('ip' => $ip, 'cookies' => $st['cookies']));
 				}
-				// another user name every time: the same one over and over would trigger
-				// the account-level throttle of the current version (a deliberate 5 s sleep)
+				// another user name every time: the same one over and over would count as an
+				// attack on one account in the current version, and get addresses blocked sooner
 				$req = loginRequest($site, $st['token'], 'perf_target_' . $i, $ip, $st['cookies']);
 				$r = http($req['url'], $req);
 				$label = 'attack_fail';

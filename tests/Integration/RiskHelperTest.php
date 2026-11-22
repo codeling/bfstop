@@ -9,6 +9,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Library\Bfstop\Repository\DnsCacheRepository;
+use Codeling\Library\Bfstop\Repository\FailedLoginRepository;
 use Codeling\Library\Bfstop\Repository\KnownIpRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\LoginService;
@@ -44,6 +45,7 @@ class RiskHelperTest extends IntegrationTestCase
 			'riskUserAgentEnabled'      => 0,
 			'riskGeoEnabled'            => 0,
 			'riskReverseDnsEnabled'     => 0,
+			'accountAttackEnabled'      => 0,
 		), $overrides));
 	}
 
@@ -224,5 +226,31 @@ class RiskHelperTest extends IntegrationTestCase
 		$params = self::allOff(array('riskKnownIpEnabled' => 1, 'riskKnownIpPoints' => 5, 'ipv6PrefixLength' => 128));
 		$this->assertSame(-5, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::5', 'bob'));
 		$this->assertSame(0, RiskHelper::computeScore($db, $this->logger, $params, '2001:db8:1:2::6', 'bob'));
+	}
+
+	public function testTheAccountAttackSignalCountsTheUsernameAsStored()
+	{
+		// the hash of a username which is no account, not what was typed
+		$failed = $this->createMock(FailedLoginRepository::class);
+		$failed->expects($this->once())->method('countUnhandledForUsername')
+			->with(30, 'h:0123abcd', '2026-01-02 03:04:05')->willReturn(7);
+		$repos = $this->repos();
+		$repos->method('failedLogins')->willReturn($failed);
+		$params = self::allOff(array('accountAttackEnabled' => 1, 'accountCheckInterval' => 30,
+			'accountBlockNumber' => 7, 'accountAttackPoints' => 3));
+		$entry = (object) array('username' => 'h:0123abcd', 'logtime' => '2026-01-02 03:04:05');
+		$this->assertSame(3, RiskHelper::computeScore($repos, $this->logger, $params, '203.0.113.5', 'jdoe', null, $entry));
+	}
+
+	public function testTheAccountAttackSignalFailsSafe()
+	{
+		$failed = $this->createMock(FailedLoginRepository::class);
+		$failed->method('countUnhandledForUsername')->willThrowException(new \RuntimeException('table gone'));
+		$repos = $this->repos();
+		$repos->method('failedLogins')->willReturn($failed);
+		$params = self::allOff(array('accountAttackEnabled' => 1, 'accountBlockNumber' => 1));
+		$entry = (object) array('username' => 'jdoe', 'logtime' => '2026-01-02 03:04:05');
+		$this->assertSame(0, RiskHelper::computeScore($repos, $this->logger, $params, '203.0.113.5', 'jdoe', null, $entry));
+		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'table gone'));
 	}
 }

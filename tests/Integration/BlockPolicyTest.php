@@ -9,6 +9,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Library\Bfstop\Helper\NotifierHelper;
+use Codeling\Library\Bfstop\Helper\RiskHelper;
 use Codeling\Library\Bfstop\Repository\BlockRepository;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
@@ -21,9 +22,9 @@ use Joomla\Registry\Registry;
 
 /**
  * What the settings make of a failed login, on its own: FailedLoginTest runs
- * the whole plugin, which shows that something is blocked, delayed or mailed,
+ * the whole plugin, which shows that something is blocked or mailed,
  * but not where each of the rules has its edges (the threshold, the cap of the
- * progressive durations, the thresholds of the adaptive delay, ...).
+ * progressive durations, the threshold of an attacked account, ...).
  */
 class BlockPolicyTest extends IntegrationTestCase
 {
@@ -456,69 +457,35 @@ class BlockPolicyTest extends IntegrationTestCase
 		$this->assertFalse($this->withLiveSite('  ', function () { return BlockPolicy::hasLiveSite(); }));
 	}
 
-	public function testTheDelayIsTheBaseDelayPlusOneSecondPerPointOfPositiveRisk()
+	public function testAnAccountUnderAttackLowersTheThresholdOfEveryAddressTryingIt()
 	{
-		$policy = $this->policy(array('delayDuration' => 3, 'riskDelaySecondsPerPoint' => 2, 'accountThrottleEnabled' => 0));
-		$entry = $this->entry();
-		$this->assertEquals(3, $policy->delaySeconds($entry, 0));
-		$this->assertEquals(7, $policy->delaySeconds($entry, 2));
-		$this->assertEquals(3, $policy->delaySeconds($entry, -5), 'trust never reduces the delay');
-		$this->assertEquals(0, $this->policy(array('accountThrottleEnabled' => 0))->delaySeconds($entry, 10), 'no delay by default');
-	}
-
-	public function testTheAccountThrottleAddsDelayOnceEnoughFailedLoginsAimedAtTheUsername()
-	{
-		$params = array('accountThrottleEnabled' => 1, 'accountCheckInterval' => 60,
-			'accountBlockNumber' => 3, 'accountThrottleDelay' => 5, 'riskDelaySecondsPerPoint' => 0);
-		$entry = $this->entry('bob');
+		// the signal of the risk score which took the place of the account
+		// throttle's delay (see RiskHelper::accountAttackScore())
+		$params = array('accountAttackEnabled' => 1, 'accountCheckInterval' => 60, 'accountBlockNumber' => 3,
+			'accountAttackPoints' => 4, 'riskKnownIpEnabled' => 0, 'riskCommonUsernameEnabled' => 0,
+			'riskUserAgentEnabled' => 0, 'riskGeoEnabled' => 0, 'riskReverseDnsEnabled' => 0,
+			'blockNumber' => 10, 'riskBlockNumberReductionPerPoint' => 1, 'riskMinBlockNumber' => 2);
+		$score = function (array $overrides = array(), $username = 'bob') use ($params)
+		{
+			return RiskHelper::computeScore($this->repos, $this->logger, new Registry($overrides + $params), self::Ip,
+				$username, null, $this->entry($username));
+		};
 		// from any address; not the ones of another account, nor too old, nor handled already
 		$this->failedLogins(1, 5, 'bob', '203.0.113.1');
 		$this->failedLogins(1, 5, 'bob', '203.0.113.2');
 		$this->failedLogins(5, 5, 'carol', '203.0.113.3');
 		$this->failedLogins(5, 120, 'bob', '203.0.113.4');
 		$this->failedLogins(5, 5, 'bob', '203.0.113.5', 1);
-		$this->assertEquals(0, $this->policy($params)->delaySeconds($entry, 0), '2 of 3');
+		$this->assertSame(0, $score(), '2 of 3');
 
 		$this->failedLogins(1, 5, 'bob', '203.0.113.6');
-		$this->assertEquals(5, $this->policy($params)->delaySeconds($entry, 0), '3 of 3');
-		$this->assertEquals(0, $this->policy($params)->delaySeconds($this->entry('dave'), 0), 'another account');
-		$this->assertEquals(0, $this->policy(array('accountThrottleEnabled' => 0) + $params)->delaySeconds($entry, 0), 'switched off');
-		$this->assertEquals(0, $this->policy(array('accountThrottleDelay' => 0) + $params)->delaySeconds($entry, 0));
-		$this->assertEquals(0, $this->policy(array('accountThrottleDelay' => -3) + $params)->delaySeconds($entry, 0), 'never negative');
-		$this->assertEquals(5 + 4, $this->policy(array('delayDuration' => 4) + $params)->delaySeconds($entry, 0), 'adds to the base delay');
-	}
-
-	public function testTheAdaptiveDelayGrowsWithTheFailedLoginsOfTheLastHour()
-	{
-		$params = array('accountThrottleEnabled' => 0, 'adaptiveDelay' => 1, 'delayDuration' => 1,
-			'adaptiveDelayMax' => 11, 'adaptiveDelayThresholdMin' => 10, 'adaptiveDelayThresholdMax' => 20);
-		$entry = $this->entry();
-		$this->failedLogins(5, 10, 'x');
-		$this->assertEquals(1, $this->policy($params)->delaySeconds($entry, 0), 'below the lower threshold');
-		$this->failedLogins(10, 10, 'x'); // 15
-		$this->assertEquals(6, $this->policy($params)->delaySeconds($entry, 0), 'halfway between the thresholds');
-		$this->failedLogins(15, 10, 'x'); // 30
-		$this->assertEquals(11, $this->policy($params)->delaySeconds($entry, 0), 'capped at the maximum');
-		$this->assertEquals(1, $this->policy(array('adaptiveDelay' => 0) + $params)->delaySeconds($entry, 0), 'switched off');
-		$this->assertEquals(11 + 6, $this->policy(array('riskDelaySecondsPerPoint' => 2) + $params)->delaySeconds($entry, 3),
-			'plus the delay for the risk');
-	}
-
-	public function testThresholdsOfTheAdaptiveDelayInTheWrongOrderAreSwapped()
-	{
-		$params = array('accountThrottleEnabled' => 0, 'adaptiveDelay' => 1, 'delayDuration' => 1,
-			'adaptiveDelayMax' => 11, 'adaptiveDelayThresholdMin' => 20, 'adaptiveDelayThresholdMax' => 10);
-		$this->failedLogins(15, 10, 'x');
-		$this->assertEquals(6, $this->policy($params)->delaySeconds($this->entry(), 0));
-		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'Swapping'));
-	}
-
-	public function testEqualThresholdsOfTheAdaptiveDelayFallBackToTheBaseDelay()
-	{
-		$params = array('accountThrottleEnabled' => 0, 'adaptiveDelay' => 1, 'delayDuration' => 2,
-			'adaptiveDelayMax' => 11, 'adaptiveDelayThresholdMin' => 10, 'adaptiveDelayThresholdMax' => 10);
-		$this->failedLogins(30, 10, 'x');
-		$this->assertEquals(2, $this->policy($params)->delaySeconds($this->entry(), 0));
-		$this->assertTrue($this->logger->hasMessage(Log::WARNING, 'cannot be configured to the same value'));
+		$this->assertSame(4, $score(), '3 of 3');
+		$this->assertTrue($this->logger->hasMessage(Log::INFO, 'Account under attack'));
+		$this->assertSame(10 - 4, $this->policy($params)->effectiveBlockNumber($score()));
+		$this->assertSame(0, $score(array(), 'dave'), 'another account');
+		$this->assertSame(0, $score(array('accountAttackEnabled' => 0)), 'switched off');
+		$this->assertSame(0, $score(array('accountAttackPoints' => 0)), 'no points: only logged');
+		$this->assertSame(0, RiskHelper::computeScore($this->repos, $this->logger, new Registry($params), self::Ip, 'bob'),
+			'without the failed login as recorded');
 	}
 }

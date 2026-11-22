@@ -71,7 +71,6 @@ class RepositoriesTest extends IntegrationTestCase
 		$this->assertSame(3, $this->repos->failedLogins()->countUnhandledFromAddress(60, '203.0.113.5', $now));
 		$this->assertSame(4, $this->repos->failedLogins()->countUnhandledFromAddress(180, '203.0.113.5', $now));
 		$this->assertSame(4, $this->repos->failedLogins()->countUnhandledForUsername(60, 'bob', $now));
-		$this->assertSame(4, (int) $this->repos->failedLogins()->countInLastHour());
 		$entries = $this->repos->failedLogins()->listUnhandledFromAddress(60, '203.0.113.5', $now);
 		$this->assertCount(3, $entries);
 		$this->assertSame(array('bob', 'bob', 'bob'), array_column($entries, 'username'));

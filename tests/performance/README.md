@@ -98,11 +98,11 @@ The report is written to `$BENCH_DIR/results/<time>/report.md` (with
 - Both versions are used with their default settings, which are not the same:
   e.g. what the current version does with a failed login depends on its risk
   score. Requests carry a browser's `User-Agent`, as without one the current
-  version scores the request as suspicious and, by default, delays the answer
-  to a failed login by several seconds (`riskDelaySecondsPerPoint`) - a
-  deliberate cost to a bot, but it would swamp everything else here. Likewise
-  every failed login uses another user name: repeating one would trigger the
-  account-level throttle, a 5 second delay after 20 failures within an hour.
+  version scores the request as suspicious and blocks its address after fewer
+  failed logins than 1.5.2, which would make the attack scenarios
+  incomparable. Likewise every failed login uses another user name: repeating
+  one would count as an attack on that account after 20 failures within an
+  hour, with the same effect.
 
 ## Results
 
@@ -164,6 +164,7 @@ What stands out:
   it answers blocked clients more slowly than 1.5.2 (205 against 242
   requests/s here). The cause was not investigated.
 
-The delays which the current version adds on purpose (to failed logins without
-a `User-Agent`, and to repeated failures for one user name) are not part of
-these numbers, see above.
+These runs were made while the current version still delayed some failed
+logins on purpose (those without a `User-Agent`, and repeated failures for one
+user name). The requests avoided both, see above, so the numbers hold for the
+version without delays as well.

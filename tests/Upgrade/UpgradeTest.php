@@ -111,6 +111,9 @@ class UpgradeTest extends IntegrationTestCase
 			'the hint that the API is protected now, only when updating from before 2.0.0');
 		$this->assertSame(0, substr_count($log, 'protects your site with its default settings'),
 			'the hint of a new installation');
+		// the seed delays failed logins by 90 seconds, which 2.0.0 doesn't any more
+		$this->assertSame(1, substr_count($log, 'no longer delays the response to failed logins'),
+			'the notice that the delays are gone');
 	}
 
 	public function testSettingsAreKeptAndMigrated()
@@ -124,7 +127,11 @@ class UpgradeTest extends IntegrationTestCase
 		$params = json_decode($this->getSettings(), true);
 		$this->assertSame('full', $params['blockMode'] ?? null, 'blockEnabled/useHtaccess became blockMode');
 		$this->assertSame('15', (string) $params['blockNumber']);
-		$this->assertSame('90', (string) $params['delayDuration']);
+		foreach (array('delayDuration', 'adaptiveDelay', 'adaptiveDelayMax', 'adaptiveDelayThresholdMin',
+			'adaptiveDelayThresholdMax') as $removed)
+		{
+			$this->assertArrayNotHasKey($removed, $params, 'the delays are gone in 2.0.0');
+		}
 		$this->assertSame(version_compare(getenv('UPGRADE_FROM'), '2.0.0-dev', '<') ? 7 : 3,
 			(int) $params['enabledForOrigin'], 'frontend and backend became frontend, backend and API (the seed is in 1.x form)');
 	}

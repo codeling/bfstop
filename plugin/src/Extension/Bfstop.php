@@ -212,19 +212,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->logger->log('Failed login attempt from IP address '.
 			$logEntry->ipaddress, Log::DEBUG);
 
-		// Everything is recorded and evaluated *before* the delay below. The
-		// password has been checked by now, so the delay only holds back the
-		// response; if the attempt was only counted after the sleep, a burst
-		// of parallel requests would all run before the first of them
-		// reached the block threshold, and each of them would tie up a
-		// worker for the whole delay.
+		// Recorded first, then evaluated: a burst of parallel requests has to
+		// be counted as it comes in, so that the one which reaches the block
+		// threshold blocks the address (see LoginTurn).
 		$this->logins->recordFailedLogin($logEntry);
 
 		// after recording it: a signal of the score may take time (the
 		// reverse DNS lookup), and parallel requests waiting for it must
-		// already count
+		// already count; the count of the account's failed logins includes
+		// this one
 		$riskScore = RiskHelper::computeScore($this->repositories, $this->logger, $this->params, $ipAddress, $username,
-			$logEntry->ipaddress);
+			$logEntry->ipaddress, $logEntry);
 
 		// counted once (a query) for the message of the remaining attempts and
 		// the decision to block; neither is made without blocking
@@ -241,8 +239,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			}
 		}
 		// counted, and blocked if that was one too many: the next login of
-		// this address may be handled (see LoginTurn). The mail below and the
-		// delay take time it needn't wait for
+		// this address may be handled (see LoginTurn). The mail below takes
+		// time it needn't wait for
 		$this->loginTurn->end();
 
 		// $username is what was typed; the entry only holds a hash of it if
@@ -255,23 +253,6 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		else
 		{
 			$this->notifier()->failedLogin($logEntry, $this->intParam('notifyFailedNumber'));
-		}
-
-		$delay = $this->policy->delaySeconds($logEntry, $riskScore);
-		if ($delay > 0)
-		{
-			// a blocked address gets nothing more out of a slow response;
-			// don't let it hold on to a worker (attackers could otherwise use
-			// the delay to exhaust the server's workers)
-			if ($this->repositories->blocks()->isBlocked($ipAddress))
-			{
-				$this->logger->log('Not delaying the response, IP address '.
-					$ipAddress.' is blocked', Log::DEBUG);
-			}
-			else
-			{
-				$this->responder->delay($delay);
-			}
 		}
 	}
 

@@ -81,7 +81,7 @@ INSERT INTO `#__bfstop_username_stats` (username, attempts, first_attempt, last_
 	FROM `#__bfstop_failedlogin` GROUP BY username
 	ON DUPLICATE KEY UPDATE attempts=attempts;
 
--- speeds up the per-username (account-level) throttle query
+-- speeds up the per-username count (attacks on one account)
 ALTER TABLE `#__bfstop_failedlogin` ADD INDEX username_logtime (username, logtime) /** CAN FAIL **/;
 -- the failed logins of an address within a time span (counted for every
 -- failed login), and those of the last hour / older than the purge age

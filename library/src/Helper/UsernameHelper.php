@@ -21,8 +21,9 @@ defined('_JEXEC') or die;
  * and the well-known names an admin configured as "common usernames" - are
  * stored readably; any other value is replaced by a keyed hash. The hash is
  * still the same for the same input, so attempts against one unknown name
- * are still counted together (e.g. for the account throttle and the
- * username statistics), but the input cannot be read back from it.
+ * are still counted together (e.g. for the signal of an attack on one
+ * account and the username statistics), but the input cannot be read back
+ * from it.
  */
 class UsernameHelper
 {
