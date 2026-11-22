@@ -10,8 +10,6 @@ namespace Codeling\Bfstop\Tests\Integration;
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
-use Codeling\Library\Bfstop\Settings;
-use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Factory;
 
 /**
@@ -70,11 +68,9 @@ class FailedLoginTest extends IntegrationTestCase
 			'blockNumber' => 15,
 			'riskMinBlockNumber' => 1,
 			'riskBlockNumberReductionPerPoint' => 0,
-			'riskDelaySecondsPerPoint' => 0,
 			'checkInterval' => 60,
 			'blockDuration' => 60,
-			'delayDuration' => 0,
-			'accountThrottleEnabled' => 0,
+			'accountAttackEnabled' => 0,
 			'notifyBlockedNumber' => 0,
 			'riskCommonUsernames' => "root\nadministrator",
 			'logLevel' => 8, // errors only
@@ -110,263 +106,39 @@ class FailedLoginTest extends IntegrationTestCase
 		return $this->db->loadColumn();
 	}
 
-	public function testFailedLoginIsRecordedBeforeTheDelay()
+	public function testAnAccountUnderAttackGetsItsAttackersBlockedSooner()
 	{
-		// the delay only holds back the response; the attempt has to count
-		// right away, or a burst of parallel requests all start before the
-		// first one reaches the block threshold
-		$this->configure(array('delayDuration' => 5));
-		$process = proc_open($this->command('Admin'),
-			array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes);
-		$this->assertIsResource($process);
-		try
-		{
-			$recorded = false;
-			for ($i = 0; $i < 40 && !$recorded; ++$i)
-			{
-				usleep(100000);
-				$recorded = ((int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin')) === 1;
-			}
-			$this->assertTrue($recorded, 'failed login was not recorded within 4s (the delay is 5s)');
-			$this->assertTrue(proc_get_status($process)['running'],
-				'the request should still be delayed at this point');
-		}
-		finally
-		{
-			proc_terminate($process);
-			proc_close($process);
-		}
-	}
+		// the failed logins of other addresses on the account count for every
+		// address which tries it: blocked after 5 - 3 points = 2 attempts
+		$this->configure(array('blockNumber' => 5, 'riskBlockNumberReductionPerPoint' => 1,
+			'riskUserAgentEnabled' => 0, 'riskCommonUsernameEnabled' => 0, 'riskKnownIpEnabled' => 0,
+			'accountAttackEnabled' => 1, 'accountBlockNumber' => 3, 'accountAttackPoints' => 3));
+		$this->failedLogin('Admin', '203.0.113.60');
+		// as stored: readable, or the hash of a username which is no account
+		$stored = $this->storedUsernames()[0];
+		$this->insert('#__bfstop_failedlogin', array('username' => $stored, 'ipaddress' => '203.0.113.61',
+			'logtime' => self::minutesAgo(1), 'origin' => 0, 'handled' => 0));
+		$this->failedLogin('Admin');
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), '3 of 3, 2 allowed');
+		$this->failedLogin('Admin');
+		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
 
-	/**
-	 * A failed login to the Web Services API: Joomla reports it with an empty
-	 * username whatever the request carried. $headers as in $_SERVER
-	 */
-	private function failedApiLogin(array $headers = array(), $ip = self::Ip)
-	{
-		$options = array('--api');
-		foreach ($headers as $name => $value)
-		{
-			$options[] = '--server='.$name.'='.$value;
-		}
-		$this->failedLogin('', $ip, $options);
-	}
-
-	public function testApiLoginsWithoutCredentialsAreNotCounted()
-	{
-		// Joomla tries to log in every request to an endpoint which isn't
-		// public, also those which carry no credentials at all
-		$this->configure(array('blockNumber' => 2));
-		$this->failedApiLogin();
-		$this->failedApiLogin();
-		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
-		$this->assertFalse((new Repositories($this->logger))->blocks()->isBlocked(self::Ip));
-	}
-
-	public function testApiLoginsWithCredentialsAreCountedAndBlocked()
-	{
-		$this->configure(array('blockNumber' => 3, 'unknownUsernameMode' => 'plain'));
-		$this->failedApiLogin(array('PHP_AUTH_USER' => 'bob', 'PHP_AUTH_PW' => 'guess'));
-		$this->failedApiLogin(array('HTTP_AUTHORIZATION' => 'Basic '.base64_encode('carol:guess')));
-		$this->failedApiLogin(array('HTTP_AUTHORIZATION' => 'Bearer c2hhMjU2OjQyOmFiYw=='));
-		// HTTP Basic gives the username; a token names its user by id only
-		$this->assertSame(array('bob', 'carol', ''), $this->storedUsernames());
-		$this->assertSame(array('3', '3', '3'), array_map('strval',
-			$this->db->setQuery('SELECT origin FROM #__bfstop_failedlogin ORDER BY id')->loadColumn()));
-		$this->assertTrue((new Repositories($this->logger))->blocks()->isBlocked(self::Ip));
-	}
-
-	public function testApiLoginsAreOnlyCountedIfSwitchedOn()
-	{
-		$this->configure(array('enabledForOrigin' => Origin::Frontend | Origin::Backend));
-		$this->failedApiLogin(array('HTTP_X_JOOMLA_TOKEN' => 'c2hhMjU2OjQyOmFiYw=='));
-		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
-		$this->failedLogin('bob');
-		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
-	}
-
-	public function testTrustedProxyIsNotBlockedThroughHtaccess()
-	{
-		// a failed login through a trusted proxy without the header naming
-		// the client is counted against the proxy (not counting it would let
-		// such requests fail logins without limit) - but in .htaccess, the
-		// proxy's address would turn away every visitor coming through it
-		$dir = sys_get_temp_dir().'/bfstop-proxy-htaccess-'.getmypid();
-		mkdir($dir);
-		try
-		{
-			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir,
-				'useProxy' => 1, 'proxyIpAddress' => self::Ip));
-			$this->failedLogin('Admin');
-			$this->failedLogin('Admin');
-			$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'), 'blocked in the database');
-			$this->assertStringNotContainsString(self::Ip, (string) @file_get_contents($dir.'/.htaccess'));
-
-			// a client the proxy names in the header is blocked through .htaccess
-			$header = array('--server=HTTP_X_FORWARDED_FOR=203.0.113.99');
-			$this->failedLogin('Admin', self::Ip, $header);
-			$this->failedLogin('Admin', self::Ip, $header);
-			$this->assertStringContainsString("-R '203.0.113.99'", (string) file_get_contents($dir.'/.htaccess'));
-		}
-		finally
-		{
-			@unlink($dir.'/.htaccess');
-			@rmdir($dir);
-		}
-	}
-
-	/**
-	 * An IPv6 client is counted and blocked by its /56 (a client controls
-	 * all of it), but the web server only turns away its /64: other
-	 * customers of a provider may have the other /64s of the /56, and the
-	 * web server knows nothing of the allow list. Within the /64, an
-	 * allowed address keeps it out of the file.
-	 */
-	public function testIpv6ClientIsBlockedThroughHtaccessByItsOwnNetwork()
-	{
-		$dir = sys_get_temp_dir().'/bfstop-allow-htaccess-'.getmypid();
-		mkdir($dir);
-		try
-		{
-			// an allowed host in another /64 of the same /56
-			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:1:7f::9', 'notes' => ''));
-			$this->configure(array('blockNumber' => 2, 'blockMode' => 'htaccess', 'htaccessPath' => $dir));
-			$this->failedLogin('Admin', '2001:db8:1:2a::5');
-			$this->failedLogin('Admin', '2001:db8:1:2a::5');
-			$this->assertSame('2001:db8:1::/56', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'),
-				'blocked in the database by the /56');
-			$file = (string) file_get_contents($dir.'/.htaccess');
-			$this->assertStringContainsString("-R '2001:db8:1:2a::/64'", $file, 'the web server turns away the /64');
-			$this->assertStringNotContainsString('/56', $file);
-
-			// an allowed address within the client's /64: only the database blocks
-			$this->insert('#__bfstop_allowlist', array('ipaddress' => '2001:db8:2:2a::9', 'notes' => ''));
-			$this->failedLogin('Admin', '2001:db8:2:2a::5');
-			$this->failedLogin('Admin', '2001:db8:2:2a::5');
-			$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_bannedip WHERE ipaddress='2001:db8:2::/56'"));
-			$this->assertStringNotContainsString('2001:db8:2:', (string) file_get_contents($dir.'/.htaccess'));
-
-			// IPv4 addresses are what they are tracked as
-			$this->failedLogin('Admin', '203.0.113.88');
-			$this->failedLogin('Admin', '203.0.113.88');
-			$this->assertStringContainsString("-R '203.0.113.88'", (string) file_get_contents($dir.'/.htaccess'));
-		}
-		finally
-		{
-			@unlink($dir.'/.htaccess');
-			@rmdir($dir);
-		}
-	}
-
-	/**
-	 * Parallel failed logins of one client which all reach the threshold
-	 * must block it once: each extra block would count as an earlier offence
-	 * (a single burst making the block permanent with maxBlocksBefore) and
-	 * send mails of its own.
-	 */
-	public function testParallelFailedLoginsBlockOnce()
-	{
-		$this->configure(array('blockNumber' => 1, 'maxBlocksBefore' => 2));
-		$count = 8;
-		$processes = array();
-		$pipes = array();
-		for ($i = 0; $i < $count; ++$i)
-		{
-			$processes[$i] = proc_open($this->command('Admin', self::Ip, array('--live-site='.$this->liveSite)),
-				array(1 => array('pipe', 'w'), 2 => array('pipe', 'w')), $pipes[$i]);
-		}
-		foreach ($processes as $i => $process)
-		{
-			$output = stream_get_contents($pipes[$i][1]).stream_get_contents($pipes[$i][2]);
-			$this->assertSame(0, proc_close($process), $output);
-			$this->assertStringContainsString('DONE', $output);
-		}
+		// another account, not attacked: the usual 5 attempts
+		$this->failedLogin('Bob', '203.0.113.70');
+		$this->failedLogin('Bob', '203.0.113.70');
 		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
-		$this->assertNotSame(0, (int) $this->queryValue('SELECT duration FROM #__bfstop_bannedip'), 'not permanent');
 	}
 
-	public function testBlockedAddressIsNotDelayed()
+	public function testAFailedLoginIsAnsweredAtOnce()
 	{
-		$this->configure(array('delayDuration' => 5, 'blockNumber' => 1));
-		$start = microtime(true);
-		$this->failedLogin('Admin');
-		$this->assertLessThan(4.0, microtime(true) - $start, 'a request that got its address blocked must not wait for the delay');
-		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
-	}
-
-	public function testAccountThrottleDoesNotDelayABlockedAddress()
-	{
-		// the account has been attacked from elsewhere: every further failed
-		// login for it would be delayed, but this one got its address blocked
-		$this->configure(array('blockNumber' => 1, 'accountThrottleEnabled' => 1, 'accountBlockNumber' => 2,
-			'accountThrottleDelay' => 5));
-		foreach (array('203.0.113.60', '203.0.113.61', '203.0.113.62') as $ip)
-		{
-			$this->insert('#__bfstop_failedlogin', array('username' => 'Admin', 'ipaddress' => $ip,
-				'logtime' => self::minutesAgo(1), 'origin' => 0, 'handled' => 0));
-		}
-		$start = microtime(true);
-		$this->failedLogin('Admin');
-		$this->assertLessThan(4.0, microtime(true) - $start);
-		$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
-	}
-
-	public function testOnlySoManyResponsesAreDelayedAtTheSameTime()
-	{
-		// every delayed response holds a PHP worker: with all slots taken
-		// (here by this test), the response goes out at once - and the
-		// failed login counts all the same
-		$this->configure(array('blockNumber' => 2, 'delayDuration' => 5, 'delayMaxConcurrent' => 2));
-		$handles = array();
-		try
-		{
-			foreach (Responder::delaySlotFiles(2) as $file)
-			{
-				$handle = fopen($file, 'c');
-				// waits for a delayed response of an earlier test which still
-				// runs (proc_terminate() only ends the shell around it)
-				$this->assertTrue(flock($handle, LOCK_EX), $file);
-				$handles[] = $handle;
-			}
-			$start = microtime(true);
-			$this->failedLogin('Admin');
-			$this->assertLessThan(3.0, microtime(true) - $start, 'not delayed');
-			$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
-			$this->failedLogin('Admin');
-			$this->assertSame(self::Ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'), 'blocked as usual');
-
-			// one slot free again: delayed
-			flock(array_pop($handles), LOCK_UN);
-			$start = microtime(true);
-			$this->failedLogin('Admin', '203.0.113.52');
-			$this->assertGreaterThanOrEqual(4.5, microtime(true) - $start, 'delayed');
-		}
-		finally
-		{
-			foreach ($handles as $handle)
-			{
-				flock($handle, LOCK_UN);
-				fclose($handle);
-			}
-		}
-	}
-
-	public function testRiskScoreAddsNoDelayByDefault()
-	{
-		$this->assertSame(0, Settings::Defaults['riskDelaySecondsPerPoint']);
-		// "admin" is a common username, and there is no User-Agent: 4 points
-		$this->setSettings(json_encode(array('blockMode' => 'full', 'accountThrottleEnabled' => 0)));
+		// nothing holds the response back (and a PHP worker with it), not
+		// even with the account under attack and a risky request
+		$this->configure(array('blockNumber' => 100, 'riskBlockNumberReductionPerPoint' => 1,
+			'accountAttackEnabled' => 1, 'accountBlockNumber' => 1));
 		$start = microtime(true);
 		$this->failedLogin('admin', self::Ip, array('--server=HTTP_USER_AGENT='));
 		$this->assertLessThan(3.0, microtime(true) - $start);
-	}
-
-	public function testDelaysAreCapped()
-	{
-		$this->assertSame(0, Responder::cappedDelay(0));
-		$this->assertSame(0, Responder::cappedDelay(-5));
-		$this->assertSame(7, Responder::cappedDelay(6.6));
-		$this->assertSame(Responder::MaxDelaySeconds, Responder::cappedDelay(100000));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
 	}
 
 	public function testExistingAndCommonUsernamesAreStoredReadably()

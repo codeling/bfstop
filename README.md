@@ -1,10 +1,10 @@
 # Brute Force Stop for Joomla!
 
 Brute Force Stop (BFStop) protects the login of a Joomla! site against
-brute-force attacks. It records failed logins, slows down and blocks the IP
-addresses (and throttles the accounts) they come from, notifies you about
-failed logins and blocks, and lets users who blocked themselves unblock their
-address through a link sent by email.
+brute-force attacks. It records failed logins, blocks the IP addresses they
+come from (sooner when an account is attacked from many addresses), notifies
+you about failed logins and blocks, and lets users who blocked themselves
+unblock their address through a link sent by email.
 
 This repository contains all of BFStop, which is released as one package:
 
@@ -43,21 +43,23 @@ of another, only those of the library.
   *Components → Brute Force Stop → Settings*.
 - Joomla! offers updates through its update manager.
 
-### What the delays can and can't do
+### Rate limiting
 
 Blocking is what protects the login: an address (an IPv6 client: its
-network) gets only so many failed logins. The delays - the delay of the
-response to a failed login, the adaptive delay, the account throttle and the
-delay per point of the risk score - only slow down a client which waits for
-one answer before it sends the next attempt. Each delayed response holds a
-PHP worker for as long as it is delayed, so at most "delayMaxConcurrent"
-responses are delayed at the same time (and none longer than 60 seconds);
-any further failed login is answered at once. An attacker who sends many
-attempts in parallel, from many addresses, therefore gets most answers
-without delay: the account throttle in particular doesn't stop a distributed
-attack on one account, it only makes it a little slower. Holding many
-connections open cheaply is something only the web server or a proxy in
-front of it can do (e.g. nginx's `limit_req`).
+network) gets only so many failed logins, fewer if its attempts look risky
+or the account it tries is attacked from many addresses at once. BFStop
+answers every failed login at once and doesn't slow clients down: since
+2.0.0, there are no delay settings any more. A response held back by PHP
+holds a PHP worker for as long, so an attacker sending many attempts in
+parallel, from many addresses, could run the server out of workers, while a
+delay hardly slows down a client which doesn't wait for one answer before
+sending the next attempt. Holding many connections open cheaply is something
+only the web server or a proxy in front of it can do: to slow down or limit
+requests to the login, use e.g. nginx's
+[`limit_req`](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html),
+Apache's `mod_evasive` or `mod_qos`, or fail2ban. The wiki explains
+[why the delays were removed](https://github.com/codeling/bfstop/wiki/Why-No-Delay-Options-in-2.0)
+and has examples.
 
 ## Resources
 

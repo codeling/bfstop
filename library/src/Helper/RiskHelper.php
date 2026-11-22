@@ -17,8 +17,9 @@ use Joomla\Registry\Registry;
 
 /**
  * Computes a signed per-attempt risk score for a failed login (issue #76).
- * Positive contributions mean "more suspicious" (allow fewer attempts,
- * add more delay); negative contributions mean "more trusted" (allow more).
+ * Positive contributions mean "more suspicious" (allow fewer attempts);
+ * negative contributions mean "more trusted" (allow more), see
+ * BlockPolicy::effectiveBlockNumber().
  * Every signal is independently toggleable and fails safe: any internal
  * error is logged and contributes 0, never blocks or throws.
  */
@@ -156,12 +157,55 @@ class RiskHelper
 	}
 
 	/**
+	 * A distributed attack on one account: once the username of the failed
+	 * login $failedLogin (as stored, see the plugin's usernameForStorage())
+	 * has had "accountBlockNumber" failed logins within "accountCheckInterval"
+	 * minutes, from whatever addresses (the failed login itself included),
+	 * every address trying it is allowed fewer attempts. A per-address
+	 * threshold alone never notices an attacker who spreads the attempts on
+	 * one account over many addresses (issue #76). The account itself is never
+	 * locked: the real owner, from an address they logged in from before, is
+	 * still trusted by the known-IP signal. Until 2.0.0, this was a delay of
+	 * the response instead, which held a PHP worker and did not slow down an
+	 * attacker who doesn't wait for the answers.
+	 */
+	private static function accountAttackScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $failedLogin)
+	{
+		if ($failedLogin === null || !Settings::bool($params, 'accountAttackEnabled'))
+		{
+			return 0;
+		}
+		try
+		{
+			$minutes = Settings::int($params, 'accountCheckInterval');
+			$count = (int) $repositories->failedLogins()->countUnhandledForUsername($minutes,
+				$failedLogin->username, $failedLogin->logtime);
+			if ($count >= Settings::int($params, 'accountBlockNumber'))
+			{
+				$logger->log('Account under attack: '.$count.' failed logins for username \''.$failedLogin->username.
+					'\' within '.$minutes.' minutes, from any address', Log::INFO);
+				return Settings::int($params, 'accountAttackPoints');
+			}
+		}
+		catch (\Throwable $e)
+		{
+			$logger->log('RiskHelper: count of failed logins of the account failed: '.$e->getMessage(), Log::WARNING);
+		}
+		return 0;
+	}
+
+	/**
 	 * @param string|null $trackedAddress the key the client is tracked under
 	 *                                    (IpHelper::trackedAddress()), if not
 	 *                                    its address
+	 * @param object|null $failedLogin    the failed login as recorded (its
+	 *                                    username as stored, and its logtime),
+	 *                                    for the signal of a distributed attack
+	 *                                    on one account; without it, that
+	 *                                    signal is skipped
 	 */
 	public static function computeScore(Repositories $repositories, LoggerHelper $logger, Registry $params, $ipaddress, $username,
-		$trackedAddress = null)
+		$trackedAddress = null, $failedLogin = null)
 	{
 		$score = 0;
 		$score += self::knownIpScore($repositories, $logger, $params, $ipaddress, $username);
@@ -169,6 +213,7 @@ class RiskHelper
 		$score += self::userAgentScore($params);
 		$score += self::geoScore($logger, $params, $ipaddress);
 		$score += self::reverseDnsScore($repositories, $logger, $params, $ipaddress, $trackedAddress ?? $ipaddress);
+		$score += self::accountAttackScore($repositories, $logger, $params, $failedLogin);
 		return $score;
 	}
 }

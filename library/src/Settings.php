@@ -136,19 +136,12 @@ final class Settings
 		// empty: the root of the site
 		'htaccessPath' => '',
 		'nginxDenyFile' => '',
-		// delay
-		'delayDuration' => 0,
-		'adaptiveDelay' => 0,
-		'adaptiveDelayMax' => 0,
-		'adaptiveDelayThresholdMin' => 50,
-		'adaptiveDelayThresholdMax' => 200,
-		// at most this many responses are delayed at the same time
-		'delayMaxConcurrent' => 5,
-		// account throttle
-		'accountThrottleEnabled' => 1,
+		// distributed attacks on one account: a signal of the risk score,
+		// see RiskHelper::accountAttackScore()
+		'accountAttackEnabled' => 1,
 		'accountBlockNumber' => 20,
 		'accountCheckInterval' => 60,
-		'accountThrottleDelay' => 5,
+		'accountAttackPoints' => 3,
 		// GeoIP
 		'geoDbPath' => '',
 		// risk score
@@ -164,10 +157,6 @@ final class Settings
 		'riskCommonUsernamePoints' => 2,
 		'riskUserAgentEnabled' => 1,
 		'riskUserAgentPoints' => 2,
-		// a delay ties up a PHP worker for its whole length, see the
-		// plugin's Responder::delay(): the risk score adds none unless the
-		// administrator asks for it
-		'riskDelaySecondsPerPoint' => 0,
 		'riskBlockNumberReductionPerPoint' => 1,
 		'riskMinBlockNumber' => 2,
 	);

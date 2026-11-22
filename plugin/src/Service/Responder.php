@@ -10,7 +10,6 @@ namespace Codeling\Plugin\System\Bfstop\Service;
 
 defined('_JEXEC') or die;
 
-use Codeling\Library\Bfstop\Helper\LockHelper;
 use Codeling\Library\Bfstop\Helper\LoggerHelper;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Application\CMSApplicationInterface;
@@ -20,19 +19,14 @@ use Joomla\CMS\Router\Route;
 use Joomla\Registry\Registry;
 
 /**
- * What the client is told, and when: the page which refuses a blocked
- * client, the messages about the attempts left, and the delay of the
- * response to a failed login.
+ * What the client is told: the page which refuses a blocked client, and the
+ * messages about the attempts left. A failed login is answered at once: a
+ * response held back on purpose would hold a PHP worker for as long, which
+ * an attacker with many addresses could use to run the server out of them
+ * (see the README, "Rate limiting").
  */
 class Responder
 {
-	/**
-	 * Every second of delay occupies a PHP worker, which is what an attacker
-	 * with many addresses would like to run out of - so however the delays of
-	 * the settings add up, one response is never held back longer than this.
-	 */
-	public const MaxDelaySeconds = 60;
-
 	private CMSApplicationInterface $app;
 	private Registry $params;
 	private LoggerHelper $logger;
@@ -185,95 +179,5 @@ class Responder
 			$error['code'] = $status;
 		}
 		return json_encode(array('errors' => array($error)), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-	}
-
-	public static function cappedDelay($seconds)
-	{
-		return max(0, min((int) round($seconds), self::MaxDelaySeconds));
-	}
-
-	/**
-	 * The files of the slots for delayed responses (see delay()), one set per
-	 * site (database), as the temporary directory may be shared.
-	 *
-	 * @return string[]
-	 */
-	public static function delaySlotFiles($count)
-	{
-		$files = array();
-		for ($i = 0; $i < max(1, (int) $count); ++$i)
-		{
-			$files[] = LockHelper::file('delay', $i);
-		}
-		return $files;
-	}
-
-	/**
-	 * Holds back the response by $seconds (at most MaxDelaySeconds) - if fewer
-	 * than "delayMaxConcurrent" responses are being held back right now.
-	 *
-	 * A delay only slows down whoever waits for one answer before sending the
-	 * next request; for the whole time, it occupies a PHP worker, of which a
-	 * server has only so many. An attacker with many addresses (an IPv6
-	 * network gives plenty) sends failed logins in parallel instead, each of
-	 * them sleeping in a worker of its own, until there are none left for
-	 * anybody else. So a delayed response takes one of a fixed number of
-	 * slots - an exclusive lock on one of delaySlotFiles(), which the
-	 * operating system releases however the request ends - and if none is
-	 * free, the response goes out at once. The failed login has been counted
-	 * by then (see Bfstop::onUserLoginFailure()), so blocking is not affected.
-	 *
-	 * Not answering at all wouldn't help: PHP can't keep a connection open
-	 * without a worker, and a connection which is closed at once tells the
-	 * client just as quickly that the login failed. Holding connections open
-	 * cheaply is something only the web server or a proxy in front of it can
-	 * do (e.g. nginx's limit_req).
-	 *
-	 * @return bool whether the response was delayed
-	 */
-	public function delay($seconds)
-	{
-		$capped = self::cappedDelay($seconds);
-		if ($capped < (int) round($seconds))
-		{
-			$this->logger->log('Delay of '.round($seconds).'s cut to '.$capped.'s', Log::WARNING);
-		}
-		if ($capped <= 0)
-		{
-			return false;
-		}
-		$maxConcurrent = max(1, Settings::int($this->params, 'delayMaxConcurrent'));
-		$opened = false;
-		foreach (self::delaySlotFiles($maxConcurrent) as $file)
-		{
-			$handle = @fopen($file, 'c');
-			if ($handle === false)
-			{
-				continue;
-			}
-			$opened = true;
-			if (!flock($handle, LOCK_EX | LOCK_NB))
-			{
-				fclose($handle);
-				continue;
-			}
-			try
-			{
-				sleep($capped);
-			}
-			finally
-			{
-				flock($handle, LOCK_UN);
-				fclose($handle);
-			}
-			return true;
-		}
-		// without a way to count the delayed responses, there is no limit:
-		// not delaying is what keeps the server available
-		$this->logger->log($opened
-			? 'Not delaying the response: '.$maxConcurrent.' response(s) are being delayed already'
-			: 'Not delaying the response: could not create the lock files in '.LockHelper::directory(),
-			$opened ? Log::INFO : Log::WARNING);
-		return false;
 	}
 }

@@ -27,10 +27,8 @@ class PluginEventsTest extends IntegrationTestCase
 		'blockNumber' => 3,
 		'checkInterval' => 60,
 		'blockDuration' => 60,
-		'delayDuration' => 0,
-		'riskDelaySecondsPerPoint' => 0,
 		'riskBlockNumberReductionPerPoint' => 0,
-		'accountThrottleEnabled' => 0,
+		'accountAttackEnabled' => 0,
 		'notifyBlockedNumber' => 0,
 		'logLevel' => 8, // errors only
 	);

@@ -1,5 +1,19 @@
 2.0.0 (unreleased)
   - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Removed: the delay of the response to failed logins ("Delay", "Adaptive
+    Delay" and its thresholds). A response held back by PHP holds a PHP
+    worker for the whole delay, which an attacker sending failed logins in
+    parallel, from many addresses (an IPv6 network gives plenty), can use to
+    run the server out of workers, while it hardly slows down anybody who
+    doesn't wait for one answer before sending the next attempt; blocking
+    stops a single address long before a delay would matter. Failed logins
+    are now answered at once, and counted and blocked as before. The update
+    removes the settings and tells the administrator if they delayed
+    responses; to slow down clients, use the rate limiting of the web server
+    or a proxy (e.g. nginx's limit_req, Apache's mod_evasive or mod_qos,
+    fail2ban). With "Reporting Only" as the blocking mode, BFStop now only
+    records failed logins and sends notifications. The wiki has the details:
+    "Design Decision No Response Delays" and "Why No Delay Options in 2.0"
   - Hardening (issue #285): the page shown to a blocked address and the
     unblock page may not be shown in another site's frame, and the unblock
     page's type is not left to the browser to guess; with a proxy
@@ -181,9 +195,8 @@
     Joomla's events; what it did itself is split up in src/Service:
     RequestClassifier (what a request does - a login, the unblock page, the
     password recovery), BlockPolicy (when, for how long and how a client is
-    blocked, the unblock mail, the delays), Responder (the block page, the
-    messages, the delayed response), LoginTurn (logins of one address one
-    after the other) and DailyMaintenance (see the Task Scheduler entry).
+    blocked, the unblock mail), Responder (the block page, the messages),
+    LoginTurn (logins of one address one after the other) and DailyMaintenance (see the Task Scheduler entry).
     RequestClassifier works out what
     Joomla will run the way Joomla's own code does, which is no API: a new
     test, RequestClassifierTest, compares it with what the Joomla version
@@ -332,12 +345,15 @@
     (Components -> Brute Force Stop -> Settings); the plugin's Options tab
     and description now just point there instead of holding real settings
   - Adaptive allowance of failed attempts (#76): failed logins for a
-    username are now also throttled across all source IPs combined, not
-    just per IP, so a distributed attack spreading attempts against one
-    account across many IPs can no longer evade the per-IP threshold; a
-    new per-attempt risk score (known IP/username pairs, common usernames,
-    missing User-Agent, optional GeoIP country and reverse-DNS signals)
-    adjusts the delay and allowed-attempts threshold; optional progressive
+    username are now also counted across all source IPs combined, not just
+    per IP: once an account has had too many of them ("Distributed Attacks
+    on One Account", default 20 within 60 minutes), every address trying it
+    is blocked after fewer attempts, so a distributed attack spreading
+    attempts against one account across many IPs no longer goes unnoticed
+    by the per-IP threshold; a new per-attempt risk score (known
+    IP/username pairs, common usernames, missing User-Agent, optional GeoIP
+    country and reverse-DNS signals, an attacked account) adjusts the
+    allowed-attempts threshold; optional progressive
     (exponential) block duration for repeat offenders; password reset/
     username reminder now stay reachable even for a blocked IP
   - Notifications of failed logins only for existing accounts (#172): the new
@@ -392,12 +408,9 @@
     and private client addresses reported by the proxy are accepted. Not
     all proxies append to an incoming header: pick a header yours sets or
     appends to
-  - Security: a failed login is now recorded, counted and checked against
-    the block threshold before the configured delay is applied, not after
-    it, and a request whose IP address just got (or already is) blocked is
-    not delayed any more. Before, a burst of parallel login attempts all
-    ran before the first of them was counted, and every one of them held
-    on to a server worker for the whole delay
+  - Security: a failed login is now recorded and counted before anything
+    else is done with it (the risk score, the mails). Before, a burst of
+    parallel login attempts all ran before the first of them was counted
   - Security: usernames of failed logins which do not belong to an existing
     account (and are not on the list of common usernames) are now stored,
     shown, logged and mailed as an unreadable hash by default, as users
@@ -499,8 +512,8 @@
   - Security: the failed logins are indexed by address and by time. With
     the 200000 of them that are kept at most, the lookups made for every
     failed login took 9-27 ms each (PostgreSQL 16 / MariaDB 10.11), the one
-    made when an address gets blocked up to 190 ms on MariaDB, and those of
-    the adaptive delay 8-18 ms; now each takes below 1 ms, while recording
+    made when an address gets blocked up to 190 ms on MariaDB; now each
+    takes below 1 ms, while recording
     a failed login takes as long as before
   - Security: the bundled MaxMind DB reader (maxmind-db/reader, now 1.14.0,
     which limits the decoding of malformed or hostile database files) is
@@ -547,11 +560,6 @@
     duration instead of a language key
   - Security: failed logins are purged after 4 weeks by default (set the
     purge age to 0 for the old behaviour) and limited to 200000 rows
-  - Security: a response is delayed by 60 seconds at most, however the delay
-    settings add up, and the account throttle no longer delays an address
-    that was just blocked. "Delay Duration" and "Maximum Adaptive Delay" go
-    up to 60 seconds (before: 120); a larger value saved by an earlier
-    version has to be lowered the next time the settings are saved
   - Security: unblock tokens are stored as hashes; links sent before the
     update stop working (they are valid for 3 days only)
   - Security: usernames in log entries and in mails can no longer contain
@@ -581,14 +589,6 @@
     user has logged in from that IP address before" sends them; the settings
     page doesn't take the setting then and says what to add to
     configuration.php, and the backend warns about a setting saved before
-  - Security: delays can no longer be used to run the server out of PHP
-    workers. A delayed response holds a worker for the whole delay, and an
-    attacker with many addresses (an IPv6 network gives plenty) could send
-    failed logins in parallel until none was left. At most "Responses
-    delayed at the same time" (default 5) responses are delayed at once;
-    further ones are answered without delay, and still counted and blocked.
-    The risk score adds no delay by default any more ("Delay Seconds Per
-    Risk Point" 0, before: 2, i.e. 4 seconds for a failed login as "admin")
   - Security: the reverse DNS risk signal can no longer hold a request for
     as long as the attacker's name servers like. The lookup is made by the
     plugin over UDP, with the name servers of /etc/resolv.conf, and given up

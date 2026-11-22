@@ -55,8 +55,8 @@ class InstallTest extends IntegrationTestCase
 
 	public function testLookupsOfFailedLoginsAreIndexed()
 	{
-		// per address (every failed login), per username (account throttle),
-		// by time (adaptive delay, purge): with up to 200000 rows, a scan
+		// per address (every failed login), per username (attacks on one account),
+		// by time (notifications, purge): with up to 200000 rows, a scan
 		// takes 10-200 ms
 		$indexes = self::indexedColumns($this->db, 'bfstop_failedlogin');
 		foreach (array('ipaddress,logtime', 'username,logtime', 'logtime') as $columns)

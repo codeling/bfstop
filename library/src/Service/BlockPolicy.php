@@ -24,9 +24,8 @@ use Joomla\Registry\Registry;
 /**
  * What the settings make of a failed login: when its client is blocked, for
  * how long (with the escalation for repeat offenders) and how, whether the
- * blocked user may get an unblock link, and by how much the response is
- * delayed. Decides only: the block itself is BlockService's, the answer to
- * the client the Responder's.
+ * blocked user may get an unblock link. Decides only: the block itself is
+ * BlockService's, the answer to the client the Responder's.
  */
 class BlockPolicy
 {
@@ -349,103 +348,5 @@ class BlockPolicy
 	{
 		$setting = (int) $setting;
 		return $hasLiveSite ? $setting : 0;
-	}
-
-	/**
-	 * By how many seconds the response to the failed login $logEntry is held
-	 * back (before Responder::delay() caps it): the account throttle, the
-	 * delay for the attack volume, and the one for the risk score of the
-	 * attempt.
-	 */
-	public function delaySeconds($logEntry, $riskScore)
-	{
-		return $this->accountThrottleDelay($logEntry) + $this->determineDelayDuration($riskScore);
-	}
-
-	/**
-	 * Account-level throttle: once a username has accumulated enough failed
-	 * attempts *from any source IP combined* within the configured window,
-	 * every further failed attempt for that username gets an extra forced
-	 * delay. Unlike the block (which is scoped to a single IP), this catches
-	 * an attacker who distributes attempts against one target account across
-	 * many different IPs - a distributed attack no per-IP threshold can ever
-	 * detect on its own. The account itself is never locked - only wrong
-	 * attempts get progressively expensive, so a correct password still logs
-	 * the real owner in immediately.
-	 *
-	 * @return int the seconds to delay the response by
-	 */
-	private function accountThrottleDelay($logEntry): int
-	{
-		if (!$this->boolParam('accountThrottleEnabled'))
-		{
-			return 0;
-		}
-		$checkInterval = $this->intParam('accountCheckInterval');
-		$accountBlockNumber = $this->intParam('accountBlockNumber');
-		$numberOfFailedLogins = $this->repositories->failedLogins()->countUnhandledForUsername(
-			$checkInterval, $logEntry->username, $logEntry->logtime);
-		if ($numberOfFailedLogins < $accountBlockNumber)
-		{
-			return 0;
-		}
-		$throttleDelay = max(0, $this->intParam('accountThrottleDelay'));
-		if ($throttleDelay > 0)
-		{
-			$this->logger->log('Account-level throttle triggered for username \''.
-				$logEntry->username.'\' ('.$numberOfFailedLogins.
-				' failed attempts across all IPs within '.$checkInterval.
-				' minutes), adding '.$throttleDelay.'s delay', Log::INFO);
-		}
-		return $throttleDelay;
-	}
-
-	/**
-	 * The global-attack-volume-based delay, plus an additional delay
-	 * proportional to the per-attempt risk score (issue #76) - the two are
-	 * independent, orthogonal mechanisms; only a positive (suspicious) score
-	 * adds delay, a trust bonus never reduces it below the base.
-	 */
-	private function determineDelayDuration($riskScore)
-	{
-		$riskDelaySecondsPerPoint = $this->intParam('riskDelaySecondsPerPoint');
-		return $this->determineBaseDelayDuration() + max(0, $riskScore) * $riskDelaySecondsPerPoint;
-	}
-
-	private function determineBaseDelayDuration()
-	{
-		$delayDuration = $this->intParam('delayDuration');
-		if (!$this->boolParam('adaptiveDelay'))
-		{
-			return $delayDuration;
-		}
-		$maxDelay = $this->intParam('adaptiveDelayMax');
-		$lowThreshold = $this->intParam('adaptiveDelayThresholdMin');
-		$highThreshold = $this->intParam('adaptiveDelayThresholdMax');
-		if ($lowThreshold > $highThreshold)
-		{
-			$tmp = $lowThreshold;
-			$lowThreshold = $highThreshold;
-			$highThreshold = $tmp;
-			$this->logger->log('Lower threshold is configured to a smaller value than higher threshold!'.
-				' Please correct! Swapping the values for now!',
-				Log::WARNING);
-		}
-		if ($lowThreshold == $highThreshold)
-		{
-			$this->logger->log('Lower and higher threshold cannot be configured to the same value!'.
-				' Either disable adaptive delay and use the delay duration instead, or'.
-				' set the thresholds to reasonable values! Using delay duration for now',
-				Log::WARNING);
-			return $delayDuration;
-		}
-		$recentFailed = min($this->repositories->failedLogins()->countInLastHour(), $highThreshold);
-		if ($recentFailed > $lowThreshold)
-		{
-			return $delayDuration + ($recentFailed - $lowThreshold)
-				* ($maxDelay - $delayDuration)
-				/ ($highThreshold - $lowThreshold);
-		}
-		return $delayDuration;
 	}
 }

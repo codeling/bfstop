@@ -96,22 +96,6 @@ class FailedLoginRepository extends Repository
 		}, 0);
 	}
 
-	/**
-	 * The failed logins of the last hour. Fail-open: 0.
-	 */
-	public function countInLastHour()
-	{
-		return $this->failOpen('countInLastHour', function ()
-		{
-			$query = $this->db->createQuery()
-				->select('COUNT(*)')
-				->from($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('logtime').' > :from');
-			$values = array('from' => self::minutesBefore(self::now(), 60));
-			return $this->count($query, $values);
-		}, 0);
-	}
-
 	// the most failed logins listUnhandledFromAddress() reads: those which
 	// count towards a block are about the block threshold (at most 25)
 	private const ListLimit = 100;

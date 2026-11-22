@@ -39,6 +39,20 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	// why update() could not migrate the settings and data, if it couldn't
 	private $updateFailure = null;
 
+	// whether the settings of the version this update replaces delayed the
+	// response to failed logins, see removeDelaySettings()
+	private $delaysRemoved = false;
+
+	/**
+	 * The settings of 1.x which delayed the response to a failed login. 2.0.0
+	 * delays no response any more: a response held back holds a PHP worker,
+	 * which an attacker with many addresses could use to run the server out
+	 * of them, and it slows down nobody who doesn't wait for the answers
+	 * (see the README, "Rate limiting").
+	 */
+	public const RemovedDelaySettings = array('delayDuration', 'adaptiveDelay', 'adaptiveDelayMax',
+		'adaptiveDelayThresholdMin', 'adaptiveDelayThresholdMax');
+
 	// the bit of the "enabledForOrigin" setting for the Web Services API
 	// (Origin::Api - the class of the version being replaced may be the
 	// one loaded while this runs)
@@ -301,6 +315,12 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 				'warning'
 			);
 		}
+		// the settings of the version replaced delayed responses, see update()
+		if ($this->delaysRemoved)
+		{
+			Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+			Factory::getApplication()->enqueueMessage(Text::_('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_DELAYS_REMOVED'), 'warning');
+		}
 		return true;
 	}
 
@@ -414,6 +434,17 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 				$params['enabledForOrigin'] = ((int) $params['enabledForOrigin']) | self::OriginApi;
 				$changed = true;
 			}
+			// the delays are gone (see RemovedDelaySettings); postflight()
+			// tells the administrator if they were in use
+			if (is_array($params))
+			{
+				$removed = self::removeDelaySettings($params);
+				if ($removed !== null)
+				{
+					$this->delaysRemoved = $removed['delayed'];
+					$changed = true;
+				}
+			}
 			// whatever the blocking mode is now: the file may still hold the
 			// section of the time .htaccess blocking was used
 			$htaccessFile = self::htaccessFile($params);
@@ -437,6 +468,29 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 				Log::ERROR, 'jerror');
 		}
 		return true;
+	}
+
+	/**
+	 * Removes the settings of the delays (RemovedDelaySettings) from the
+	 * settings $params.
+	 *
+	 * @return array|null null if there were none, else whether they delayed
+	 *                    the response at all: ['delayed' => bool]
+	 */
+	public static function removeDelaySettings(array &$params): ?array
+	{
+		$found = false;
+		$delayed = (int) ($params['delayDuration'] ?? 0) > 0 ||
+			((int) ($params['adaptiveDelay'] ?? 0) === 1 && (int) ($params['adaptiveDelayMax'] ?? 0) > 0);
+		foreach (self::RemovedDelaySettings as $name)
+		{
+			if (array_key_exists($name, $params))
+			{
+				unset($params[$name]);
+				$found = true;
+			}
+		}
+		return $found ? array('delayed' => $delayed) : null;
 	}
 
 	/**
