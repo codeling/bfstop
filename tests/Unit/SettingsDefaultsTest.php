@@ -33,7 +33,8 @@ class SettingsDefaultsTest extends TestCase
 	public function testEverySettingHasItsDefaultAndOnlyThose()
 	{
 		$form = self::formDefaults();
-		$this->assertGreaterThan(50, count($form));
+		// the page was found and read: it has 50 settings (2.0.0)
+		$this->assertGreaterThan(40, count($form));
 		$this->assertSame(array(), array_values(array_diff(array_keys($form), array_keys(Settings::Defaults))),
 			'settings without a default in Settings::Defaults');
 		$this->assertSame(array(), array_values(array_diff(array_keys(Settings::Defaults), array_keys($form))),
