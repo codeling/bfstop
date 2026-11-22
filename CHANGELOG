@@ -12,9 +12,8 @@
     responses; to slow down clients, use the rate limiting of the web server
     or a proxy (e.g. nginx's limit_req, Apache's mod_evasive or mod_qos,
     fail2ban). With "Reporting Only" as the blocking mode, BFStop now only
-    records failed logins and sends notifications. The wiki has the details
-    ("Design decision: no response delays", "FAQ: Why are there no delay
-    options in 2.0?")
+    records failed logins and sends notifications. The wiki has the details:
+    "Design Decision No Response Delays" and "Why No Delay Options in 2.0"
   - Hardening (issue #285): the page shown to a blocked address and the
     unblock page may not be shown in another site's frame, and the unblock
     page's type is not left to the browser to guess; with a proxy

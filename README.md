@@ -57,9 +57,9 @@ sending the next attempt. Holding many connections open cheaply is something
 only the web server or a proxy in front of it can do: to slow down or limit
 requests to the login, use e.g. nginx's
 [`limit_req`](https://nginx.org/en/docs/http/ngx_http_limit_req_module.html),
-Apache's `mod_evasive` or `mod_qos`, or fail2ban. The
-[wiki](https://github.com/codeling/bfstop/wiki) explains why the delays were
-removed.
+Apache's `mod_evasive` or `mod_qos`, or fail2ban. The wiki explains
+[why the delays were removed](https://github.com/codeling/bfstop/wiki/Why-No-Delay-Options-in-2.0)
+and has examples.
 
 ## Resources
 
