@@ -408,13 +408,15 @@ person. Sending stays limited by the existing "Notify on blocks"
 
 A new plugin, `plg_quickicon_bfstop`, installed and enabled by the package.
 It adds a tile to the Home Dashboard's notification area (the context
-Joomla's own status tiles use; believed to be `update_quickicon`, to be
-confirmed against Joomla 5.4/6). It is shown to users with `core.manage` on
-com_bfstop; the states other than "fine" need `core.admin`.
+Joomla's own status tiles use: `update_quickicon`, confirmed against Joomla
+5.4.10 and 6.2.0 - the default of their quick icon plugins and of the
+"Notifications" module of the installation). It is shown to users with
+`core.manage` on com_bfstop; the states other than "fine" need `core.admin`.
 
 | State (highest priority first) | Tile | Link |
 |---|---|---|
-| System plugin missing or disabled, or setup not completed | **Error**: "Brute Force Stop is not active" | Assistant |
+| System plugin missing or disabled | **Error**: "Brute Force Stop is not active" | Assistant |
+| Setup not completed (the plugin runs) | **Error**: "Brute Force Stop: complete the setup" | Assistant |
 | A mismatch that hasn't been dismissed (section 6) | **Warning**: "Brute Force Stop: check proxy settings" | Assistant, proxy step only |
 | Everything fine | Normal: "Brute Force Stop" | Component |
 
@@ -423,9 +425,11 @@ Cost: one query, and only when a dashboard is shown.
 ## 9. Console commands
 
 For command-line installs and updates, automation and lockout recovery.
-They are registered the way the Joomla console loads extension commands (a
-console plugin, `plg_console_bfstop`, unless the implementation finds a
-better-supported way):
+They are registered the way the Joomla console loads extension commands: a
+console plugin, `plg_console_bfstop`. Joomla's `ConsoleApplication` imports
+the plugins of the group "console" before it runs (5.4 and 6), and the
+plugin adds its commands on `ApplicationEvents::BEFORE_EXECUTE`. The system
+plugin can't: it is disabled until the setup is done.
 
 - `bfstop:status`: setup state, plugin enabled, proxy settings
 - `bfstop:setup --no-proxy | --trusted=<list> --header=<header>`: runs the
@@ -530,3 +534,68 @@ A documented SQL fallback covers sites where the console can't be used.
 | Hashing old usernames | **Opt-in** step in the assistant | It changes stored data; the admin decides |
 | Writing `configuration.php` (`$live_site`, `behind_loadbalancer`) | **Never** | Touching Joomla's core configuration is not the extension's job; the assistant shows the line to add |
 | Built-in CDN address ranges | **Not shipped**; Cloudflare's are fetched on request | Ranges change; trusting them needs the origin restriction the step explains |
+
+## 14. Implementation notes (phase 1)
+
+Where the implementation differs from the plan above, or settles what the
+plan left open:
+
+- **State:** a row of `#__bfstop_state` holds 255 characters, so the state
+  is three rows: `setup` (mode, version updated from, why the update
+  disabled the plugin, scenario and header names of the update's request,
+  delays removed, `.htaccess` not rewritten, the confirmed fingerprint,
+  `completed`), `setupSteps` (the steps which aren't pending) and
+  `setupDismissed` (up to 16 fingerprints). They are read with one query.
+  The installer script writes `setup` itself, in the same form (a test
+  checks that `SetupState` reads it). An installation stays in mode
+  `install` across updates until its setup is completed; any update whose
+  setup isn't completed records its findings and may disable the plugin.
+- **Detection in the installer:** the update can't use the library's
+  classes (those of the version replaced may be loaded), so it has its own
+  copy of the scenario detection and of the header and network lists; a
+  test checks that it agrees with `ProxyDetector` on the table of
+  scenarios. Scenario C needs a public `REMOTE_ADDR`, as in 5.1.
+- **Pure functions:** `ProxyDetector` and `ProxyMismatch` take the proxy
+  settings as an array (`ProxyDetector::proxySettings()` makes it from the
+  settings), so that their unit tests need no Joomla.
+- **`SettingsAudit`** validates each stored value with its field of the
+  settings form, plus `SettingsModel::crossFieldErrors()` (the checks across
+  fields, which `SettingsModel::validate()` uses too). Finding the values
+  needs Joomla's form, so that part is tested in the integration test
+  `SetupTest` (with settings of 1.5.2); the unit test covers the proposed
+  fixes.
+- **Mismatch fingerprints** hold the code, the names of the headers present
+  and whether `REMOTE_ADDR` is public or not - no address, so a dynamic
+  address doesn't bring a dismissed mismatch back.
+- **Banners:** Joomla sanitises its messages (`Joomla.sanitizeHtml()` allows
+  no `form`), so a banner can't carry a token-checked "This is expected"
+  button. The banners link to the assistant's proxy step, where each
+  mismatch has that button. Information-only hints (Joomla's "Behind Load
+  Balancer") are shown as notices and don't make the quick icon a warning.
+- **Post-installation message:** of type "action" (Joomla's `MessagesModel`
+  drops the URL of a "link" message before it checks that there is one, in
+  5.4 and 6), and written into `#__postinstall_messages` by the component's
+  installer script directly, as the model would: from the command line the
+  model finds no table class. The component's uninstallation removes it.
+- **Dry run:** the confirmation carries the address the page showed, which
+  the settings must still give when they are saved - settings changed after
+  the check have to be checked again.
+- **Console:** `bfstop:setup` replaces stored values which block saving
+  only with `--fix` (it lists them otherwise), keeps "Reporting Only" only
+  with `--block-mode=off`, and takes the proxy settings without a dry run
+  (there is no request). The commands print English, as Joomla's own; the
+  model's messages are translated. The console plugin uses the component's
+  setup model (booted through Joomla), so the settings are checked as in
+  the browser.
+- **Block mail:** whether the blocked address may be a proxy is decided
+  before the block, and only when a block mail may be sent; the check of
+  the known-address table costs one query then. The query counts of page
+  views, blocked requests and failed logins are unchanged.
+- **Tests of the update:** the update suite (`tests/Upgrade`) runs one
+  update from the command line, so it checks that the plugin stays enabled
+  there and that the setup state is recorded. The browser update with an
+  `X-Forwarded-For` request from a private address, and the command-line
+  update with "Behind Load Balancer", are tested in `InstallerScriptTest`,
+  which calls the installer script as Joomla does; "Reporting Only" with a
+  delay in `SetupTest`.
+
