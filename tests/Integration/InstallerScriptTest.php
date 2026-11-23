@@ -231,6 +231,103 @@ class InstallerScriptTest extends IntegrationTestCase
 	}
 
 	/**
+	 * Where the settings already read the address behind the proxy, or the
+	 * step of the assistant for the proxy is done, the update leaves the
+	 * plugin enabled: it blocks the clients, not the proxy.
+	 */
+	public function testAnUpdateThroughAProxyWhichIsSetUpDoesNotDisableThePlugin()
+	{
+		$proxied = array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7');
+		$setUp = array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.0/24, 192.0.2.1', 'proxyHeaderSource' => 'HTTP_X_FORWARDED_FOR');
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($proxied, false, false, $setUp));
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($proxied, true, true, $setUp), 'the console: there are trusted proxies');
+		$this->assertSame('proxy', \PlgsystembfstopInstallerScript::setupDisableReason(
+			array('REMOTE_ADDR' => '10.0.1.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7'), false, false, $setUp), 'another proxy');
+		$this->assertSame('proxy', \PlgsystembfstopInstallerScript::setupDisableReason($proxied, false, false,
+			array('useProxy' => '0') + $setUp), 'proxy support is off');
+		$this->assertSame('loadbalancer', \PlgsystembfstopInstallerScript::setupDisableReason($proxied, true, true,
+			array('proxyIpAddress' => '') + $setUp), 'no trusted proxies');
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($proxied, false, false, array(), true), 'the step is done');
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($proxied, true, true, array(), true));
+	}
+
+	/**
+	 * The update decides whether an address is a trusted proxy without the
+	 * library (see proxySetUp()), as IpHelper::isTrustedProxy() does.
+	 */
+	public function testTheUpdateMatchesTrustedProxiesAsTheLibraryDoes()
+	{
+		$trusted = array('10.0.0.0/24', '192.0.2.1', '2001:db8::/32', '::ffff:198.51.100.0/120', '2001:DB8:1::5',
+			'203.0.113.77/24', 'garbage', '10.1.0.0/40', '172.16.0.0/x', '198.18.0.1');
+		$addresses = array('10.0.0.5', '10.0.1.5', '192.0.2.1', '192.0.2.2', '2001:db8:ffff::1', '2001:db9::1',
+			'198.51.100.200', '::ffff:198.51.100.7', '::ffff:10.0.0.9', '203.0.113.1', '203.0.114.1', '10.1.0.1',
+			'198.18.0.1', '', 'nonsense', '10.0.0.0/24', '172.16.0.1');
+		foreach ($addresses as $address)
+		{
+			foreach (array_merge(array_map(fn ($entry) => array($entry), $trusted), array($trusted, array())) as $entries)
+			{
+				$this->assertSame(\Codeling\Library\Bfstop\Helper\IpHelper::isTrustedProxy($address, $entries),
+					\PlgsystembfstopInstallerScript::isTrustedProxy($address, $entries), $address.' in '.implode(', ', $entries));
+			}
+		}
+	}
+
+	/**
+	 * A later update's findings replace an earlier one's: one which came
+	 * another way leaves no headers of the earlier one behind, and once the
+	 * plugin was enabled again, no reason why it is disabled. While it is
+	 * still disabled, the reason stays; the version of the first update
+	 * stays too (its steps are still to be offered).
+	 */
+	public function testALaterUpdateReplacesWhatAnEarlierOneFound()
+	{
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$enabled = "SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'";
+		$before = (int) $this->queryValue($enabled);
+		$server = $_SERVER;
+		$original = $this->getSettings();
+		$pluginParams = $this->pluginParams();
+		try
+		{
+			$this->db->setQuery("DELETE FROM #__bfstop_state WHERE name IN ('setup', 'setupSteps')")->execute();
+			$this->db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			$_SERVER['REMOTE_ADDR'] = '10.0.0.5';
+			$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.7';
+			$this->update('1.5.2', array('blockEnabled' => '1'));
+			$this->assertSame(0, (int) $this->queryValue($enabled));
+			$this->assertSame('proxy', \PlgsystembfstopInstallerScript::readSetupState($this->db)['disabled']);
+
+			// still disabled: a direct update says why it is
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.9';
+			unset($_SERVER['HTTP_X_FORWARDED_FOR']);
+			$this->update('2.0.0', array('blockMode' => 'full'), false);
+			$this->assertSame(0, (int) $this->queryValue($enabled));
+			$setup = \PlgsystembfstopInstallerScript::readSetupState($this->db);
+			$this->assertSame(array('mode' => 'upgrade', 'from' => '1.5.2', 'scenario' => 'A', 'headers' => array(),
+				'disabled' => 'proxy'), $setup);
+
+			// enabled again by hand, the proxy set up: an update through it disables nothing, and the old reason is gone
+			$this->db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			$_SERVER['REMOTE_ADDR'] = '10.0.0.5';
+			$_SERVER['HTTP_CF_CONNECTING_IP'] = '203.0.113.7';
+			$this->update('2.0.0', array('blockMode' => 'full', 'useProxy' => '1', 'proxyIpAddress' => '10.0.0.5',
+				'proxyHeaderSource' => 'HTTP_CF_CONNECTING_IP'));
+			$this->assertSame(1, (int) $this->queryValue($enabled), 'the proxy is set up');
+			$setup = \PlgsystembfstopInstallerScript::readSetupState($this->db);
+			$this->assertSame(array('mode' => 'upgrade', 'from' => '1.5.2', 'scenario' => 'B',
+				'headers' => array('HTTP_CF_CONNECTING_IP')), $setup);
+		}
+		finally
+		{
+			$_SERVER = $server;
+			$this->setSettings($original);
+			$this->setPluginParams($pluginParams);
+			$this->db->setQuery("UPDATE #__extensions SET enabled=".$before." WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			Factory::getApplication()->getMessageQueue(true);
+		}
+	}
+
+	/**
 	 * The update tells the scenarios apart without the library (see
 	 * proxyScenario()): the same way as the library's ProxyDetector, with the
 	 * same headers and networks.
@@ -253,13 +350,17 @@ class InstallerScriptTest extends IntegrationTestCase
 	 * Runs the update of the installed plugin from $fromVersion, whose stored
 	 * settings are $params - in the plugin's params before 2.0.0, in the
 	 * component's since; returns the settings afterwards, which are the
-	 * component's.
+	 * component's. The plugin is enabled before, unless $enabled is false.
 	 */
-	private function update($fromVersion, array $params)
+	private function update($fromVersion, array $params, bool $enabled = true)
 	{
 		$this->setInstalledVersion($fromVersion);
 		$before200 = version_compare($fromVersion, '2.0.0-dev', '<');
 		$this->setSettings($before200 ? '{}' : json_encode($params));
+		if (!$enabled)
+		{
+			$this->db->setQuery("UPDATE #__extensions SET enabled=0 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+		}
 		$this->setPluginParams($before200 ? json_encode($params) : '{}');
 		list($script, $adapter) = $this->script();
 		$this->assertTrue($script->preflight('update', $adapter));

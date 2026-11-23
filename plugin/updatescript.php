@@ -480,6 +480,14 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	 * version), what it found and did. And disables the plugin where it
 	 * would block everybody (see setupDisableReason()): it stays disabled
 	 * until the assistant has been completed.
+	 *
+	 * What an update finds about the request (scenario, headers) and why it
+	 * disabled the plugin replaces what an earlier one found (UpdateFindings):
+	 * a second update may come another way, or after the proxy was set up.
+	 * The reason stays while the plugin is still disabled for it. What was
+	 * done to the settings (delays, .htaccess) stays to be told, and the
+	 * version of the first update whose setup is still open: the steps for
+	 * an update from before 2.0.0 are still to be offered.
 	 */
 	private function recordSetupState($db)
 	{
@@ -494,7 +502,7 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		$entry = array(
 			// an installation whose setup is still open stays one
 			'mode' => ($setup['mode'] ?? '') === 'install' ? 'install' : 'upgrade',
-			'from' => (string) $this->previousVersion,
+			'from' => isset($setup['from']) && (string) $setup['from'] !== '' ? (string) $setup['from'] : (string) $this->previousVersion,
 		);
 		if (!$cli)
 		{
@@ -510,14 +518,28 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 		{
 			$entry['htaccess'] = 1;
 		}
-		$reason = self::setupDisableReason($_SERVER, $cli, (bool) $app->get('behind_loadbalancer', 0));
+		$steps = json_decode((string) $db->setQuery($db->createQuery()
+			->select($db->quoteName('value'))
+			->from($db->quoteName('#__bfstop_state'))
+			->where($db->quoteName('name') . ' = ' . $db->quote('setupSteps')))->loadResult(), true);
+		$reason = self::setupDisableReason($_SERVER, $cli, (bool) $app->get('behind_loadbalancer', 0),
+			self::storedSettings($db)['params'], is_array($steps) && ($steps['proxy'] ?? '') === 'done');
 		if ($reason !== null && self::disablePlugin($db))
 		{
 			$entry['disabled'] = $reason;
 			$this->pluginDisabled = $reason;
 		}
-		self::writeSetupState($db, $entry);
+		elseif (isset($setup['disabled']) && !self::pluginEnabled($db))
+		{
+			// disabled by an earlier update, and still
+			$entry['disabled'] = (string) $setup['disabled'];
+		}
+		self::writeSetupState($db, $entry, self::UpdateFindings);
 	}
+
+	// the parts of the state of the setup which each update finds anew, see
+	// recordSetupState()
+	public const UpdateFindings = array('scenario', 'headers', 'disabled');
 
 	// the forwarding headers of IpHelper::KnownProxyHeaders and
 	// ::UnsupportedProxyHeaders of the library, and its non-public networks
@@ -631,14 +653,89 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	 * everybody, the administrator too. An update from the command line has
 	 * no request to look at: there it is Joomla's "Behind Load Balancer"
 	 * ($behindLoadBalancer).
+	 *
+	 * Not if the step of the assistant for the proxy is done
+	 * ($proxyStepDone), or the settings $settings already read the address
+	 * behind the proxy (proxySetUp()).
 	 */
-	public static function setupDisableReason(array $server, $cli, $behindLoadBalancer)
+	public static function setupDisableReason(array $server, $cli, $behindLoadBalancer, array $settings = array(),
+		$proxyStepDone = false)
 	{
+		if ($proxyStepDone || self::proxySetUp($server, $cli, $settings))
+		{
+			return null;
+		}
 		if ($cli)
 		{
 			return $behindLoadBalancer ? 'loadbalancer' : null;
 		}
 		return in_array(self::proxyScenario($server), array('B', 'D', 'E'), true) ? 'proxy' : null;
+	}
+
+	/**
+	 * Whether the settings $settings read the client address behind a
+	 * proxy for the request $server: proxy support is on and REMOTE_ADDR is
+	 * one of the trusted proxies - as IpHelper::getAddress() of the library
+	 * decides it, which the update can't call (see canonicalAddress()); a
+	 * test checks that both agree. On the command line ($cli) there is no
+	 * request: that there are trusted proxies.
+	 */
+	public static function proxySetUp(array $server, $cli, array $settings)
+	{
+		if ((string) ($settings['useProxy'] ?? '0') !== '1')
+		{
+			return false;
+		}
+		$trusted = preg_split('/[\s,;]+/', (string) ($settings['proxyIpAddress'] ?? ''), -1, PREG_SPLIT_NO_EMPTY);
+		if ($cli)
+		{
+			return count($trusted) > 0;
+		}
+		return self::isTrustedProxy((string) ($server['REMOTE_ADDR'] ?? ''), $trusted);
+	}
+
+	/**
+	 * Whether $ip is one of the addresses or networks $trusted: the
+	 * library's IpHelper::isTrustedProxy(), see proxySetUp().
+	 */
+	public static function isTrustedProxy($ip, array $trusted)
+	{
+		$address = self::canonicalAddress($ip);
+		if ($address === null || strpos($address, '/') !== false)
+		{
+			return false;
+		}
+		foreach ($trusted as $entry)
+		{
+			$entry = self::unmapped((string) $entry);
+			$parts = explode('/', $entry);
+			if (count($parts) === 1)
+			{
+				if (self::canonicalAddress($entry) === $address)
+				{
+					return true;
+				}
+				continue;
+			}
+			// the address masked to the network's prefix is the network
+			$network = self::canonicalAddress($entry);
+			if ($network !== null && self::canonicalAddress($address.'/'.$parts[1]) === $network)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether the system plugin is enabled. */
+	private static function pluginEnabled($db)
+	{
+		return (int) $db->setQuery($db->createQuery()
+			->select($db->quoteName('enabled'))
+			->from($db->quoteName('#__extensions'))
+			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop')))->loadResult() === 1;
 	}
 
 	/**
@@ -716,16 +813,17 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 
 	/**
 	 * Adds $values to the main row of the state of the setup assistant (see
-	 * readSetupState()); a row holds 255 characters at most, so the header
-	 * names are left out if they don't fit (as SetupState does).
+	 * readSetupState()), after taking the parts $replace out of it; a row
+	 * holds 255 characters at most, so the header names are left out if
+	 * they don't fit (as SetupState does).
 	 */
-	public static function writeSetupState($db, array $values)
+	public static function writeSetupState($db, array $values, array $replace = array())
 	{
 		$exists = $db->setQuery($db->createQuery()
 			->select('COUNT(*)')
 			->from($db->quoteName('#__bfstop_state'))
 			->where($db->quoteName('name') . ' = ' . $db->quote('setup')))->loadResult() > 0;
-		$state = array_merge(self::readSetupState($db), $values);
+		$state = array_merge(array_diff_key(self::readSetupState($db), array_flip($replace)), $values);
 		$json = json_encode((object) $state);
 		if (strlen($json) > 255)
 		{
