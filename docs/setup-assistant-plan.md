@@ -543,13 +543,15 @@ plan left open:
 - **State:** a row of `#__bfstop_state` holds 255 characters, so the state
   is three rows: `setup` (mode, version updated from, why the update
   disabled the plugin, scenario and header names of the update's request,
-  delays removed, `.htaccess` not rewritten, the confirmed fingerprint,
-  `completed`), `setupSteps` (the steps which aren't pending) and
+  delays removed, `.htaccess` not rewritten, the scenario of an
+  acknowledged "no proxy" (see section 16), `completed`), `setupSteps` (the
+  steps which aren't pending) and
   `setupDismissed` (up to 16 fingerprints). They are read with one query.
   The installer script writes `setup` itself, in the same form (a test
   checks that `SetupState` reads it). An installation stays in mode
   `install` across updates until its setup is completed; any update whose
-  setup isn't completed records its findings and may disable the plugin.
+  setup isn't completed records its findings and may disable the plugin
+  (each update's findings replace the last one's, see section 16).
 - **Detection in the installer:** the update can't use the library's
   classes (those of the version replaced may be loaded), so it has its own
   copy of the scenario detection and of the header and network lists; a
@@ -625,3 +627,51 @@ plan left open:
 - **Scheduler (7)** shows the task plugin, the maintenance task and
   whether the Task Scheduler's lazy mode is on, with links.
 
+## 16. Changes after the review
+
+Where the review of the implementation changed it, and the deviations from
+the plan above which remain:
+
+- **Trusted proxies are stored on one line,** separated by `, `
+  (`IpHelper::formatTrustedProxies()`), whatever the assistant, the
+  Cloudflare ranges or `bfstop:setup` were given: the settings page's field
+  is one line, and a browser drops the line breaks of its value.
+- **Hashing old usernames on MySQL/MariaDB** reads, compares and renames by
+  exact spelling (`CAST(... AS BINARY)`): the collation `utf8mb4_unicode_ci`
+  takes "muller" and "Müller" for the same name. Whether a name is an
+  account's is decided by the database's comparison, as `isAccount()` does
+  for a failed login, one `EXISTS` per name (fail-closed: nothing hashed).
+- **The update doesn't disable the plugin where the proxy is set up**
+  (proxy support on and `REMOTE_ADDR` one of the trusted proxies; on the
+  command line, trusted proxies being set) or the proxy step is done. Each
+  update's scenario, headers and reason replace the last update's; the
+  reason stays while the plugin is still disabled, the version of the first
+  update stays (its steps are still to be offered).
+- **"No proxy" behind a proxy or CDN (B, D)** still passes the proxy step
+  with the acknowledgement and without a dry run (section 4 asks for the
+  dry run for B and D; a corporate proxy on the administrator's side is
+  the case the acknowledgement is for). Instead of the fingerprint of
+  section 5.2, which nothing compared, the setup state keeps the scenario
+  of the acknowledgement, and the summary warns prominently about it while
+  proxy support is off.
+- **Behind a CDN other than Cloudflare (D),** no address is proposed (the
+  request's is one of the CDN's many servers); the page recommends the web
+  server's real-IP module, or the CDN's published ranges. There is no
+  question "which provider" (5.2): Cloudflare is recognised by its header.
+  For several nodes (B and D), the textarea takes them all, and the page
+  offers their narrowest common network (`IpHelper::commonNetwork()`, no
+  wider than `/8` or `/16`) with a button that puts it into the dry run;
+  there is no separate question "more than one node?".
+- **The summary warns before a lock-out:** if the administrator's own
+  address, as the saved settings take it from their request, has an active
+  block (and isn't on the allow list), activating would lock them out.
+- **Super users** of the proxy warning are the members of every group for
+  which `Access::checkGroup()` grants `core.admin` (also by inheritance),
+  and each recipient gets a mail of their own (section 7 said one mail per
+  event per person; it is now one per recipient, nobody sees the others).
+- **Cloudflare's ranges** are fetched without following redirects, and an
+  answer longer than 16 KB is refused (with cURL, the transfer is broken
+  off).
+- **The settings page** shows the proxy mismatches once, next to the proxy
+  settings, not also as banners; the blocks that look like a proxy's are
+  read on the proxy page only.

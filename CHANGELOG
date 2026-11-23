@@ -38,14 +38,20 @@
     in rounds - hashing the usernames 1.x stored in plain text, merging
     the statistics which end up with the same hash) and the scheduled
     maintenance; the summary lists the defaults of 2.0 which change what
-    an updated site does
+    an updated site does, and warns where activating would lock the
+    administrator out (their own address is blocked) or where they said
+    there is no proxy although their request came through one. Behind a
+    CDN other than Cloudflare, no address is proposed: the page recommends
+    the web server's real-IP module or the CDN's published ranges, and
+    offers the narrowest network of several nodes entered
   - Activation: the system plugin installs disabled (as in 1.5) and the
     setup assistant activates it - behind a proxy, BFStop would count every
     visitor's failed logins against the proxy's address and block
     everybody. An update through the browser whose request came through a
     proxy, load balancer or CDN disables the plugin until the assistant is
     done (and says so); one from the command line does where Joomla's
-    "Behind Load Balancer" is on. Otherwise the plugin stays enabled, and
+    "Behind Load Balancer" is on - neither where the proxy settings already
+    take the address behind the proxy. Otherwise the plugin stays enabled, and
     the update message, a post-installation message, a banner on the
     BFStop pages and the quick icon point to the assistant. It replaces
     the update hints of the settings which moved and of the API
@@ -78,8 +84,8 @@
     header, or one at least two accounts have logged in from): everybody
     behind it is blocked then. It says how to lift the block (the block
     list, or bfstop:unblock), and also goes to the super users who receive
-    system emails (all super users if none does), once per address, within
-    the limit of "Notify on blocks"
+    system emails (all super users if none does), in a mail of their own
+    for each address, within the limit of "Notify on blocks"
   - Removed: the delay of the response to failed logins ("Delay", "Adaptive
     Delay" and its thresholds). A response held back by PHP holds a PHP
     worker for the whole delay, which an attacker sending failed logins in
