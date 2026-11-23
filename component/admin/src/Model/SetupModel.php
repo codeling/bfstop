@@ -23,8 +23,10 @@ use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
 use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
 use Codeling\Library\Bfstop\Service\Setup\SettingsAudit;
 use Codeling\Library\Bfstop\Service\Setup\SetupState;
+use Codeling\Library\Bfstop\Service\Setup\UsernameHashing;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Cache\CacheControllerFactoryInterface;
+use Joomla\CMS\Component\ComponentHelper;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Http\HttpFactory;
 use Joomla\CMS\Language\Text;
@@ -47,19 +49,21 @@ use Joomla\Registry\Registry;
 class SetupModel extends BaseDatabaseModel
 {
 	/** the pages of the assistant, in their order (not all are shown, see pages()) */
-	public const Pages = array('overview', 'proxy', 'cleanup', 'blockmode', 'htaccess', 'notify', 'parts', 'ratelimit',
-		'summary');
+	public const Pages = array('overview', 'proxy', 'cleanup', 'blockmode', 'htaccess', 'notify', 'parts', 'privacy',
+		'ratelimit', 'scheduler', 'summary');
 
 	/** the step of the setup state each page stands for (the others stand for none) */
 	public const PageSteps = array('proxy' => SetupState::StepProxy, 'cleanup' => SetupState::StepCleanup,
 		'blockmode' => SetupState::StepBlockMode, 'htaccess' => SetupState::StepHtaccess,
-		'notify' => SetupState::StepNotify, 'parts' => SetupState::StepParts, 'ratelimit' => SetupState::StepRateLimit);
+		'notify' => SetupState::StepNotify, 'parts' => SetupState::StepParts, 'privacy' => SetupState::StepPrivacy,
+		'ratelimit' => SetupState::StepRateLimit, 'scheduler' => SetupState::StepScheduler);
 
 	/** the settings each step of a page of settings saves (see saveFields()) */
 	public const StepFields = array(
 		SetupState::StepNotify => array('emailaddress', 'userID', 'groupNotificationEnabled', 'userGroup',
 			'notifyBlockedUser', 'notifyBlockedNumber', 'notifyFailedNumber', 'notifyFailedOnlyExisting'),
 		SetupState::StepParts => array('enabledForOrigin'),
+		SetupState::StepPrivacy => array('deleteOld', 'unknownUsernameMode'),
 	);
 
 	/** Cloudflare's address ranges, which the proxy step fetches when asked to */
@@ -103,7 +107,7 @@ class SetupModel extends BaseDatabaseModel
 	 * only make sense after an update only then (the clean-up after the
 	 * proxy fix behind a proxy, the .htaccess section of an earlier version
 	 * while the file has one, the rate limiting where the update removed
-	 * delays which were in use).
+	 * delays which were in use, the privacy of the data of 1.x).
 	 *
 	 * @return string[]
 	 */
@@ -115,6 +119,7 @@ class SetupModel extends BaseDatabaseModel
 			'cleanup' => $upgrade && (Settings::bool($this->settings(), 'useProxy') ||
 				$setup->status(SetupState::StepCleanup) !== SetupState::Pending),
 			'htaccess' => $upgrade && ($this->legacyHtaccess()['present'] || $setup->htaccessNotRewritten()),
+			'privacy' => $upgrade,
 			'ratelimit' => $upgrade && $setup->delaysRemoved(),
 		);
 		return array_values(array_filter(self::Pages, fn ($page) => $shown[$page] ?? true));
@@ -144,7 +149,7 @@ class SetupModel extends BaseDatabaseModel
 	/** Marks the step $step, which saves no settings (it explains), as done. */
 	public function acknowledge(string $step): bool
 	{
-		if (!in_array($step, array(SetupState::StepRateLimit), true))
+		if (!in_array($step, array(SetupState::StepRateLimit, SetupState::StepScheduler), true))
 		{
 			$this->setError(Text::_('COM_BFSTOP_SETUP_ERROR_SKIP'));
 			return false;
@@ -307,6 +312,94 @@ class SetupModel extends BaseDatabaseModel
 		$this->saveSetupState();
 		ActionLogHelper::log('setup_step_applied', array('step' => SetupState::StepHtaccess));
 		return true;
+	}
+
+	/**
+	 * What the privacy step shows: how many failed logins there are and when
+	 * the oldest was, and the log file (which holds usernames too).
+	 *
+	 * @return array{count: int, oldest: string|null, logFile: string, logBytes: int}
+	 */
+	public function privacyFacts(): array
+	{
+		$logFile = rtrim((string) Factory::getApplication()->get('log_path'), '/\\').'/plg_system_bfstop.log.php';
+		return $this->repositories()->failedLogins()->extent() + array(
+			'logFile' => $logFile,
+			'logBytes' => is_file($logFile) ? (int) filesize($logFile) : 0,
+		);
+	}
+
+	/**
+	 * Hashes the plain usernames earlier versions stored (see
+	 * UsernameHashing), in rounds, for at most $seconds: of the failed logins
+	 * first ($table UsernameHashing::FailedLogins), then of the statistics,
+	 * going on after the username $after.
+	 *
+	 * @return array{table: string, after: string, done: bool, hashed: int}
+	 *         where to go on, unless done
+	 */
+	public function hashUsernames(string $table, string $after, float $seconds = 5.0): array
+	{
+		$hashing = new UsernameHashing($this->repositories(), $this->settings(),
+			(string) Factory::getApplication()->get('secret', ''));
+		$table = $table === UsernameHashing::Statistics ? $table : UsernameHashing::FailedLogins;
+		$until = microtime(true) + $seconds;
+		$hashed = 0;
+		do
+		{
+			$round = $hashing->round($table, $after);
+			$hashed += $round['hashed'];
+			if ($round['last'] !== null)
+			{
+				$after = $round['last'];
+				continue;
+			}
+			if ($table === UsernameHashing::Statistics)
+			{
+				ActionLogHelper::log('usernames_hashed');
+				return array('table' => $table, 'after' => '', 'done' => true, 'hashed' => $hashed);
+			}
+			$table = UsernameHashing::Statistics;
+			$after = '';
+		}
+		while (microtime(true) < $until);
+		return array('table' => $table, 'after' => $after, 'done' => false, 'hashed' => $hashed);
+	}
+
+	/**
+	 * What the scheduler step shows: whether the task plugin is enabled,
+	 * the maintenance tasks (title, state, last and next run), and whether
+	 * the Task Scheduler runs tasks in visitors' requests (its "lazy
+	 * scheduler"; otherwise a cron job has to).
+	 *
+	 * @return array{plugin: bool, tasks: object[], lazy: bool}
+	 */
+	public function schedulerFacts(): array
+	{
+		$db = $this->getDatabase();
+		$facts = array('plugin' => false, 'tasks' => array(), 'lazy' => true);
+		try
+		{
+			$db->setQuery($db->createQuery()
+				->select($db->quoteName('enabled'))
+				->from($db->quoteName('#__extensions'))
+				->where($db->quoteName('type').' = '.$db->quote('plugin'))
+				->where($db->quoteName('folder').' = '.$db->quote('task'))
+				->where($db->quoteName('element').' = '.$db->quote('bfstop')));
+			$facts['plugin'] = (int) $db->loadResult() === 1;
+			$db->setQuery($db->createQuery()
+				->select($db->quoteName(array('id', 'title', 'state', 'last_execution', 'next_execution', 'times_failed')))
+				->from($db->quoteName('#__scheduler_tasks'))
+				->where($db->quoteName('type').' = '.$db->quote('bfstop.maintenance'))
+				->order($db->quoteName('id')));
+			$facts['tasks'] = $db->loadObjectList();
+			$facts['lazy'] = (bool) ComponentHelper::getParams('com_scheduler')->get('lazy_scheduler.enabled', 1);
+		}
+		catch (\Throwable $e)
+		{
+			// what can't be read is shown as missing
+		}
+		return $facts;
 	}
 
 	/** Joomla's "Behind Load Balancer" (see ProxyDetector::loadBalancerHint()). */

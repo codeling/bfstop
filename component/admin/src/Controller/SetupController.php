@@ -285,4 +285,32 @@ class SetupController extends BaseController
 		$model = $this->setupModel();
 		$this->finish($model, $model->upgradeHtaccess(), 'htaccess', Text::_('COM_BFSTOP_SETUP_HTACCESS_DONE'));
 	}
+
+	// where the hashing of old usernames goes on, see hashUsernames()
+	public const HashingUserState = 'com_bfstop.setup.hashing';
+
+	/**
+	 * Hashes the plain usernames of earlier versions (see
+	 * SetupModel::hashUsernames()) for a few seconds; the page shows how far
+	 * it got and offers to go on, until it is done.
+	 */
+	public function hashUsernames()
+	{
+		if (!$this->allowed('privacy'))
+		{
+			return;
+		}
+		$app = $this->app;
+		$progress = $app instanceof CMSApplication ? $app->getUserState(self::HashingUserState) : null;
+		$progress = is_array($progress) ? $progress : array('table' => '', 'after' => '', 'hashed' => 0);
+		$round = $this->setupModel()->hashUsernames((string) $progress['table'], (string) $progress['after']);
+		$hashed = (int) $progress['hashed'] + $round['hashed'];
+		if ($app instanceof CMSApplication)
+		{
+			$app->setUserState(self::HashingUserState, $round['done'] ? null
+				: array('table' => $round['table'], 'after' => $round['after'], 'hashed' => $hashed));
+		}
+		$this->setRedirect(self::pageUrl('privacy'), Text::sprintf($round['done']
+			? 'COM_BFSTOP_SETUP_HASHING_DONE' : 'COM_BFSTOP_SETUP_HASHING_PROGRESS', $hashed), 'message');
+	}
 }

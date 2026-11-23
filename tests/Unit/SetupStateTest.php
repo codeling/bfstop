@@ -69,7 +69,8 @@ class SetupStateTest extends TestCase
 			'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP',
 			'HTTP_TRUE_CLIENT_IP', 'HTTP_FASTLY_CLIENT_IP'))))));
 		foreach (array(SetupState::StepProxy, SetupState::StepBlockMode, SetupState::StepCleanup, SetupState::StepHtaccess,
-			SetupState::StepNotify, SetupState::StepNotifyMeaning, SetupState::StepParts, SetupState::StepRateLimit) as $step)
+			SetupState::StepNotify, SetupState::StepNotifyMeaning, SetupState::StepParts, SetupState::StepRateLimit,
+			SetupState::StepPrivacy, SetupState::StepScheduler) as $step)
 		{
 			// the longest status of every step
 			$state->setStatus($step, SetupState::Skipped);

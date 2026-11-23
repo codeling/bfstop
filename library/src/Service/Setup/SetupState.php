@@ -53,6 +53,8 @@ final class SetupState
 	public const StepNotifyMeaning = 'notifyMeaning';
 	public const StepParts = 'parts';
 	public const StepRateLimit = 'rateLimit';
+	public const StepPrivacy = 'privacy';
+	public const StepScheduler = 'scheduler';
 
 	/** the steps which have to be done before protection is activated */
 	public const RequiredSteps = array(self::StepProxy, self::StepBlockMode);

@@ -432,16 +432,16 @@ class SetupTest extends IntegrationTestCase
 		$state = (new Repositories($this->logger))->state();
 		$state->set(SetupState::Name, json_encode(array('mode' => 'install')));
 		self::storeSettings($this->db, json_encode(array('htaccessPath' => sys_get_temp_dir().'/bfstop-no-such-dir')));
-		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'summary'), $this->model()->pages());
+		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'scheduler', 'summary'), $this->model()->pages());
 		$this->assertSame('blockmode', $this->model()->nextPage('proxy'));
 		$this->assertSame('summary', $this->model()->nextPage('summary'));
 		$state->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2')));
-		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'summary'),
+		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'privacy', 'scheduler', 'summary'),
 			$this->model()->pages(), 'no proxy, no delays, no .htaccess section of 1.x');
 		$state->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2', 'delays' => 1)));
 		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.5')));
-		$this->assertSame(array('overview', 'proxy', 'cleanup', 'blockmode', 'notify', 'parts', 'ratelimit', 'summary'),
-			$this->model()->pages());
+		$this->assertSame(array('overview', 'proxy', 'cleanup', 'blockmode', 'notify', 'parts', 'privacy', 'ratelimit',
+			'scheduler', 'summary'), $this->model()->pages());
 	}
 
 	/** Optional steps can be skipped, the required ones not. */
@@ -568,6 +568,8 @@ class SetupTest extends IntegrationTestCase
 			$this->assertTrue($model->saveFields(SetupState::StepParts, array('enabledForOrigin' => array('1', '4')), array()),
 				self::errors($model));
 			$this->assertSame(5, (int) $this->stored()['enabledForOrigin']);
+			$this->assertTrue($this->model()->saveFields(SetupState::StepPrivacy, array('deleteOld' => '8'), array()));
+			$this->assertSame('8', (string) $this->stored()['deleteOld']);
 			$this->assertFalse($this->model()->saveFields('proxy', array('useProxy' => '1'), array()), 'not a step of settings');
 			$this->assertGreaterThanOrEqual(0, $this->model()->apiTokenUsers());
 		}
@@ -575,5 +577,61 @@ class SetupTest extends IntegrationTestCase
 		{
 			Factory::getApplication()->set('live_site', '');
 		}
+	}
+
+	/**
+	 * The plain usernames of 1.x are hashed on request, in rounds: not those
+	 * of accounts or the common ones; statistics which end up with the same
+	 * hash are merged.
+	 */
+	public function testHashingTheUsernamesOf1x()
+	{
+		$secret = (string) Factory::getApplication()->get('secret', '');
+		$hash = fn ($name) => \Codeling\Library\Bfstop\Helper\UsernameHelper::forStorage($name, 'hash', false, $secret);
+		foreach (array('Admin', 'root', 'my-Secret-password', $hash('other')) as $i => $name)
+		{
+			$this->insert('#__bfstop_failedlogin', array('ipaddress' => '203.0.113.'.$i, 'logtime' => self::minutesAgo(1),
+				'username' => $name, 'origin' => 0));
+		}
+		$this->insert('#__bfstop_username_stats', array('username' => 'my-secret-password', 'attempts' => 2,
+			'first_attempt' => '2024-01-01 10:00:00', 'last_attempt' => '2024-01-05 10:00:00'));
+		$this->insert('#__bfstop_username_stats', array('username' => $hash('my-secret-password'), 'attempts' => 3,
+			'first_attempt' => '2025-01-01 10:00:00', 'last_attempt' => '2025-02-01 10:00:00'));
+		$this->insert('#__bfstop_username_stats', array('username' => 'Admin', 'attempts' => 1,
+			'first_attempt' => '2024-01-01 10:00:00', 'last_attempt' => '2024-01-01 10:00:00'));
+
+		$model = $this->model();
+		$progress = array('table' => '', 'after' => '');
+		for ($i = 0; $i < 10; ++$i)
+		{
+			$progress = $model->hashUsernames((string) $progress['table'], (string) $progress['after'], 0.0);
+			if ($progress['done'])
+			{
+				break;
+			}
+		}
+		$this->assertTrue($progress['done']);
+		$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY ipaddress');
+		$this->assertSame(array('Admin', 'root', $hash('my-Secret-password'), $hash('other')), $this->db->loadColumn());
+		$this->db->setQuery('SELECT username, attempts, first_attempt, last_attempt FROM #__bfstop_username_stats ORDER BY username');
+		$stats = $this->db->loadAssocList('username');
+		$this->assertCount(2, $stats);
+		$merged = $stats[$hash('my-secret-password')];
+		$this->assertSame(5, (int) $merged['attempts']);
+		$this->assertStringStartsWith('2024-01-01', (string) $merged['first_attempt']);
+		$this->assertStringStartsWith('2025-02-01', (string) $merged['last_attempt']);
+		$this->assertArrayHasKey('Admin', $stats);
+		$this->assertTrue(\Codeling\Library\Bfstop\Service\Setup\UsernameHashing::isHashed($hash('x')));
+		$this->assertSame(1, $this->model()->privacyFacts()['count'] > 0 ? 1 : 0);
+	}
+
+	/** What the scheduler step shows of the installed site. */
+	public function testTheSchedulerFacts()
+	{
+		$facts = $this->model()->schedulerFacts();
+		$this->assertTrue($facts['plugin'], 'the package installs the task plugin switched on');
+		$this->assertCount(1, $facts['tasks']);
+		$this->assertSame('Brute Force Stop maintenance', $facts['tasks'][0]->title);
+		$this->assertIsBool($facts['lazy']);
 	}
 }

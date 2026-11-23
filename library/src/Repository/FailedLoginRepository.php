@@ -258,4 +258,57 @@ class FailedLoginRepository extends Repository
 				->whereIn($this->db->quoteName('ipaddress'), $addresses, ParameterType::STRING));
 		}, null);
 	}
+
+	/**
+	 * The usernames of the failed logins which sort after $after, at most
+	 * $limit, in order: for going through all of them in rounds. Fail-open:
+	 * none (the round ends).
+	 *
+	 * @return string[]
+	 */
+	public function usernamesAfter(string $after, int $limit)
+	{
+		return $this->failOpen('usernamesAfter', function () use ($after, $limit)
+		{
+			$query = $this->db->createQuery()
+				->select('DISTINCT '.$this->db->quoteName('username'))
+				->from($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('username').' > :after')
+				->order($this->db->quoteName('username'));
+			return $this->column($query, array('after' => $after), 0, $limit);
+		}, array());
+	}
+
+	/**
+	 * Replaces the username $old of the failed logins by $new (its hash, see
+	 * UsernameHelper). Fail-open: it stays.
+	 */
+	public function renameUsername(string $old, string $new)
+	{
+		$this->failOpen('renameUsername', function () use ($old, $new)
+		{
+			$this->execute($this->db->createQuery()
+				->update($this->db->quoteName(self::Table))
+				->set($this->db->quoteName('username').' = :new')
+				->where($this->db->quoteName('username').' = :old'), array('new' => $new, 'old' => $old));
+		}, null);
+	}
+
+	/**
+	 * How many failed logins there are, and when the oldest was. Fail-open:
+	 * none.
+	 *
+	 * @return array{count: int, oldest: string|null}
+	 */
+	public function extent()
+	{
+		return $this->failOpen('extent', function ()
+		{
+			$row = $this->row($this->db->createQuery()
+				->select('COUNT(*) AS '.$this->db->quoteName('total'))
+				->select('MIN('.$this->db->quoteName('logtime').') AS '.$this->db->quoteName('oldest'))
+				->from($this->db->quoteName(self::Table)));
+			return array('count' => (int) ($row['total'] ?? 0), 'oldest' => isset($row['oldest']) ? (string) $row['oldest'] : null);
+		}, array('count' => 0, 'oldest' => null));
+	}
 }

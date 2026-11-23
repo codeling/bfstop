@@ -34,7 +34,14 @@ $completed = $this->setup->completedAt();
 </ul>
 <p><?php echo Text::sprintf('COM_BFSTOP_SETUP_SUMMARY_SETTINGS', (int) $this->setting('blockNumber'),
 	DurationHelper::toReadable((int) $this->setting('checkInterval')), DurationHelper::toReadable((int) $this->setting('blockDuration'))); ?></p>
-<?php if (!in_array('ratelimit', $this->pages, true)): ?>
+<?php if ($this->setup->mode() === 'upgrade'): ?>
+<p><?php echo Text::_('COM_BFSTOP_SETUP_SUMMARY_CHANGED_DEFAULTS'); ?></p>
+<ul>
+<?php foreach (array('ACCOUNT', 'RISK', 'IPV6', 'LOG', 'DELAY', 'SCHEDULER') as $change): ?>
+	<li><?php echo Text::_('COM_BFSTOP_SETUP_SUMMARY_DEFAULT_'.$change); ?></li>
+<?php endforeach; ?>
+</ul>
+<?php elseif (!in_array('ratelimit', $this->pages, true)): ?>
 <p><?php echo Text::_('COM_BFSTOP_SETUP_RATELIMIT_'.$this->rateLimitAdvice()); ?></p>
 <?php endif; ?>
 <?php if ($this->loadBalancerHint !== null): ?>

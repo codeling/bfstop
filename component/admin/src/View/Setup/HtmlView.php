@@ -57,6 +57,9 @@ class HtmlView extends BaseHtmlView
 	protected array $htaccess = array();
 	protected bool $notifyMeaningChanged = false;
 	protected int $apiTokenUsers = 0;
+	protected array $privacy = array();
+	protected ?array $hashing = null;
+	protected array $scheduler = array();
 	protected string $liveSiteNote = '';
 	/** the buttons of the optional step of the page: step, task of saving, its label (see default_buttons.php) */
 	public array $stepButtons = array('', '', '');
@@ -112,6 +115,12 @@ class HtmlView extends BaseHtmlView
 			case 'parts':
 				$this->apiTokenUsers = $model->apiTokenUsers();
 				break;
+			case 'privacy':
+				$this->privacy = $model->privacyFacts();
+				break;
+			case 'scheduler':
+				$this->scheduler = $model->schedulerFacts();
+				break;
 		}
 		if (isset(SetupModel::StepFields[SetupModel::PageSteps[$this->page] ?? '']))
 		{
@@ -124,6 +133,8 @@ class HtmlView extends BaseHtmlView
 		$app = Factory::getApplication();
 		$input = $app instanceof CMSApplication ? $app->getUserState(SetupController::ProxyUserState) : null;
 		$this->proxyInput = is_array($input) ? $input : null;
+		$hashing = $app instanceof CMSApplication ? $app->getUserState(SetupController::HashingUserState) : null;
+		$this->hashing = is_array($hashing) ? $hashing : null;
 		if ($this->proxyInput !== null && !empty($this->proxyInput['previewed']) && $this->proxyInput['header'] !== '')
 		{
 			$this->preview = ProxyDetector::preview($_SERVER, true, (string) $this->proxyInput['header'],
