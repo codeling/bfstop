@@ -281,7 +281,8 @@ class NotifierMailTest extends IntegrationTestCase
 	/**
 	 * A block which may have hit a proxy: the mail says so, with how to lift
 	 * the block, and goes to the super users who receive system emails as
-	 * well - once to each address, whatever its case.
+	 * well - once to each address, whatever its case, and each in a mail of
+	 * its own (nobody sees who else got it).
 	 */
 	public function testABlockWhichMayHaveHitAProxyWarnsTheSuperUsersToo()
 	{
@@ -294,19 +295,59 @@ class NotifierMailTest extends IntegrationTestCase
 		$notifier = $this->notifier('notify@example.org;ADMIN@example.org');
 		$notifier->blockedNotifyAdmin($this->entry(), array(), -1, true);
 
-		$this->assertCount(1, $notifier->mails, 'one mail per event');
-		$to = array_map('strtolower', $notifier->mails[0]['to']);
+		$this->assertCount(3, $notifier->mails, 'one mail per recipient');
+		foreach ($notifier->mails as $mail)
+		{
+			$this->assertCount(1, $mail['to']);
+			$this->assertStringContainsString(NotifierHelper::proxyWarning(self::Ip), $mail['body']);
+			$this->assertStringContainsString('bfstop:unblock '.self::Ip, $mail['body']);
+		}
+		$to = array_map(fn ($mail) => strtolower($mail['to'][0]), $notifier->mails);
 		sort($to);
 		$this->assertSame(array('admin@example.org', 'notify@example.org', 'sysmail@example.org'), $to,
 			'the notification addresses and the super users with system emails, nobody twice');
-		$this->assertStringContainsString(NotifierHelper::proxyWarning(self::Ip), $notifier->mails[0]['body']);
-		$this->assertStringContainsString('bfstop:unblock '.self::Ip, $notifier->mails[0]['body']);
 
 		// without the warning, as before: the notification addresses only
 		$notifier = $this->notifier('notify@example.org');
 		$notifier->blockedNotifyAdmin($this->entry(), array(), -1);
 		$this->assertSame(array('notify@example.org'), $notifier->mails[0]['to']);
 		$this->assertStringNotContainsString(NotifierHelper::proxyWarning(self::Ip), $notifier->mails[0]['body']);
+	}
+
+	/**
+	 * Super users are those Joomla takes for them: also the members of a
+	 * group below "Super Users", which inherits core.admin without the
+	 * rules of the root asset naming it.
+	 */
+	public function testTheSuperUsersOfAChildGroupAreWarnedToo()
+	{
+		$parent = $this->db->setQuery($this->db->createQuery()->select($this->db->quoteName(array('lft', 'rgt')))
+			->from($this->db->quoteName('#__usergroups'))->where($this->db->quoteName('id').' = 8'))->loadAssoc();
+		$group = $this->insert('#__usergroups', array('parent_id' => 8, 'lft' => (int) $parent['rgt'], 'rgt' => (int) $parent['rgt'],
+			'title' => 'Deputy super users'), 'id');
+		$helper = new \ReflectionProperty(\Joomla\CMS\Helper\UserGroupsHelper::class, 'instance');
+		$helper->setAccessible(true);
+		$helper->setValue(null, null);
+		try
+		{
+			$this->assertContains((int) $group, NotifierHelper::superUserGroups());
+			$this->assertContains(8, NotifierHelper::superUserGroups());
+			$this->assertNotContains(2, NotifierHelper::superUserGroups(), 'Registered');
+			$deputy = $this->createUser('deputy', (int) $group);
+			$registered = $this->createUser('registered', 2);
+			$this->db->setQuery('UPDATE #__users SET '.$this->db->quoteName('sendEmail').' = 1 WHERE id IN ('.(int) $deputy.', '.(int) $registered.')')->execute();
+			$this->blocks(1, 0);
+			$notifier = $this->notifier('');
+			$notifier->blockedNotifyAdmin($this->entry(), array(), -1, true);
+			$to = array_map(fn ($mail) => strtolower($mail['to'][0]), $notifier->mails);
+			$this->assertContains('deputy@example.org', $to);
+			$this->assertNotContains('registered@example.org', $to);
+		}
+		finally
+		{
+			$this->db->setQuery('DELETE FROM #__usergroups WHERE id = '.(int) $group)->execute();
+			$helper->setValue(null, null);
+		}
 	}
 
 	/**
@@ -323,7 +364,7 @@ class NotifierMailTest extends IntegrationTestCase
 		$this->assertFalse($notifier->mailsBlocks(0, true), '"Notify on blocks": never');
 		$notifier->blockedNotifyAdmin($this->entry(), array(), 5, true);
 		$this->assertCount(1, $notifier->mails);
-		$this->assertContains('admin@example.org', array_map('strtolower', $notifier->mails[0]['to']));
+		$this->assertSame(array('admin@example.org'), array_map('strtolower', $notifier->mails[0]['to']));
 
 		$this->db->setQuery('UPDATE #__users SET '.$this->db->quoteName('sendEmail').' = 0 WHERE email = '.$this->db->quote('admin@example.org'))->execute();
 		try

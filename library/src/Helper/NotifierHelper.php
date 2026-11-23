@@ -14,6 +14,7 @@ use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
 use Joomla\CMS\Access\Access;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Helper\UserGroupsHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
 use Joomla\CMS\Mail\MailerFactoryInterface;
@@ -244,19 +245,17 @@ class NotifierHelper
 	}
 
 	/**
-	 * The groups whose members are super users: those with core.admin on
-	 * the root asset.
+	 * The groups whose members are super users: those which have core.admin
+	 * on the root asset, as Joomla decides it for a user - also by
+	 * inheriting it from a parent group, not only where the root asset's
+	 * rules name the group.
 	 *
 	 * @return int[]
 	 */
 	public static function superUserGroups(): array
 	{
-		$rules = Access::getAssetRules('root.1')->getData();
-		if (!isset($rules['core.admin']))
-		{
-			return array();
-		}
-		return array_keys(array_filter($rules['core.admin']->getData(), fn ($allowed) => (int) $allowed === 1));
+		return array_values(array_filter(array_map('intval', array_keys(UserGroupsHelper::getInstance()->getAll())),
+			fn ($id) => Access::checkGroup($id, 'core.admin') === true));
 	}
 
 	/**
@@ -289,7 +288,8 @@ class NotifierHelper
 	 * handled - see BlockService::blockAsDecided() - not every failed login
 	 * of the address still stored, which may have led to earlier blocks).
 	 * If the blocked address $mayBeProxy (see BlockPolicy::mayBeProxy()),
-	 * the mail says so, and goes to the super users too.
+	 * the mail says so, and goes to the super users too: one to each
+	 * recipient.
 	 *
 	 * @param object[] $failedLogins
 	 */
@@ -316,7 +316,17 @@ class NotifierHelper
 		$subject = Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);
-		$this->sendMail($subject, $body, $recipients);
+		if (!$mayBeProxy)
+		{
+			$this->sendMail($subject, $body, $recipients);
+			return;
+		}
+		// the super users didn't choose to share a mail with the
+		// notification addresses: one to each, nobody sees the others
+		foreach ($recipients as $recipient)
+		{
+			$this->sendMail($subject, $body, array($recipient));
+		}
 	}
 
 	public function sendUnblockMail($userEmail, $unblockLink)
