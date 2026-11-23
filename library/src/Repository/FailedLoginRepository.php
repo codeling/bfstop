@@ -261,8 +261,9 @@ class FailedLoginRepository extends Repository
 
 	/**
 	 * The usernames of the failed logins which sort after $after, at most
-	 * $limit, in order: for going through all of them in rounds. Fail-open:
-	 * none (the round ends).
+	 * $limit, in order: for going through all of them in rounds. Every
+	 * spelling of a name on its own (see exact()). Fail-open: none (the
+	 * round ends).
 	 *
 	 * @return string[]
 	 */
@@ -271,17 +272,18 @@ class FailedLoginRepository extends Repository
 		return $this->failOpen('usernamesAfter', function () use ($after, $limit)
 		{
 			$query = $this->db->createQuery()
-				->select('DISTINCT '.$this->db->quoteName('username'))
+				->select('DISTINCT '.$this->exact('username').' AS '.$this->db->quoteName('name'))
 				->from($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('username').' > :after')
-				->order($this->db->quoteName('username'));
+				->where($this->exact('username').' > :after')
+				->order($this->db->quoteName('name'));
 			return $this->column($query, array('after' => $after), 0, $limit);
 		}, array());
 	}
 
 	/**
 	 * Replaces the username $old of the failed logins by $new (its hash, see
-	 * UsernameHelper). Fail-open: it stays.
+	 * UsernameHelper) - that spelling only (see exact()). Fail-open: it
+	 * stays.
 	 */
 	public function renameUsername(string $old, string $new)
 	{
@@ -290,7 +292,9 @@ class FailedLoginRepository extends Repository
 			$this->execute($this->db->createQuery()
 				->update($this->db->quoteName(self::Table))
 				->set($this->db->quoteName('username').' = :new')
-				->where($this->db->quoteName('username').' = :old'), array('new' => $new, 'old' => $old));
+				// by the index of the column, then exactly
+				->where($this->db->quoteName('username').' = :old')
+				->where($this->exact('username').' = :exact'), array('new' => $new, 'old' => $old, 'exact' => $old));
 		}, null);
 	}
 

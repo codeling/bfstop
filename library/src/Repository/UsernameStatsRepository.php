@@ -68,7 +68,8 @@ class UsernameStatsRepository extends Repository
 
 	/**
 	 * The usernames of the statistics which sort after $after, at most
-	 * $limit, in order. Fail-open: none (the round ends).
+	 * $limit, in order (byte by byte, see exact()). Fail-open: none (the
+	 * round ends).
 	 *
 	 * @return string[]
 	 */
@@ -77,16 +78,17 @@ class UsernameStatsRepository extends Repository
 		return $this->failOpen('usernamesAfter', function () use ($after, $limit)
 		{
 			$query = $this->db->createQuery()
-				->select($this->db->quoteName('username'))
+				->select($this->exact('username').' AS '.$this->db->quoteName('name'))
 				->from($this->db->quoteName(self::Table))
-				->where($this->db->quoteName('username').' > :after')
-				->order($this->db->quoteName('username'));
+				->where($this->exact('username').' > :after')
+				->order($this->db->quoteName('name'));
 			return $this->column($query, array('after' => $after), 0, $limit);
 		}, array());
 	}
 
 	/**
-	 * Renames the statistics of $old to $new (its hash, see UsernameHelper);
+	 * Renames the statistics of $old (that spelling, see exact()) to $new
+	 * (its hash, see UsernameHelper);
 	 * if $new has statistics already, the two are merged: the attempts
 	 * added, the earliest and the latest time kept. Fail-open: it stays.
 	 */
@@ -99,19 +101,21 @@ class UsernameStatsRepository extends Repository
 				$select = fn () => $this->db->createQuery()
 					->select($this->db->quoteName(array('attempts', 'first_attempt', 'last_attempt')))
 					->from($this->db->quoteName(self::Table))
-					->where($this->db->quoteName('username').' = :username');
-				$from = $this->row($select(), array('username' => $old));
+					->where($this->db->quoteName('username').' = :username')
+					->where($this->exact('username').' = :exact');
+				$from = $this->row($select(), array('username' => $old, 'exact' => $old));
 				if (!is_array($from))
 				{
 					return;
 				}
-				$into = $this->row($select(), array('username' => $new));
+				$into = $this->row($select(), array('username' => $new, 'exact' => $new));
 				if (!is_array($into))
 				{
 					$this->execute($this->db->createQuery()
 						->update($this->db->quoteName(self::Table))
 						->set($this->db->quoteName('username').' = :new')
-						->where($this->db->quoteName('username').' = :old'), array('new' => $new, 'old' => $old));
+						->where($this->db->quoteName('username').' = :old')
+						->where($this->exact('username').' = :exact'), array('new' => $new, 'old' => $old, 'exact' => $old));
 					return;
 				}
 				$this->execute($this->db->createQuery()
@@ -126,7 +130,8 @@ class UsernameStatsRepository extends Repository
 						'new' => $new));
 				$this->execute($this->db->createQuery()
 					->delete($this->db->quoteName(self::Table))
-					->where($this->db->quoteName('username').' = :old'), array('old' => $old));
+					->where($this->db->quoteName('username').' = :old')
+					->where($this->exact('username').' = :exact'), array('old' => $old, 'exact' => $old));
 			});
 		}, null);
 	}

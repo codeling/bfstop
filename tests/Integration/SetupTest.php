@@ -668,4 +668,47 @@ class SetupTest extends IntegrationTestCase
 		$this->assertSame(array('173.245.48.0/20', '103.21.244.0/22', '2400:cb00::/32'),
 			\Codeling\Library\Bfstop\Helper\IpHelper::parseTrustedProxies($valid['params']['proxyIpAddress']));
 	}
+
+	/**
+	 * Whether a username of 1.x is an account's - and stays readable - is
+	 * decided as the login decides it (UserRepository::accountExists()),
+	 * whatever the database's collation: MySQL's utf8mb4_unicode_ci takes
+	 * "muller", "müller" and "Müller" for the same name, PostgreSQL doesn't.
+	 * And only the spelling decided about is renamed: on MySQL, renaming
+	 * "muller" must not rename "müller" with it.
+	 */
+	public function testHashingDecidesAsTheLoginWhateverTheCollation()
+	{
+		$secret = (string) Factory::getApplication()->get('secret', '');
+		$hash = fn ($name) => \Codeling\Library\Bfstop\Helper\UsernameHelper::forStorage($name, 'hash', false, $secret);
+		$userId = $this->insert('#__users', array('name' => 'Müller', 'username' => 'müller', 'email' => 'mueller@example.org',
+			'password' => '', 'registerDate' => self::minutesAgo(0), 'params' => '{}', 'block' => 0), 'id');
+		try
+		{
+			$names = array('muller', 'müller', 'Müller', 'stranger-pw', 'mueller@example.org');
+			foreach ($names as $i => $name)
+			{
+				$this->insert('#__bfstop_failedlogin', array('ipaddress' => '203.0.113.'.($i + 10), 'logtime' => self::minutesAgo(1),
+					'username' => $name, 'origin' => 0));
+			}
+			$users = (new Repositories($this->logger))->users();
+			$expected = array_map(fn ($name) => $users->accountExists($name) ? $name : $hash($name), $names);
+			$this->assertSame('müller', $expected[1], 'the account itself');
+			$this->assertSame($hash('stranger-pw'), $expected[3]);
+
+			$model = $this->model();
+			$progress = array('table' => '', 'after' => '');
+			for ($round = 0; $round < 10 && empty($progress['done']); ++$round)
+			{
+				$progress = $model->hashUsernames((string) $progress['table'], (string) $progress['after'], 0.0);
+			}
+			$this->assertTrue($progress['done']);
+			$this->db->setQuery('SELECT username FROM #__bfstop_failedlogin ORDER BY ipaddress');
+			$this->assertSame($expected, $this->db->loadColumn(), $this->db->getServerType());
+		}
+		finally
+		{
+			$this->db->setQuery('DELETE FROM #__users WHERE id='.(int) $userId)->execute();
+		}
+	}
 }

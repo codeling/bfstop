@@ -54,7 +54,13 @@ final class UsernameHashing
 
 	/**
 	 * The hashes of those of $usernames which are to be hashed: no hash
-	 * yet, no account's name or email address, no common username.
+	 * yet, no account's name or email address, no common username. Whether
+	 * a name is an account's is decided as for a failed login
+	 * (UserRepository::existingLogins() compares as accountExists(), which
+	 * the plugin's isAccount() asks): by the database's comparison, which on
+	 * MySQL takes "muller" for the account "müller" - so a name stays
+	 * readable exactly where a new failed login with it would be stored
+	 * readably. If the accounts can't be read, nothing is hashed.
 	 *
 	 * @param string[] $usernames
 	 * @return array<string, string> username => its hash
@@ -63,11 +69,11 @@ final class UsernameHashing
 	{
 		$candidates = array_values(array_filter($usernames, fn ($name) => !self::isHashed((string) $name) &&
 			!RiskHelper::isCommonUsername($this->settings, (string) $name)));
-		$accounts = array_flip(array_map('mb_strtolower', $this->repositories->users()->existingLogins($candidates)));
+		$accounts = array_flip($this->repositories->users()->existingLogins($candidates));
 		$hashes = array();
 		foreach ($candidates as $name)
 		{
-			if (!isset($accounts[mb_strtolower((string) $name)]))
+			if (!isset($accounts[(string) $name]))
 			{
 				$hashes[(string) $name] = UsernameHelper::forStorage((string) $name, UsernameHelper::ModeHash, false, $this->secret);
 			}

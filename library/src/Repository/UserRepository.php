@@ -233,9 +233,11 @@ class UserRepository extends Repository
 
 	/**
 	 * Those of $logins which are the username or the email address of an
-	 * account (matched as Joomla matches a login, see loginCondition()), in
-	 * lower case: one query for up to LookupChunk of them. Fail-closed: all
-	 * of them (nothing is taken for a name which belongs to no account).
+	 * account, each decided by the same comparison as accountExists() (on
+	 * MySQL by the collation, so "muller" is the account "müller"'s): one
+	 * query for up to LookupChunk / 5 of them, with one EXISTS per login.
+	 * Fail-closed: all of them (nothing is taken for a name which belongs to
+	 * no account).
 	 *
 	 * @param string[] $logins
 	 * @return string[]
@@ -250,30 +252,30 @@ class UserRepository extends Repository
 		return $this->failClosed('existingLogins', function () use ($logins)
 		{
 			$found = array();
-			foreach (array_chunk($logins, self::LookupChunk) as $chunk)
+			foreach (array_chunk($logins, intdiv(self::LookupChunk, 5)) as $chunk)
 			{
 				$values = array();
-				$usernames = array();
-				$emails = array();
+				$columns = array();
 				foreach ($chunk as $i => $login)
 				{
 					$values['u'.$i] = $login;
 					$values['e'.$i] = $login;
-					$usernames[] = 'u'.$i;
-					$emails[] = 'e'.$i;
+					$exists = $this->db->createQuery()
+						->select('1')
+						->from($this->db->quoteName('#__users'))
+						->where('('.$this->loginCondition(array('u'.$i), array('e'.$i)).')');
+					$columns[] = 'CASE WHEN EXISTS ('.$exists.') THEN 1 ELSE 0 END AS '.$this->db->quoteName('a'.$i);
 				}
-				$query = $this->db->createQuery()
-					->select($this->db->quoteName(array('username', 'email')))
-					->from($this->db->quoteName('#__users'))
-					->where('('.$this->loginCondition($usernames, $emails).')');
-				foreach ($this->objects($query, $values) as $row)
+				$row = $this->row($this->db->createQuery()->select($columns), $values);
+				foreach ($chunk as $i => $login)
 				{
-					$found[] = mb_strtolower((string) $row->username);
-					$found[] = mb_strtolower((string) $row->email);
+					if (is_array($row) && (int) ($row['a'.$i] ?? 0) === 1)
+					{
+						$found[] = $login;
+					}
 				}
 			}
-			$found = array_flip($found);
-			return array_values(array_filter($logins, fn ($login) => isset($found[mb_strtolower($login)])));
+			return $found;
 		}, $logins);
 	}
 }

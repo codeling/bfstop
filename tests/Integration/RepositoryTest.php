@@ -128,7 +128,9 @@ class RepositoryTest extends IntegrationTestCase
 		$tokens = new UnblockTokenRepository($db, $this->logger);
 		$this->assertFalse($tokens->validForBlocks('abc', array(1)), 'no token is valid');
 		$this->assertTrue($tokens->hasCurrentFor('bob'), 'no further link is sent');
-		$this->expectFailures(4);
+		$this->assertSame(array('bob', 'eve'), (new UserRepository($db, $this->logger))->existingLogins(array('bob', 'eve')),
+			'no name is taken for one which belongs to no account (and hashed)');
+		$this->expectFailures(5);
 	}
 
 	public function testCountingAndBookkeepingFailOpen()
@@ -151,6 +153,20 @@ class RepositoryTest extends IntegrationTestCase
 		$this->assertNull($users->emailById(1));
 		$this->assertSame(array(), $users->emailsOfGroup(1));
 		$this->expectFailures(12);
+	}
+
+	public function testExistingLoginsAreLookedUpInChunks()
+	{
+		$users = new UserRepository($this->db, $this->logger);
+		$admin = (string) $this->db->setQuery($this->db->createQuery()
+			->select($this->db->quoteName('username'))->from($this->db->quoteName('#__users'))->order('id'), 0, 1)->loadResult();
+		$this->assertNotSame('', $admin);
+		$logins = array_map(fn ($i) => 'nobody-'.$i, range(1, 250));
+		$logins[] = $admin;
+		$logins[] = mb_strtoupper($admin);
+		$this->assertSame(array($admin, mb_strtoupper($admin)), $users->existingLogins($logins),
+			'compared as at the login (case-insensitively), past the first chunk too');
+		$this->assertSame(array(), $users->existingLogins(array()));
 	}
 
 	public function testFailuresAreCountedAndTheLastOneIsKept()
