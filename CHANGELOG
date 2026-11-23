@@ -1,5 +1,73 @@
 2.0.0 (unreleased)
   - Requires PHP 8.2 (was 8.1), the oldest version CI runs the tests on
+  - Setup assistant (Components - Brute Force Stop - Setup Assistant), for
+    a new installation and for the update from 1.5: an overview of what the
+    update did, the proxy step, the blocking-mode step and "Activate
+    protection". The proxy step looks at the administrator's own request -
+    directly reached, behind a proxy or load balancer, a web server which
+    resolves the address itself (mod_remoteip, nginx's real_ip), behind a
+    CDN, or a proxy which only sends headers BFStop can't read - proposes
+    the settings, and saves them only after a dry run showed the
+    administrator's own address and they confirmed it; Cloudflare's
+    address ranges can be fetched on request (with the warning that
+    trusting them needs the origin restricted to the zone); X-Real-IP,
+    True-Client-IP, Fastly-Client-IP and other headers BFStop doesn't read
+    are recognised, with what to do instead and a link to a pre-filled
+    issue (header names, scenario and versions only); Joomla's "Behind
+    Load Balancer" gets a hint where it doesn't fit (BFStop doesn't use it,
+    and never writes configuration.php). The blocking-mode step knows
+    nginx, LiteSpeed and .htaccess behind a proxy, and flags "Reporting
+    Only" as unprotected where the update removed the delays which were
+    the site's protection. Stored values which the settings page would
+    refuse (an email list with a stray ";", an invalid .htaccess path,
+    .htaccess on nginx, unblock mails without $live_site, a risk floor
+    above the threshold) are shown with each step, found by the settings
+    form's own validation, and fixed with it. Every step saves through the
+    settings page's model, so its checks, the User Actions Log, the nginx
+    deny file and the tidying of .htaccess apply; the steps and the
+    activation are in the User Actions Log too. It can be run again from
+    the settings page ("Setup assistant", "Re-run proxy check")
+  - Activation: the system plugin installs disabled (as in 1.5) and the
+    setup assistant activates it - behind a proxy, BFStop would count every
+    visitor's failed logins against the proxy's address and block
+    everybody. An update through the browser whose request came through a
+    proxy, load balancer or CDN disables the plugin until the assistant is
+    done (and says so); one from the command line does where Joomla's
+    "Behind Load Balancer" is on. Otherwise the plugin stays enabled, and
+    the update message, a post-installation message, a banner on the
+    BFStop pages and the quick icon point to the assistant. It replaces
+    the update hints of the settings which moved and of the API
+  - CF-Connecting-IP is a header BFStop can read behind a proxy: Cloudflare
+    sets it on every request and overwrites what the visitor sent, so it
+    counts only if it is exactly one valid address, from a trusted proxy
+  - Proxy mismatch check: the administrator's own request is compared with
+    the saved proxy settings (a proxy which appeared, was removed or
+    changed its address or header, a web server which resolves the address
+    itself now, only headers BFStop can't read), shown on the BFStop pages
+    and on the quick icon; "This is expected" dismisses a mismatch (by a
+    fingerprint without any address), a different one shows again. There
+    is no other change detection; a reminder to run the proxy check again
+    whenever the hosting changes is shown with the proxy settings
+  - New quick icon plugin (plg_quickicon_bfstop, installed and enabled by
+    the package): a tile in the Home Dashboard's notifications - BFStop is
+    not active or its setup incomplete, the proxy settings no longer fit,
+    or fine. One query, only on the dashboard
+  - New console plugin (plg_console_bfstop): "php cli/joomla.php
+    bfstop:status" (the setup, the plugin, the proxy settings),
+    "bfstop:setup --no-proxy" or "--trusted=<proxies> --header=<header>"
+    (with --block-mode and --fix: completes the setup and activates
+    protection, for sites installed or updated from the command line) and
+    "bfstop:unblock <address>" (lifts the blocks of an address with its
+    .htaccess and nginx entries, for an administrator who locked everybody
+    out). The README has an SQL fallback for sites without a command line.
+    CI completes the setup of its sites with bfstop:setup --no-proxy
+  - The administrators' mail about a block warns when the blocked address
+    may be a proxy (a private address whose request had a forwarding
+    header, or one at least two accounts have logged in from): everybody
+    behind it is blocked then. It says how to lift the block (the block
+    list, or bfstop:unblock), and also goes to the super users who receive
+    system emails (all super users if none does), once per address, within
+    the limit of "Notify on blocks"
   - Removed: the delay of the response to failed logins ("Delay", "Adaptive
     Delay" and its thresholds). A response held back by PHP holds a PHP
     worker for the whole delay, which an attacker sending failed logins in

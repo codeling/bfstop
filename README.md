@@ -25,22 +25,57 @@ This repository contains all of BFStop, which is released as one package:
   is part of this one now.
 - `task/`: the **task plugin** (`plg_task_bfstop`), which runs the daily
   maintenance as a task of Joomla's Task Scheduler.
+- `quickicon/`: the **quick icon plugin** (`plg_quickicon_bfstop`), a tile
+  on the Home Dashboard which says whether BFStop is active and whether the
+  proxy settings still fit how the site is reached.
+- `console/`: the **console plugin** (`plg_console_bfstop`), the commands
+  `bfstop:status`, `bfstop:setup` and `bfstop:unblock` of Joomla's command
+  line (`php cli/joomla.php`).
 - `package/`: the package (`pkg_bfstop`) which contains them, and how it is
   built and released.
 
 Plugins and component only work together; none of them uses the classes
-of another, only those of the library.
+of another, only those of the library - except the console plugin, whose
+`bfstop:setup` saves the settings through the setup assistant's model of
+the component (booted through Joomla), so that the same checks apply.
 
 ## Usage
 
 - Install the **package** `pkg_bfstop-<version>.zip` from the
   [releases](https://github.com/codeling/bfstop/releases). It contains the
-  plugin and the component and installs both. Don't install them separately:
-  they are released together, and need to have the same version.
+  plugins, the component and the library and installs them all. Don't
+  install them separately: they are released together, and need to have the
+  same version.
 - Requirements: Joomla! 5.4 or 6, PHP 8.2 or newer, and MySQL, MariaDB or
   PostgreSQL. Sites still on Joomla! 4 stay with BFStop 1.5.
-- The plugin is enabled when it is installed. Configure BFStop under
-  *Components → Brute Force Stop → Settings*.
+- After installing (and after the update from 1.5), run the **setup
+  assistant** in *Components → Brute Force Stop → Setup Assistant*: it checks
+  how visitors reach the site (directly, or through a proxy, load balancer or
+  CDN, which BFStop has to be told about, or it would block the proxy's
+  address - and with it everybody) and whether the blocking mode fits the web
+  server, and then **activates the plugin**, which installs disabled. Until
+  then, BFStop doesn't protect anything; the Home Dashboard and the BFStop
+  pages say so. An update through the browser whose request came through a
+  proxy disables the plugin until the assistant is done; an update from the
+  command line does where Joomla's "Behind Load Balancer" is on.
+- On the command line: `php cli/joomla.php bfstop:status` shows where the
+  setup stands, `php cli/joomla.php bfstop:setup --no-proxy` (or
+  `--trusted=<proxies> --header=<header>`, e.g.
+  `--trusted=10.0.0.5 --header=X-Forwarded-For`) completes it and activates
+  protection, and `php cli/joomla.php bfstop:unblock <address>` lifts the
+  blocks of an address, with its `.htaccess` and nginx entries - for an
+  administrator who locked everybody out.
+- Where the command line can't be used, the plugin can be enabled in the
+  Plugin Manager (*System → Plugins*, "System - Brute Force Stop"), and the
+  blocks of an address lifted in the database:
+  `INSERT INTO <prefix>bfstop_unblock (block_id, source, crdate) SELECT id, 0, CURRENT_TIMESTAMP FROM <prefix>bfstop_bannedip WHERE ipaddress = '<address>' AND id NOT IN (SELECT block_id FROM <prefix>bfstop_unblock);`
+  (with blocking through `.htaccess`, take the address out of the file's
+  `BFStop Blocks` section too). The banners and the quick icon keep saying
+  that the setup isn't complete until the assistant has run.
+- Configure everything else under *Components → Brute Force Stop →
+  Settings*. Keep the proxy settings up to date: whenever the hosting
+  changes (a new proxy or CDN, load balancer nodes added or replaced, a move
+  to another host), run the proxy check of the assistant again.
 - Joomla! offers updates through its update manager.
 
 ### Rate limiting

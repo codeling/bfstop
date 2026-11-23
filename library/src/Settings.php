@@ -86,8 +86,9 @@ final class Settings
 	/**
 	 * What the settings are while they have not been saved: the same as the
 	 * settings page shows for them (forms/settings.xml, which a test compares
-	 * with this, both ways). The plugin is enabled by the installation, so it
-	 * runs with these until an administrator opens the settings.
+	 * with this, both ways). The setup assistant, which activates the
+	 * plugin, saves the settings with the values the settings page shows, so
+	 * these are what an installation starts with.
 	 */
 	public const Defaults = array(
 		// basic

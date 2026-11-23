@@ -51,6 +51,16 @@ the site only needs to be set up again when the database schema changes.
   instead of running it). The classifier rebuilds Joomla internals, so this is
   what tells whether a Joomla version still handles requests the way it
   expects; CI runs it on every Joomla version of the matrix.
+- `Integration/SetupTest.php` is about the setup assistant: its steps,
+  saved through the settings model with the fixes of stored values which
+  would keep the settings from being saved (settings of 1.5.2), the dry run
+  of the proxy settings, the activation of the plugin, the banners, the
+  quick icon, the pages rendered for each kind of request, and the console
+  commands (called on the installed site). `InstallerScriptTest` has the
+  activation model of the installation and the update (the plugin
+  disabled by an update behind a proxy), and checks that the update tells
+  the proxy scenarios apart as the library's `ProxyDetector` does (whose
+  unit test has the table of scenarios).
 - `Integration/QueryCountTest.php` keeps the number of queries a page view, the
   request of a blocked address and a failed login send within limits (the
   scripts of `Integration/fixtures` print the queries when called with
@@ -65,7 +75,9 @@ GitHub Actions runs everything on each push and pull request, on Joomla 5 and
 6 with MySQL, MariaDB and PostgreSQL, see `.github/workflows/ci.yml`. The
 sites there have bfstop installed from the package which the "Package" job
 built with `package/build.sh` - the zip users would get, kept as an artifact
-of the run - and the "Update from the previous release" jobs run
+of the run - whose setup `ci/install-joomla.sh` completes with
+`bfstop:setup --no-proxy` (the system plugin installs disabled, see the setup
+assistant), and the "Update from the previous release" jobs run
 `ci/upgrade-test.sh` with it, on the Joomla 5 sites with MySQL/MariaDB.
 
 ### Static analysis
