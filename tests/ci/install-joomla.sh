@@ -10,12 +10,18 @@
 #     previous release for the upgrade test)
 #   - else: the package built from this checkout by package/build.sh
 #
+# and completes its setup with the console command "bfstop:setup --no-proxy",
+# which activates the system plugin (it installs disabled, until its setup
+# assistant has run) - unless BFSTOP_SETUP is 0 (a release before 2.0.0,
+# which has no such command, see upgrade-test.sh).
+#
 # Environment:
 #   JOOMLA_VERSION   Joomla version to download, e.g. 5.4.8
 #   JOOMLA_ROOT      directory to set up the site in
 #   DB_TYPE          mysqli or pgsql
 #   DB_HOST, DB_USER, DB_PASS, DB_NAME   database connection (database must exist)
 #   BFSTOP_PACKAGE   optional: package zip to install instead of building one
+#   BFSTOP_SETUP     optional: 0 to leave the setup of bfstop to the caller
 #   DOWNLOAD_CACHE   optional: directory to keep the Joomla package in between
 #                    runs, see download-joomla.sh
 set -euo pipefail
@@ -53,3 +59,9 @@ else
 	install_zip "$build_dir"/pkg_bfstop-*.zip
 fi
 rm -rf "$build_dir"
+
+if [ "${BFSTOP_SETUP:-1}" != "0" ]; then
+	# the sites of the tests are reached directly: no proxy to configure
+	echo "Completing the setup of bfstop"
+	php "$JOOMLA_ROOT/cli/joomla.php" bfstop:setup --no-proxy -n
+fi

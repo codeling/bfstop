@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="quickicon" method="upgrade">
+	<name>plg_quickicon_bfstop</name>
+	<author>Bernhard Froehler</author>
+	<description>PLG_QUICKICON_BFSTOP_XML_DESCRIPTION</description>
+	<creationDate>November 2026</creationDate>
+	<copyright>Copyright (C) Bernhard Froehler</copyright>
+	<license>GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html</license>
+	<authorEmail>bfstop@bfroehler.info</authorEmail>
+	<authorUrl>https://github.com/codeling/bfstop</authorUrl>
+	<version>2.0.0</version>
+	<namespace path="src">Codeling\Plugin\Quickicon\Bfstop</namespace>
+	<scriptfile>script.php</scriptfile>
+	<files>
+		<filename>index.html</filename>
+		<filename>script.php</filename>
+		<folder plugin="bfstop">services</folder>
+		<folder>src</folder>
+	</files>
+	<languages>
+		<language tag="ca-ES">language/ca-ES/ca-ES.plg_quickicon_bfstop.ini</language>
+		<language tag="ca-ES">language/ca-ES/ca-ES.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="de-DE">language/de-DE/de-DE.plg_quickicon_bfstop.ini</language>
+		<language tag="de-DE">language/de-DE/de-DE.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="en-GB">language/en-GB/en-GB.plg_quickicon_bfstop.ini</language>
+		<language tag="en-GB">language/en-GB/en-GB.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="es-ES">language/es-ES/es-ES.plg_quickicon_bfstop.ini</language>
+		<language tag="es-ES">language/es-ES/es-ES.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="fr-FR">language/fr-FR/fr-FR.plg_quickicon_bfstop.ini</language>
+		<language tag="fr-FR">language/fr-FR/fr-FR.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="it-IT">language/it-IT/it-IT.plg_quickicon_bfstop.ini</language>
+		<language tag="it-IT">language/it-IT/it-IT.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="nl-NL">language/nl-NL/nl-NL.plg_quickicon_bfstop.ini</language>
+		<language tag="nl-NL">language/nl-NL/nl-NL.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="pt-BR">language/pt-BR/pt-BR.plg_quickicon_bfstop.ini</language>
+		<language tag="pt-BR">language/pt-BR/pt-BR.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="pt-PT">language/pt-PT/pt-PT.plg_quickicon_bfstop.ini</language>
+		<language tag="pt-PT">language/pt-PT/pt-PT.plg_quickicon_bfstop.sys.ini</language>
+		<language tag="ru-RU">language/ru-RU/ru-RU.plg_quickicon_bfstop.ini</language>
+		<language tag="ru-RU">language/ru-RU/ru-RU.plg_quickicon_bfstop.sys.ini</language>
+	</languages>
+	<config>
+		<fields name="params">
+			<fieldset name="basic">
+				<!-- the Home Dashboard's notification area, where Joomla's own
+				     status tiles are (the "context" of its Notifications module) -->
+				<field name="context" type="text" default="update_quickicon"
+					label="PLG_QUICKICON_BFSTOP_CONTEXT_LABEL"
+					description="PLG_QUICKICON_BFSTOP_CONTEXT_DESC" />
+			</fieldset>
+		</fields>
+	</config>
+</extension>

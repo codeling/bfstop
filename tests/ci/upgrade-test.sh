@@ -29,7 +29,8 @@ echo "Fetching BFStop $previous"
 "$here/fetch-verified.sh" "https://github.com/codeling/bfstop/releases/download/$previous/$file" \
 	"$expected" "$work/$file"
 
-BFSTOP_PACKAGE="$work/$file" "$here/install-joomla.sh"
+# the previous release has no setup to complete (it enables its plugin itself)
+BFSTOP_PACKAGE="$work/$file" BFSTOP_SETUP=0 "$here/install-joomla.sh"
 php "$root/tests/Upgrade/fixtures/seed.php"
 
 echo "Updating to $(basename "$new_package")"

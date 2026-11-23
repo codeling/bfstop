@@ -47,13 +47,16 @@ class DeprecatedApiTest extends TestCase
 	private function installerScripts()
 	{
 		return array(BFSTOP_PLUGIN_ROOT.'/updatescript.php', dirname(__DIR__, 2).'/task/script.php',
+			dirname(__DIR__, 2).'/quickicon/script.php', dirname(__DIR__, 2).'/console/script.php',
 			BFSTOP_COMPONENT_ROOT.'/installscript.php', dirname(__DIR__, 2).'/package/script.php');
 	}
 
 	private function sources()
 	{
 		$roots = array(BFSTOP_LIBRARY_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/src', BFSTOP_PLUGIN_ROOT.'/services', dirname(__DIR__, 2).'/task/src',
-			dirname(__DIR__, 2).'/task/services', BFSTOP_COMPONENT_ROOT.'/admin', BFSTOP_COMPONENT_ROOT.'/site');
+			dirname(__DIR__, 2).'/task/services', dirname(__DIR__, 2).'/quickicon/src', dirname(__DIR__, 2).'/quickicon/services',
+			dirname(__DIR__, 2).'/console/src', dirname(__DIR__, 2).'/console/services', BFSTOP_COMPONENT_ROOT.'/admin',
+			BFSTOP_COMPONENT_ROOT.'/site');
 		$roots = array_merge($roots, $this->installerScripts());
 		foreach ($roots as $root)
 		{

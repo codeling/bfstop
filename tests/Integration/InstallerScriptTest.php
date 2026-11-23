@@ -81,29 +81,172 @@ class InstallerScriptTest extends IntegrationTestCase
 			Factory::getApplication()->getMessageQueue(true));
 	}
 
-	private function updateHintShown($fromVersion)
+	/**
+	 * Whether the message about the setup assistant (of an update, see
+	 * setupMessage()) is shown after the update of the installed plugin
+	 * from $fromVersion, with the setup state $setup.
+	 */
+	private function setupMessageShown($fromVersion, $setup)
 	{
+		$this->db->setQuery("DELETE FROM #__bfstop_state WHERE name='setup'")->execute();
+		if ($setup !== null)
+		{
+			\PlgsystembfstopInstallerScript::writeSetupState($this->db, $setup);
+		}
 		$this->setInstalledVersion($fromVersion);
 		list($script, $adapter) = $this->script();
 		$this->assertTrue($script->preflight('update', $adapter));
+		$script->update($adapter);
 		$script->postflight('update', $adapter);
-		$hint = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_HINT', ''));
-		foreach ($this->messages() as $message)
-		{
-			if (strip_tags($message) === $hint)
-			{
-				return true;
-			}
-		}
-		return false;
+		$expected = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_SETUP_UPDATED', ''));
+		return in_array($expected, array_map('strip_tags', $this->messages()), true);
 	}
 
-	public function testSettingsMovedHintOnlyForUpdatesFromBefore200()
+	/**
+	 * After an update, the setup assistant is what to look at - until it has
+	 * been completed: the update from 1.5.2, and any later one while it
+	 * hasn't. Its message replaces the hints of the settings which moved and
+	 * of the API, which are the assistant's overview now.
+	 */
+	public function testSetupMessageWhileTheSetupIsNotComplete()
 	{
 		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
-		$this->assertTrue($this->updateHintShown('1.5.2'));
-		$this->assertFalse($this->updateHintShown('2.0.0'), 'the settings did not move again');
-		$this->assertFalse($this->updateHintShown('2.0.0-rc1'), 'a test release of 2.0.0 had them where they are');
+		$original = $this->getSettings();
+		$pluginParams = $this->pluginParams();
+		try
+		{
+			$this->assertTrue($this->setupMessageShown('1.5.2', null));
+			$this->assertTrue($this->setupMessageShown('2.0.0', array('mode' => 'install')), 'the setup is still open');
+			$this->assertFalse($this->setupMessageShown('2.0.0', array('mode' => 'upgrade', 'completed' => time())),
+				'the setup is complete');
+		}
+		finally
+		{
+			$this->setSettings($original);
+			$this->setPluginParams($pluginParams);
+		}
+	}
+
+	/** A new installation says that the plugin isn't active yet, and leaves it disabled. */
+	public function testInstallationLeavesThePluginDisabled()
+	{
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$enabled = "SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'";
+		$before = (int) $this->queryValue($enabled);
+		try
+		{
+			$this->db->setQuery("UPDATE #__extensions SET enabled=0 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			list($script, $adapter) = $this->script();
+			$this->assertTrue($script->install($adapter));
+			$script->postflight('install', $adapter);
+			$this->assertSame(0, (int) $this->queryValue($enabled), 'the setup assistant activates it');
+			$this->assertSame(array('mode' => 'install'), \PlgsystembfstopInstallerScript::readSetupState($this->db));
+			$messages = array_map('strip_tags', $this->messages());
+			$this->assertContains(strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_SETUP_INSTALLED', '')), $messages);
+		}
+		finally
+		{
+			$this->db->setQuery("UPDATE #__extensions SET enabled=".$before." WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+		}
+	}
+
+	/**
+	 * An update through the browser whose request came through a proxy
+	 * disables the plugin (it would block everybody), and says so; one from
+	 * the command line does where Joomla's "Behind Load Balancer" is on.
+	 * The state of the setup says why, with the scenario and the names of
+	 * the headers (no address). An update without proxy signals leaves it
+	 * enabled.
+	 */
+	public function testAnUpdateBehindAProxyDisablesThePlugin()
+	{
+		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+		$enabled = "SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'";
+		$before = (int) $this->queryValue($enabled);
+		$server = $_SERVER;
+		$original = $this->getSettings();
+		$pluginParams = $this->pluginParams();
+		try
+		{
+			// without proxy signals
+			$this->update('1.5.2', array('blockEnabled' => '1'));
+			$this->assertSame(1, (int) $this->queryValue($enabled));
+			$setup = \PlgsystembfstopInstallerScript::readSetupState($this->db);
+			$this->assertSame(array('mode' => 'upgrade', 'from' => '1.5.2', 'scenario' => 'A', 'headers' => array()), $setup);
+
+			// a request from a load balancer of the private network, with X-Forwarded-For
+			$this->db->setQuery("DELETE FROM #__bfstop_state WHERE name='setup'")->execute();
+			$_SERVER['REMOTE_ADDR'] = '10.0.0.5';
+			$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.7';
+			$this->update('1.5.2', array('blockEnabled' => '1'));
+			$this->assertSame(0, (int) $this->queryValue($enabled), 'disabled by the update');
+			$setup = \PlgsystembfstopInstallerScript::readSetupState($this->db);
+			$this->assertSame('proxy', $setup['disabled']);
+			$this->assertSame('B', $setup['scenario']);
+			$this->assertSame(array('HTTP_X_FORWARDED_FOR'), $setup['headers']);
+			$this->assertStringNotContainsString('203.0.113.7', json_encode($setup));
+			$this->assertStringNotContainsString('10.0.0.5', json_encode($setup));
+			$disabled = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_SETUP_DISABLED_PROXY', ''));
+			$queue = Factory::getApplication()->getMessageQueue(true);
+			$this->assertNotEmpty(array_filter($queue, fn ($m) => strip_tags($m['message']) === $disabled && $m['type'] === 'error'));
+			// the library reads what the update wrote
+			$state = \Codeling\Library\Bfstop\Service\Setup\SetupState::load((new Repositories($this->logger))->state());
+			$this->assertSame('upgrade', $state->mode());
+			$this->assertSame('1.5.2', $state->from());
+			$this->assertSame('proxy', $state->disabledReason());
+			$this->assertSame(array('HTTP_X_FORWARDED_FOR'), $state->updateHeaders());
+			$this->assertFalse($state->isCompleted());
+			$this->assertTrue($state->fromBefore200());
+
+			// once the setup is complete, an update leaves the plugin as it is
+			$this->db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			\PlgsystembfstopInstallerScript::writeSetupState($this->db, array('completed' => time()));
+			$this->update('2.0.0', array('blockMode' => 'full'));
+			$this->assertSame(1, (int) $this->queryValue($enabled));
+		}
+		finally
+		{
+			$_SERVER = $server;
+			$this->setSettings($original);
+			$this->setPluginParams($pluginParams);
+			$this->db->setQuery("UPDATE #__extensions SET enabled=".$before." WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			Factory::getApplication()->getMessageQueue(true);
+		}
+	}
+
+	/** On the command line, there is no request: Joomla's "Behind Load Balancer" decides. */
+	public function testTheReasonToDisableThePluginDuringAnUpdate()
+	{
+		$direct = array('REMOTE_ADDR' => '203.0.113.5');
+		$proxied = array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7');
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($direct, false, false));
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($direct, false, true), 'not a signal in the browser');
+		$this->assertSame('proxy', \PlgsystembfstopInstallerScript::setupDisableReason($proxied, false, false));
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason($proxied, true, false), 'the console has no request');
+		$this->assertSame('loadbalancer', \PlgsystembfstopInstallerScript::setupDisableReason($direct, true, true));
+		$this->assertSame('proxy', \PlgsystembfstopInstallerScript::setupDisableReason(
+			array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_REAL_IP' => '203.0.113.7'), false, false), 'E: only X-Real-IP');
+		$this->assertNull(\PlgsystembfstopInstallerScript::setupDisableReason(
+			array('REMOTE_ADDR' => '203.0.113.7', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7'), false, false), 'C: the server resolves it');
+	}
+
+	/**
+	 * The update tells the scenarios apart without the library (see
+	 * proxyScenario()): the same way as the library's ProxyDetector, with the
+	 * same headers and networks.
+	 */
+	public function testTheUpdateDetectsTheScenarioAsTheLibraryDoes()
+	{
+		$this->assertSame(\Codeling\Library\Bfstop\Helper\IpHelper::KnownProxyHeaders, \PlgsystembfstopInstallerScript::SupportedProxyHeaders);
+		$this->assertSame(array_keys(\Codeling\Library\Bfstop\Helper\IpHelper::UnsupportedProxyHeaders),
+			\PlgsystembfstopInstallerScript::UnsupportedProxyHeaders);
+		$this->assertSame(\Codeling\Library\Bfstop\Helper\IpHelper::NonPublicNetworks, \PlgsystembfstopInstallerScript::NonPublicNetworks);
+		$proxy = array('useProxy' => false, 'header' => 'HTTP_X_FORWARDED_FOR', 'trusted' => array());
+		foreach (\Codeling\Bfstop\Tests\Unit\ProxyDetectorTest::scenarios() as $name => list($server, $expected))
+		{
+			$this->assertSame($expected, \PlgsystembfstopInstallerScript::proxyScenario($server), $name);
+			$this->assertSame($expected, \Codeling\Library\Bfstop\Service\Setup\ProxyDetector::detect($server, $proxy, false)['scenario'], $name);
+		}
 	}
 
 	/**
@@ -194,28 +337,20 @@ class InstallerScriptTest extends IntegrationTestCase
 
 	public function testUpdateFromBefore200ProtectsTheApi()
 	{
-		Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
-		$hint = strip_tags(\Joomla\CMS\Language\Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_API_HINT', ''));
-		$hintShown = function () use ($hint)
-		{
-			return in_array($hint, array_map('strip_tags', $this->messages()), true);
-		};
 		$original = $this->getSettings();
 		try
 		{
-			// the frontend/backend setting of 1.x knew nothing of the API
+			// the frontend/backend setting of 1.x knew nothing of the API;
+			// the setup assistant's overview says that it is protected now
 			$params = $this->update('1.5.2', array('blockEnabled' => '1', 'enabledForOrigin' => '2'));
 			$this->assertSame(6, $params['enabledForOrigin'], 'backend only became backend and API');
 			$this->assertSame('full', $params['blockMode']);
-			$this->assertTrue($hintShown());
 			// never saved: its default protects the API anyway
 			$params = $this->update('1.5.2', array('blockEnabled' => '1'));
 			$this->assertArrayNotHasKey('enabledForOrigin', $params);
-			$this->assertTrue($hintShown());
 			// a later update leaves the choice alone
 			$params = $this->update('2.0.0', array('blockMode' => 'full', 'enabledForOrigin' => 3));
 			$this->assertSame(3, $params['enabledForOrigin']);
-			$this->assertFalse($hintShown());
 		}
 		finally
 		{

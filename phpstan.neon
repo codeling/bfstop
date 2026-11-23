@@ -17,6 +17,8 @@ parameters:
 		- plugin/src
 		- component/admin/src
 		- component/site/src
+		- quickicon/src
+		- console/src
 	excludePaths:
 		analyse:
 			# generated from maxmind-db/reader by tools/vendor-geoip.php: scanned
@@ -26,6 +28,8 @@ parameters:
 		- tests/phpstan/bootstrap.php
 	scanDirectories:
 		- %env.JOOMLA_ROOT%/libraries
+		# the event of the quick icons (Joomla\Module\Quickicon\...) is the module's
+		- %env.JOOMLA_ROOT%/administrator/modules/mod_quickicon/src
 	treatPhpDocTypesAsCertain: false
 	ignoreErrors:
 		# a form rule returns true, false - or the error to show, as an

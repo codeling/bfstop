@@ -71,6 +71,6 @@ jobs:
           fi
           gh release create "$VERSION" "${flags[@]}" \
             "build/pkg_bfstop-$VERSION.zip" "build/lib_bfstop-$VERSION.zip" "build/bfstop-$VERSION.zip" \
-            "build/plg_task_bfstop-$VERSION.zip" \
+            "build/plg_task_bfstop-$VERSION.zip" "build/plg_quickicon_bfstop-$VERSION.zip" "build/plg_console_bfstop-$VERSION.zip" \
             "build/com_bfstop-$VERSION.zip" "build/SHA256SUMS-$VERSION"
           echo "Draft release created: check it, then publish it on GitHub" >> "$GITHUB_STEP_SUMMARY"

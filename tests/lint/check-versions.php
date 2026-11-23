@@ -11,6 +11,8 @@
  *   - library/bfstop.xml (the library)
  *   - plugin/bfstop.xml (the system plugin)
  *   - task/bfstop.xml (the task plugin)
+ *   - quickicon/bfstop.xml (the quick icon plugin)
+ *   - console/bfstop.xml (the console plugin)
  *   - component/bfstop.xml (the component)
  *   - package/pkg_bfstop.xml (the package)
  *   - the first entry of CHANGELOG ("2.0.0 (unreleased)" or "2.0.0 (2026-11-06)")
@@ -71,6 +73,8 @@ $versions = array(
 	'plugin/bfstop.xml' => manifestVersion($root.'/plugin/bfstop.xml'),
 	'library/bfstop.xml' => manifestVersion($root.'/library/bfstop.xml'),
 	'task/bfstop.xml' => manifestVersion($root.'/task/bfstop.xml'),
+	'quickicon/bfstop.xml' => manifestVersion($root.'/quickicon/bfstop.xml'),
+	'console/bfstop.xml' => manifestVersion($root.'/console/bfstop.xml'),
 	'component/bfstop.xml' => manifestVersion($root.'/component/bfstop.xml'),
 	'package/pkg_bfstop.xml' => manifestVersion($root.'/package/pkg_bfstop.xml'),
 );

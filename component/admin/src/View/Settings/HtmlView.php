@@ -13,7 +13,12 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
+use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
+use Codeling\Library\Bfstop\Service\Setup\SetupState;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
@@ -29,6 +34,7 @@ class HtmlView extends BaseHtmlView
 	protected string $pluginVersion = '';
 	protected string $componentVersion = '';
 	protected string $addressCheck = '';
+	protected array $proxyMismatches = array();
 
 	public function display($tpl = null)
 	{
@@ -58,6 +64,10 @@ class HtmlView extends BaseHtmlView
 		$this->componentVersion = (string) $versions['component'];
 
 		$this->addressCheck = self::addressCheck($_SERVER, IpHelper::getAddress(LogHelper::getLogger()));
+		// shown next to the address check, as in the banner (see the setup assistant)
+		$this->proxyMismatches = ProxyMismatch::open(ProxyMismatch::check($_SERVER, ProxyDetector::proxySettings(Settings::stored()),
+			(bool) Factory::getApplication()->get('behind_loadbalancer', 0),
+			SetupState::load((new Repositories(LogHelper::getLogger()))->state())));
 
 		if (!BlockPolicy::hasLiveSite())
 		{
@@ -110,7 +120,7 @@ class HtmlView extends BaseHtmlView
 				continue;
 			}
 			// HTTP_X_FORWARDED_FOR: X-Forwarded-For
-			$name = str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', substr($header, 5)))));
+			$name = IpHelper::headerName($header);
 			$value = (string) $server[$header];
 			if (mb_strlen($value, 'UTF-8') > self::HeaderDisplayLength)
 			{
@@ -137,6 +147,10 @@ class HtmlView extends BaseHtmlView
 			ToolbarHelper::save('settings.save');
 		}
 		ToolbarHelper::cancel('settings.cancel');
+		if ($this->canSave)
+		{
+			ToolbarHelper::link('index.php?option=com_bfstop&view=setup', 'COM_BFSTOP_HEADING_SETUP', 'wand');
+		}
 		ToolbarHelper::custom('settings.testNotify', 'preview', '',
 			'COM_BFSTOP_TEST_NOTIFICATION', false);
 		if ($this->canSave)

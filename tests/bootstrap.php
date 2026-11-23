@@ -60,6 +60,8 @@ $sourceNamespaces = array(
 	'Codeling\\Plugin\\System\\Bfstop\\' => BFSTOP_PLUGIN_ROOT.'/src/',
 	'Codeling\\Component\\Bfstop\\Administrator\\' => BFSTOP_COMPONENT_ROOT.'/admin/src/',
 	'Codeling\\Component\\Bfstop\\Site\\' => BFSTOP_COMPONENT_ROOT.'/site/src/',
+	'Codeling\\Plugin\\Quickicon\\Bfstop\\' => dirname(__DIR__).'/quickicon/src/',
+	'Codeling\\Plugin\\Console\\Bfstop\\' => dirname(__DIR__).'/console/src/',
 );
 $sourceNamespaces['Codeling\\Bfstop\\Tests\\'] = __DIR__.'/';
 spl_autoload_register(function ($class) use ($sourceNamespaces)

@@ -38,7 +38,11 @@ jobs:
       - name: The Joomla! packages of the matrix have checksums
         run: php tests/lint/check-joomla-checksums.php
       - name: Language files of the plugins
-        run: php tests/lint/check-language.php plugin/bfstop.xml PLG_SYSTEM_BFSTOP PLG_TASK_BFSTOP
+        run: |
+          php tests/lint/check-language.php plugin/bfstop.xml PLG_SYSTEM_BFSTOP PLG_TASK_BFSTOP
+          php tests/lint/check-language.php task/bfstop.xml PLG_TASK_BFSTOP
+          php tests/lint/check-language.php quickicon/bfstop.xml PLG_QUICKICON_BFSTOP
+          php tests/lint/check-language.php console/bfstop.xml PLG_CONSOLE_BFSTOP
       - name: Language files of the component
         run: php tests/lint/check-language.php component/bfstop.xml COM_BFSTOP
       - name: Language files of the library

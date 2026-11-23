@@ -815,12 +815,20 @@ class ComponentTest extends IntegrationTestCase
 		$script = new \com_bfstopInstallerScript($adapter);
 		$app->getMessageQueue(true);
 
-		// the hint about the settings is for new installations; on an update,
-		// the plugin's script says what to look at, if anything
+		// what to do now (the setup assistant) is said by the plugin's script;
+		// the component adds the post-installation message which stays until
+		// the setup is complete, once
+		$this->db->setQuery("DELETE FROM #__postinstall_messages WHERE title_key='COM_BFSTOP_POSTINSTALL_SETUP_TITLE'")->execute();
+		$script->postflight('install', $adapter);
 		$script->postflight('update', $adapter);
 		$this->assertSame(array(), $app->getMessageQueue(true));
-		$script->postflight('install', $adapter);
-		$this->assertCount(1, $app->getMessageQueue(true));
+		$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__postinstall_messages ".
+			"WHERE title_key='COM_BFSTOP_POSTINSTALL_SETUP_TITLE' AND type='action' AND enabled=1"));
+		require_once BFSTOP_COMPONENT_ROOT.'/admin/postinstall/setup.php';
+		$this->assertTrue(com_bfstop_postinstall_setup_condition(), 'the setup is not complete');
+		$this->insert('#__bfstop_state', array('name' => 'setup', 'value' => json_encode(array('completed' => time())),
+			'changed' => self::minutesAgo(0)));
+		$this->assertFalse(com_bfstop_postinstall_setup_condition(), 'the setup is complete');
 
 		$cache = $this->queryValue("SELECT manifest_cache FROM #__extensions WHERE type='component' AND element='com_bfstop'");
 		try

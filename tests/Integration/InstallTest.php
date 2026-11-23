@@ -65,15 +65,50 @@ class InstallTest extends IntegrationTestCase
 		}
 	}
 
-	public function testPluginEnabledAndSchemaVersionRecorded()
+	public function testSchemaVersionRecorded()
 	{
-		$this->db->setQuery("SELECT e.enabled, s.version_id FROM #__extensions e ".
+		$this->db->setQuery("SELECT s.version_id FROM #__extensions e ".
 			"LEFT JOIN #__schemas s ON s.extension_id = e.extension_id ".
-			"WHERE e.type='plugin' AND e.element='bfstop'");
-		$row = $this->db->loadObject();
-		$this->assertSame(1, (int) $row->enabled);
+			"WHERE e.type='plugin' AND e.folder='system' AND e.element='bfstop'");
 		$manifest = simplexml_load_file(BFSTOP_PLUGIN_ROOT.'/bfstop.xml');
-		$this->assertSame((string) $manifest->version, $row->version_id);
+		$this->assertSame((string) $manifest->version, $this->db->loadResult());
+	}
+
+	/**
+	 * The system plugin installs disabled (see InstallerScriptTest): the
+	 * setup assistant, or the console command bfstop:setup, activates it -
+	 * as tests/ci/install-joomla.sh does with "bfstop:setup --no-proxy" for
+	 * the sites of the tests. The package installs the quick icon and the
+	 * console plugin switched on.
+	 */
+	public function testTheSetupActivatesThePlugin()
+	{
+		$enabled = function ($folder)
+		{
+			return (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder=".
+				$this->db->quote($folder)." AND element='bfstop'");
+		};
+		$this->assertSame(1, $enabled('quickicon'));
+		$this->assertSame(1, $enabled('console'));
+		$this->assertSame(1, $enabled('system'), 'tests/ci/install-joomla.sh ran bfstop:setup');
+
+		$settings = $this->getSettings();
+		$this->db->setQuery("UPDATE #__extensions SET enabled=0 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+		$this->db->setQuery("DELETE FROM #__bfstop_state WHERE name LIKE 'setup%'")->execute();
+		try
+		{
+			exec(escapeshellarg(PHP_BINARY).' '.escapeshellarg(getenv('JOOMLA_ROOT').'/cli/joomla.php').
+				' bfstop:setup --no-proxy -n 2>&1', $lines, $exitCode);
+			$this->assertSame(0, $exitCode, implode("\n", $lines));
+			$this->assertSame(1, $enabled('system'));
+			$state = json_decode((string) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='setup'"), true);
+			$this->assertGreaterThan(time() - 600, (int) ($state['completed'] ?? 0));
+		}
+		finally
+		{
+			$this->db->setQuery("UPDATE #__extensions SET enabled=1 WHERE type='plugin' AND folder='system' AND element='bfstop'")->execute();
+			self::storeSettings($this->db, $settings);
+		}
 	}
 
 	/**

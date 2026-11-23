@@ -7,8 +7,10 @@
 **/
 defined('_JEXEC') or die;
 
+use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
+use Joomla\CMS\Router\Route;
 
 ?>
 <form method="post" name="adminForm" id="adminForm">
@@ -31,6 +33,18 @@ use Joomla\CMS\Language\Text;
 						<h3 class="alert-heading h5"><?php echo Text::_('COM_BFSTOP_SETTINGS_ADDRESS_CHECK_HEADING'); ?></h3>
 						<?php echo $this->addressCheck; ?>
 					</div>
+<?php foreach ($this->proxyMismatches as $mismatch): ?>
+					<div class="alert <?php echo $mismatch['information'] ? 'alert-info' : 'alert-warning'; ?>">
+						<?php echo $mismatch['code'] === ProxyMismatch::LoadBalancer
+							? Text::_('COM_BFSTOP_SETUP_LOADBALANCER_'.strtoupper($mismatch['hint']))
+							: Text::_('COM_BFSTOP_SETUP_MISMATCH_'.strtoupper($mismatch['code'])); ?>
+					</div>
+<?php endforeach; ?>
+					<p>
+						<a class="btn btn-secondary" href="<?php echo Route::_('index.php?option=com_bfstop&view=setup&page=proxy'); ?>">
+							<?php echo Text::_('COM_BFSTOP_SETUP_RERUN_PROXY_CHECK'); ?>
+						</a>
+					</p>
 <?php endif; ?>
 					<div class="form-grid">
 						<?php echo $this->form->renderFieldset($fieldset->name); ?>
