@@ -5,7 +5,7 @@
  * @copyright (C) Bernhard Froehler
  * @license GNU/GPLv3 http://www.gnu.org/licenses/gpl-3.0.html
  *
- * Vendored from maxmind-db/reader 1.14.0 (see Geo/Reader.php for details).
+ * Vendored from maxmind-db/reader 1.15.0 (see Geo/Reader.php for details).
  * Original work Copyright (C) MaxMind, Inc., licensed under the
  * Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
 **/
@@ -16,11 +16,16 @@ namespace Codeling\Library\Bfstop\Helper\Geo\Reader;
 
 defined('_JEXEC') or die;
 
+/**
+ * @final
+ */
 class Util
 {
     /**
      * @param resource    $stream
      * @param int<0, max> $numberOfBytes
+     *
+     * @throws InvalidDatabaseException if the bytes cannot be read
      */
     public static function read($stream, int $offset, int $numberOfBytes): string
     {
