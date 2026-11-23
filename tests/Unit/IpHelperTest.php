@@ -486,4 +486,22 @@ class IpHelperTest extends TestCase
 			IpHelper::formatTrustedProxies("10.0.0.5\n10.0.0.0/24;\r\n 2001:db8::/32,"));
 		$this->assertSame('', IpHelper::formatTrustedProxies(" \n "));
 	}
+
+	/** The narrowest network of the nodes of a proxy, no wider than ProxylistRule takes. */
+	public function testCommonNetwork()
+	{
+		$this->assertSame('10.0.0.0/29', IpHelper::commonNetwork(array('10.0.0.5', '10.0.0.6', '10.0.0.1'), 8, 16));
+		$this->assertSame('10.0.0.0/24', IpHelper::commonNetwork(array('10.0.0.0/24', '10.0.0.200'), 8, 16));
+		$this->assertSame('10.0.0.0/23', IpHelper::commonNetwork(array('10.0.0.0/24', '10.0.1.0/24'), 8, 16));
+		$this->assertSame('172.16.0.0/12', IpHelper::commonNetwork(array('172.16.0.1', '172.31.255.254'), 8, 16));
+		$this->assertSame('10.0.0.0/8', IpHelper::commonNetwork(array('10.0.0.1', '10.255.0.1'), 8, 16));
+		$this->assertNull(IpHelper::commonNetwork(array('10.0.0.1', '11.0.0.1'), 8, 16), 'wider than /8');
+		$this->assertSame('2001:db8::/32', IpHelper::commonNetwork(array('2001:db8::1', '2001:db8:ffff::1'), 8, 16));
+		$this->assertNull(IpHelper::commonNetwork(array('2001:db8::1', '2002:db8::1'), 8, 16), 'wider than /16');
+		$this->assertSame('203.0.113.0/30', IpHelper::commonNetwork(array('::ffff:203.0.113.1', '203.0.113.2'), 8, 16), 'IPv4-mapped');
+		$this->assertNull(IpHelper::commonNetwork(array('10.0.0.1', '2001:db8::1'), 8, 16), 'two families');
+		$this->assertNull(IpHelper::commonNetwork(array('10.0.0.1', 'garbage'), 8, 16));
+		$this->assertNull(IpHelper::commonNetwork(array('10.0.0.1'), 8, 16), 'one entry is its own network');
+		$this->assertSame('10.0.0.5/32', IpHelper::commonNetwork(array('10.0.0.5', '10.0.0.5'), 8, 16));
+	}
 }

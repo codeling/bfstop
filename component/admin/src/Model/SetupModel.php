@@ -483,7 +483,8 @@ class SetupModel extends BaseDatabaseModel
 	 * address the request comes from. Not where only headers BFStop can't
 	 * read arrive (E: there is a proxy, whose header BFStop can't use), and
 	 * behind a proxy or CDN (B, D) only with $acknowledged: the administrator
-	 * says the site is reached directly all the same.
+	 * says the site is reached directly all the same - which is kept, and
+	 * the summary warns about it (see SetupState::noProxyAcknowledged()).
 	 *
 	 * @param array|null $server the request (null: none, the console)
 	 */
@@ -504,7 +505,8 @@ class SetupModel extends BaseDatabaseModel
 		{
 			return false;
 		}
-		$this->setupState()->confirmFingerprint(ProxyDetector::fingerprint($detected['scenario'] ?? ProxyDetector::Direct, null, false));
+		$this->setupState()->acknowledgeNoProxy($detected !== null && ProxyDetector::needsProxySettings($detected['scenario'])
+			? $detected['scenario'] : null);
 		$this->saveSetupState();
 		return true;
 	}
@@ -533,7 +535,6 @@ class SetupModel extends BaseDatabaseModel
 			$this->setError(Text::_('COM_BFSTOP_SETUP_PROXY_ERROR_TRUSTED'));
 			return false;
 		}
-		$fingerprint = ProxyDetector::fingerprint(ProxyDetector::BehindProxy, $header, true);
 		if ($server !== null)
 		{
 			$preview = ProxyDetector::preview($server, true, $header, $trusted);
@@ -547,14 +548,13 @@ class SetupModel extends BaseDatabaseModel
 				$this->setError(Text::_('COM_BFSTOP_SETUP_PROXY_ERROR_CONFIRM'));
 				return false;
 			}
-			$fingerprint = ProxyDetector::fingerprint($this->detection($server)['scenario'], $header, true);
 		}
 		if (!$this->apply(SetupState::StepProxy, array('useProxy' => '1', 'proxyHeaderSource' => $header,
 			'proxyIpAddress' => $trusted), $fixes))
 		{
 			return false;
 		}
-		$this->setupState()->confirmFingerprint($fingerprint);
+		$this->setupState()->acknowledgeNoProxy(null);
 		$this->saveSetupState();
 		return true;
 	}
@@ -655,6 +655,24 @@ class SetupModel extends BaseDatabaseModel
 			$missing[] = 'modeUnfit';
 		}
 		return $missing;
+	}
+
+	/**
+	 * The administrator's own address, as the saved settings take it from
+	 * the request $server (default: this one), if an active block holds it
+	 * (and the allow list doesn't): activated, the plugin would lock them
+	 * out - of the whole site with "Full Site". Null otherwise.
+	 */
+	public function selfBlocked(?array $server = null): ?string
+	{
+		$proxy = ProxyDetector::proxySettings($this->settings());
+		$address = ProxyDetector::preview($server ?? $_SERVER, $proxy['useProxy'], $proxy['header'],
+			implode(', ', $proxy['trusted']))['address'];
+		if ($address === '' || $this->repositories()->allowList()->contains($address))
+		{
+			return null;
+		}
+		return count($this->repositories()->blocks()->activeIdsFor($address) ?? array()) > 0 ? $address : null;
 	}
 
 	/** Whether the system plugin is installed and enabled (as stored, not as loaded for this request). */

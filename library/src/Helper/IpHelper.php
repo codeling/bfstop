@@ -370,6 +370,54 @@ class IpHelper
 	}
 
 	/**
+	 * The narrowest network which contains all of $entries (addresses and
+	 * networks, at least two, of one family) - for the nodes of a proxy to
+	 * be trusted as one entry; null if there is none at least as narrow as
+	 * $minPrefixIPv4 or $minPrefixIPv6 (the widest network ProxylistRule
+	 * takes), the families are mixed, or an entry is neither.
+	 */
+	public static function commonNetwork(array $entries, int $minPrefixIPv4, int $minPrefixIPv6): ?string
+	{
+		if (count($entries) < 2)
+		{
+			return null;
+		}
+		$first = null;
+		$bits = null;
+		foreach ($entries as $entry)
+		{
+			$network = self::network((string) $entry);
+			if ($network === null || ($first !== null && strlen($network[0]) !== strlen($first)))
+			{
+				return null;
+			}
+			if ($first === null)
+			{
+				$first = $network[0];
+				$bits = $network[1];
+				continue;
+			}
+			$same = 0;
+			while ($same < min($bits, $network[1]) && self::bit($first, $same) === self::bit($network[0], $same))
+			{
+				++$same;
+			}
+			$bits = $same;
+		}
+		if ($bits < (strlen($first) === 4 ? $minPrefixIPv4 : $minPrefixIPv6))
+		{
+			return null;
+		}
+		return self::canonicalEntry(inet_ntop($first).'/'.$bits);
+	}
+
+	/** The bit $i (0: the highest) of the binary address $bin. */
+	private static function bit(string $bin, int $i): int
+	{
+		return (ord($bin[intdiv($i, 8)]) >> (7 - $i % 8)) & 1;
+	}
+
+	/**
 	 * The trusted proxies of the settings, if proxy support is on
 	 * (see getAddress()); empty otherwise.
 	 *

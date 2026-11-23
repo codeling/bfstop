@@ -87,8 +87,12 @@ class ProxyDetectorTest extends TestCase
 		$this->assertSame(array('useProxy' => 1, 'proxyHeaderSource' => 'HTTP_X_FORWARDED_FOR', 'proxyIpAddress' => '10.0.0.5'),
 			ProxyDetector::proposal(ProxyDetector::detect(array('REMOTE_ADDR' => '::ffff:10.0.0.5',
 				'HTTP_X_FORWARDED_FOR' => '203.0.113.7'), self::NoProxy, false)), 'B: trust the exact address');
-		$this->assertSame('HTTP_CF_CONNECTING_IP', ProxyDetector::proposal(ProxyDetector::detect(array('REMOTE_ADDR' => '198.51.100.20',
-			'HTTP_CF_CONNECTING_IP' => '203.0.113.7'), self::NoProxy, false))['proxyHeaderSource'], 'D: Cloudflare');
+		$this->assertSame(array('useProxy' => 1, 'proxyHeaderSource' => 'HTTP_CF_CONNECTING_IP', 'proxyIpAddress' => ''),
+			ProxyDetector::proposal(ProxyDetector::detect(array('REMOTE_ADDR' => '198.51.100.20',
+			'HTTP_CF_CONNECTING_IP' => '203.0.113.7'), self::NoProxy, false)), 'D: Cloudflare, whose ranges are fetched');
+		$this->assertSame(array('useProxy' => 1, 'proxyHeaderSource' => 'HTTP_X_FORWARDED_FOR', 'proxyIpAddress' => ''),
+			ProxyDetector::proposal(ProxyDetector::detect(array('REMOTE_ADDR' => '198.51.100.20',
+			'HTTP_X_FORWARDED_FOR' => '203.0.113.7'), self::NoProxy, false)), 'D: not the one server of the CDN the request came from');
 		foreach (array('A' => array('REMOTE_ADDR' => '203.0.113.5'),
 			'C' => array('REMOTE_ADDR' => '203.0.113.7', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7'),
 			'E' => array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_REAL_IP' => '203.0.113.7')) as $scenario => $server)

@@ -53,6 +53,7 @@ class HtmlView extends BaseHtmlView
 	protected array $pages = array();
 	protected ?Form $settingsForm = null;
 	protected array $suspicious = array();
+	protected ?string $selfBlocked = null;
 	protected array $cleanup = array();
 	protected array $htaccess = array();
 	protected bool $notifyMeaningChanged = false;
@@ -98,10 +99,15 @@ class HtmlView extends BaseHtmlView
 		$this->loadBalancerHint = ProxyDetector::loadBalancerHint((bool) $this->setting('useProxy'), $this->detected['scenario'],
 			SetupModel::behindLoadBalancer());
 		$this->issueUrl = self::issueUrl($this->detected);
-		$this->suspicious = $model->suspiciousBlocks();
 		// what only some pages show
 		switch ($this->page)
 		{
+			case 'proxy':
+				$this->suspicious = $model->suspiciousBlocks();
+				break;
+			case 'summary':
+				$this->selfBlocked = $model->selfBlocked();
+				break;
 			case 'cleanup':
 				$this->cleanup = $model->cleanupFindings();
 				break;

@@ -7,6 +7,7 @@
 **/
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
 use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
 use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
@@ -22,6 +23,9 @@ $header = (string) (($input['header'] ?? '') !== '' ? $input['header']
 	: ($useProxy ? $this->setting('proxyHeaderSource') : ($this->proposal['proxyHeaderSource'] ?? 'HTTP_X_FORWARDED_FOR')));
 $trusted = (string) ($input['trusted'] ?? ($useProxy ? $this->setting('proxyIpAddress') : ($this->proposal['proxyIpAddress'] ?? '')));
 $needsProxy = ProxyDetector::needsProxySettings($detected['scenario']);
+// the nodes entered, as one network (if it is one ProxylistRule takes)
+$entries = array_values(array_unique(array_map(fn ($entry) => IpHelper::canonicalEntry($entry) ?? $entry, IpHelper::parseTrustedProxies($trusted))));
+$network = count($entries) > 1 ? IpHelper::commonNetwork($entries, IpValidateHelper::MinPrefixIPv4, IpValidateHelper::MinPrefixIPv6) : null;
 $unsupportedOnly = $detected['scenario'] === ProxyDetector::Unsupported;
 $shorten = fn ($value) => mb_strlen($value, 'UTF-8') > 200 ? mb_substr($value, 0, 200, 'UTF-8').'…' : $value;
 $action = Route::_('index.php?option=com_bfstop&view=setup&page=proxy');
@@ -82,6 +86,8 @@ $action = Route::_('index.php?option=com_bfstop&view=setup&page=proxy');
 <?php endif; ?>
 <?php if ($detected['cloudflare'] || $header === IpHelper::CloudflareHeader): ?>
 <div class="alert alert-warning"><?php echo Text::_('COM_BFSTOP_SETUP_CLOUDFLARE_WARNING'); ?></div>
+<?php elseif ($detected['scenario'] === ProxyDetector::BehindCdn): ?>
+<div class="alert alert-info"><?php echo Text::_('COM_BFSTOP_SETUP_PROXY_CDN_REALIP'); ?></div>
 <?php endif; ?>
 
 <form method="post" action="<?php echo $action; ?>" id="bfstop-setup-proxy">
@@ -114,6 +120,12 @@ $action = Route::_('index.php?option=com_bfstop&view=setup&page=proxy');
 				<label class="form-label mt-2" for="proxy-trusted"><?php echo Text::_('PLG_SYSTEM_BFSTOP_PROXY_IP_LABEL'); ?></label>
 				<textarea class="form-control" name="trusted" id="proxy-trusted" rows="3"><?php echo $this->escape($trusted); ?></textarea>
 				<div class="form-text"><?php echo Text::_('COM_BFSTOP_SETUP_PROXY_TRUSTED_DESC'); ?></div>
+<?php if ($network !== null): ?>
+				<p class="mt-2 mb-0" id="proxy-network"><?php echo Text::sprintf('COM_BFSTOP_SETUP_PROXY_COMMON_NETWORK', '<code>'.$this->escape($network).'</code>'); ?>
+					<button type="submit" name="network" value="<?php echo $this->escape($network); ?>" class="btn btn-sm btn-outline-secondary"
+						formaction="<?php echo Route::_('index.php?option=com_bfstop&view=setup&page=proxy&task=setup.preview'); ?>"><?php echo Text::_('COM_BFSTOP_SETUP_PROXY_USE_NETWORK'); ?></button>
+				</p>
+<?php endif; ?>
 				<p class="mt-2">
 					<button type="submit" name="task" value="setup.preview" class="btn btn-secondary"><?php echo Text::_('COM_BFSTOP_SETUP_PREVIEW'); ?></button>
 <?php if ($detected['cloudflare']): ?>

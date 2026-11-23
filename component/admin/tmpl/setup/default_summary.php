@@ -47,6 +47,18 @@ $completed = $this->setup->completedAt();
 <?php if ($this->loadBalancerHint !== null): ?>
 <p class="alert alert-info"><?php echo Text::_('COM_BFSTOP_SETUP_LOADBALANCER_'.strtoupper($this->loadBalancerHint)); ?></p>
 <?php endif; ?>
+<?php if ($this->setup->noProxyAcknowledged() !== null && !(bool) $this->setting('useProxy')): ?>
+<div class="alert alert-danger" id="no-proxy-acknowledged">
+	<?php echo Text::sprintf('COM_BFSTOP_SETUP_SUMMARY_NO_PROXY_ACKNOWLEDGED',
+		Route::_('index.php?option=com_bfstop&view=setup&page=proxy')); ?>
+</div>
+<?php endif; ?>
+<?php if ($this->selfBlocked !== null): ?>
+<div class="alert alert-danger" id="self-blocked">
+	<?php echo Text::sprintf('COM_BFSTOP_SETUP_SUMMARY_SELF_BLOCKED', '<code>'.$this->escape($this->selfBlocked).'</code>',
+		Route::_('index.php?option=com_bfstop&view=blocklist')); ?>
+</div>
+<?php endif; ?>
 <div class="alert alert-info"><?php echo Text::_('COM_BFSTOP_SETUP_REMINDER'); ?></div>
 <?php foreach ($missing as $reason): ?>
 <p class="alert alert-warning"><?php echo Text::_('COM_BFSTOP_SETUP_MISSING_'.strtoupper($reason)); ?></p>

@@ -156,8 +156,12 @@ final class ProxyDetector
 	 * The proxy settings to propose for what detect() found ($detected):
 	 * useProxy, proxyHeaderSource and proxyIpAddress. Behind a proxy, the
 	 * address the request came from is the one to trust, and the header the
-	 * one present (see HeaderPreference); for Cloudflare, its address ranges
-	 * have to be fetched (see the setup assistant). Otherwise none.
+	 * one present (see HeaderPreference). Behind a CDN, no address: the one
+	 * the request came from is one of the CDN's many servers, and trusting it
+	 * alone would work only until the next request comes from another - its
+	 * published ranges are to be entered (for Cloudflare, fetched, see the
+	 * setup assistant), or better, the web server resolves the address.
+	 * Otherwise none.
 	 */
 	public static function proposal(array $detected): array
 	{
@@ -168,7 +172,7 @@ final class ProxyDetector
 		return array(
 			'useProxy' => 1,
 			'proxyHeaderSource' => $detected['header'],
-			'proxyIpAddress' => IpHelper::canonicalEntry($detected['remote']) ?? '',
+			'proxyIpAddress' => $detected['scenario'] === self::BehindProxy ? IpHelper::canonicalEntry($detected['remote']) ?? '' : '',
 		);
 	}
 

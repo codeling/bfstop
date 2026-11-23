@@ -132,10 +132,12 @@ class SetupController extends BaseController
 			return;
 		}
 		$header = $this->input->post->getString('header', '');
+		// "use this network" (see IpHelper::commonNetwork()): the nodes as one entry
+		$network = IpHelper::canonicalEntry($this->input->post->getString('network', ''));
 		$this->keepProxyInput(array(
 			'choice' => 'proxy',
 			'header' => in_array($header, IpHelper::KnownProxyHeaders, true) ? $header : '',
-			'trusted' => $this->input->post->getString('trusted', ''),
+			'trusted' => $network ?? $this->input->post->getString('trusted', ''),
 			'previewed' => true,
 		));
 		$this->setRedirect(self::pageUrl('proxy').'#preview');

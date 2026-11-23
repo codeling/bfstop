@@ -21,6 +21,13 @@ $setup = $this->setup;
 <?php endif; ?>
 <?php if ($setup->mode() === 'upgrade'): ?>
 <p><?php echo Text::sprintf('COM_BFSTOP_SETUP_OVERVIEW_UPGRADE', $this->escape((string) $setup->from())); ?></p>
+<?php if (in_array($setup->updateScenario(), array('A', 'B', 'C', 'D', 'E'), true) && $setup->updateScenario() !== $this->detected['scenario']): ?>
+<p class="alert alert-info"><?php echo Text::sprintf('COM_BFSTOP_SETUP_OVERVIEW_UPDATE_REQUEST',
+	Text::_('COM_BFSTOP_SETUP_SCENARIO_'.$setup->updateScenario()),
+	count($setup->updateHeaders()) > 0
+		? '<code>'.implode('</code>, <code>', array_map(fn ($key) => $this->escape($this->headerName($key)), $setup->updateHeaders())).'</code>'
+		: Text::_('JNONE')); ?></p>
+<?php endif; ?>
 <ul>
 <?php if ($setup->fromBefore200()): ?>
 	<li><?php echo Text::_('COM_BFSTOP_SETUP_OVERVIEW_DID_SETTINGS'); ?></li>

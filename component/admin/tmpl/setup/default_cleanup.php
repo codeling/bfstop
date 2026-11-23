@@ -7,7 +7,7 @@
 **/
 defined('_JEXEC') or die;
 
-
+use Codeling\Library\Bfstop\Service\Setup\ProxyCleanup;
 use Joomla\CMS\HTML\HTMLHelper;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
@@ -20,6 +20,8 @@ $this->stepButtons = array('cleanup', 'setup.cleanup', 'COM_BFSTOP_SETUP_CLEANUP
 <p><?php echo Text::_('COM_BFSTOP_SETUP_CLEANUP_INTRO'); ?></p>
 <?php if (!(bool) $this->setting('useProxy')): ?>
 <p class="alert alert-info"><?php echo Text::_('COM_BFSTOP_SETUP_CLEANUP_NO_PROXY'); ?></p>
+<?php elseif (!ProxyCleanup::anything($findings)): ?>
+<p class="alert alert-success"><?php echo Text::_('COM_BFSTOP_SETUP_CLEANUP_NOTHING'); ?></p>
 <?php else: ?>
 <ul>
 	<li><?php echo Text::sprintf('COM_BFSTOP_SETUP_CLEANUP_BLOCKS', count($findings['blocks'])); ?>

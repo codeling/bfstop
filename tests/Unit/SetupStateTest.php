@@ -19,7 +19,6 @@ class SetupStateTest extends TestCase
 	public function testNothingStored()
 	{
 		$state = SetupState::fromRows(array());
-		$this->assertFalse($state->exists());
 		$this->assertSame(SetupState::ModeInstall, $state->mode());
 		$this->assertNull($state->from());
 		$this->assertFalse($state->isCompleted());
@@ -31,7 +30,6 @@ class SetupStateTest extends TestCase
 	{
 		$state = SetupState::fromRows(array(SetupState::Name => json_encode(array('mode' => 'upgrade', 'from' => '1.5.2',
 			'disabled' => 'proxy', 'scenario' => 'B', 'headers' => array('HTTP_X_FORWARDED_FOR'), 'delays' => 1, 'htaccess' => 1))));
-		$this->assertTrue($state->exists());
 		$this->assertSame(SetupState::ModeUpgrade, $state->mode());
 		$this->assertSame('1.5.2', $state->from());
 		$this->assertTrue($state->fromBefore200());
@@ -51,12 +49,15 @@ class SetupStateTest extends TestCase
 		$state->setStatus(SetupState::StepBlockMode, SetupState::Skipped);
 		$this->assertSame(array(SetupState::StepBlockMode), $state->pendingRequiredSteps(), 'a required step has to be done');
 		$state->setStatus(SetupState::StepBlockMode, SetupState::Done);
-		$state->confirmFingerprint('0123456789ab');
+		$this->assertNull($state->noProxyAcknowledged());
+		$state->acknowledgeNoProxy('D');
 		$state->complete(1700000000);
 		$copy = SetupState::fromRows($state->toRows());
 		$this->assertSame(array(), $copy->pendingRequiredSteps());
 		$this->assertSame(1700000000, $copy->completedAt());
-		$this->assertSame('0123456789ab', $copy->confirmedFingerprint());
+		$this->assertSame('D', $copy->noProxyAcknowledged());
+		$copy->acknowledgeNoProxy(null);
+		$this->assertNull(SetupState::fromRows($copy->toRows())->noProxyAcknowledged());
 		$copy->setStatus(SetupState::StepProxy, SetupState::Pending);
 		$this->assertSame(array(SetupState::StepProxy), $copy->pendingRequiredSteps());
 	}

@@ -16,8 +16,9 @@ use Codeling\Library\Bfstop\Repository\StateRepository;
  * Where the setup assistant stands (rows of #__bfstop_state): whether it
  * runs for a new installation or after an update (and from which version),
  * the steps done or skipped, why the update disabled the plugin, what the
- * update found and did, the proxy setup the administrator confirmed, the
- * mismatches dismissed, and when protection was activated.
+ * update found and did, whether the administrator said there is no proxy
+ * although the request came through one, the mismatches dismissed, and
+ * when protection was activated.
  *
  * The plugin's installer script writes the main row too, without this class
  * (the classes of the version being replaced may be the ones loaded while it
@@ -71,14 +72,12 @@ final class SetupState
 	private array $main;
 	private array $steps;
 	private array $dismissed;
-	private bool $exists;
 
-	private function __construct(array $main, array $steps, array $dismissed, bool $exists)
+	private function __construct(array $main, array $steps, array $dismissed)
 	{
 		$this->main = $main;
 		$this->steps = $steps;
 		$this->dismissed = $dismissed;
-		$this->exists = $exists;
 	}
 
 	/**
@@ -102,7 +101,7 @@ final class SetupState
 		}
 		$dismissed = array_values(array_filter(explode(',', (string) ($rows[self::Dismissed] ?? '')),
 			fn ($fingerprint) => preg_match('/^[0-9a-f]{12}\z/', $fingerprint) === 1));
-		return new self($decode(self::Name), $steps, $dismissed, isset($rows[self::Name]));
+		return new self($decode(self::Name), $steps, $dismissed);
 	}
 
 	/** The state as it is stored: one query. */
@@ -140,12 +139,6 @@ final class SetupState
 			self::Steps => json_encode((object) $this->steps),
 			self::Dismissed => implode(',', $this->dismissed),
 		);
-	}
-
-	/** Whether the main row is stored (an installation or update wrote it). */
-	public function exists(): bool
-	{
-		return $this->exists;
 	}
 
 	/** ModeInstall or ModeUpgrade; an installation which wrote nothing counts as one. */
@@ -234,15 +227,26 @@ final class SetupState
 		return !empty($this->main['htaccess']);
 	}
 
-	/** The fingerprint of the proxy setup the administrator confirmed (see ProxyDetector::fingerprint()). */
-	public function confirmedFingerprint(): ?string
+	/**
+	 * The scenario (see ProxyDetector: B or D) of the request with which the
+	 * administrator confirmed that there is no proxy all the same - the
+	 * acknowledgement of the proxy step, which the summary warns about while
+	 * proxy support is off. Null if there was none.
+	 */
+	public function noProxyAcknowledged(): ?string
 	{
-		return isset($this->main['fp']) ? (string) $this->main['fp'] : null;
+		return isset($this->main['noProxy']) ? (string) $this->main['noProxy'] : null;
 	}
 
-	public function confirmFingerprint(string $fingerprint): void
+	/** Records the acknowledgement of noProxyAcknowledged() for the scenario $scenario; null: there is none. */
+	public function acknowledgeNoProxy(?string $scenario): void
 	{
-		$this->main['fp'] = $fingerprint;
+		if ($scenario === null)
+		{
+			unset($this->main['noProxy']);
+			return;
+		}
+		$this->main['noProxy'] = $scenario;
 	}
 
 	public function isDismissed(string $fingerprint): bool

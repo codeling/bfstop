@@ -164,11 +164,14 @@ class SetupTest extends IntegrationTestCase
 		$this->assertSame('HTTP_X_FORWARDED_FOR', $stored['proxyHeaderSource']);
 		$state = $this->state();
 		$this->assertSame(SetupState::Done, $state->status(SetupState::StepProxy));
-		$this->assertSame(ProxyDetector::fingerprint('B', 'HTTP_X_FORWARDED_FOR', true), $state->confirmedFingerprint());
+		$this->assertNull($state->noProxyAcknowledged());
 
-		// acknowledged: there is a header, but no proxy in front of the site
+		// acknowledged: there is a header, but no proxy in front of the site - which the summary warns about
 		$this->assertTrue($this->model()->confirmNoProxy(true, array(), $server), 'acknowledged');
 		$this->assertSame('0', (string) $this->stored()['useProxy']);
+		$this->assertSame('B', $this->state()->noProxyAcknowledged());
+		$this->assertTrue($this->model()->confirmNoProxy(false, array(), array('REMOTE_ADDR' => '203.0.113.5')));
+		$this->assertNull($this->state()->noProxyAcknowledged(), 'a direct request: nothing to acknowledge');
 
 		$unsupported = array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_REAL_IP' => '203.0.113.7');
 		$model = $this->model();
@@ -424,6 +427,124 @@ class SetupTest extends IntegrationTestCase
 		$input->set('page', null);
 		// as it was: the other tests run without a document
 		(new \ReflectionProperty($app, 'document'))->setValue($app, null);
+	}
+
+	/** The page $page of the assistant, as the request $server (with this test's) gets it. */
+	private function render(string $page, array $server): string
+	{
+		if (!defined('JPATH_COMPONENT'))
+		{
+			define('JPATH_COMPONENT', JPATH_ADMINISTRATOR.'/components/com_bfstop');
+		}
+		$app = Factory::getApplication();
+		$_SERVER = $server + $this->originalServer;
+		$document = Factory::getContainer()->get(\Joomla\CMS\Document\FactoryInterface::class)->createDocument('html');
+		$app->loadDocument($document);
+		$app->getInput()->set('page', $page);
+		$view = new \Codeling\Component\Bfstop\Administrator\View\Setup\HtmlView(array(
+			'base_path' => BFSTOP_COMPONENT_ROOT.'/admin', 'template_path' => BFSTOP_COMPONENT_ROOT.'/admin/tmpl/setup'));
+		$view->setModel($this->model(), true);
+		$view->setDocument($document);
+		ob_start();
+		try
+		{
+			$view->display();
+		}
+		finally
+		{
+			$html = ob_get_clean();
+			$app->getInput()->set('page', null);
+			(new \ReflectionProperty($app, 'document'))->setValue($app, null);
+		}
+		return $html;
+	}
+
+	/**
+	 * Before protection is activated, the summary warns where it would lock
+	 * the administrator out: their own address (as the saved settings take
+	 * it) is blocked - and where they said there is no proxy although their
+	 * request came through one.
+	 */
+	public function testTheSummaryWarnsBeforeTheAdministratorIsLockedOut()
+	{
+		$direct = array('REMOTE_ADDR' => '203.0.113.5');
+		$proxied = array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.5');
+		self::storeSettings($this->db, json_encode(array('useProxy' => '0')));
+		$this->assertNull($this->model()->selfBlocked($direct));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.0/24', 'crdate' => self::minutesAgo(5), 'duration' => 60));
+		$this->assertSame('203.0.113.5', $this->model()->selfBlocked($direct), 'a network block holds it');
+		$this->assertNull($this->model()->selfBlocked($proxied), 'without proxy settings: the proxy\'s address');
+		$this->assertStringContainsString('id="self-blocked"', $this->render('summary', $direct));
+
+		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.5',
+			'proxyHeaderSource' => 'HTTP_X_FORWARDED_FOR')));
+		$this->assertSame('203.0.113.5', $this->model()->selfBlocked($proxied), 'the address behind the proxy');
+		$this->assertNull($this->model()->selfBlocked(array('HTTP_X_FORWARDED_FOR' => '198.51.100.9') + $proxied));
+		$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.5', 'notes' => 'me'));
+		$this->assertNull($this->model()->selfBlocked($proxied), 'the allow list goes first');
+		$this->assertStringNotContainsString('id="self-blocked"', $this->render('summary', $proxied));
+
+		self::storeSettings($this->db, json_encode(array('useProxy' => '0')));
+		$this->assertTrue($this->model()->confirmNoProxy(true, array(), $proxied));
+		$this->assertStringContainsString('id="no-proxy-acknowledged"', $this->render('summary', $proxied));
+		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.5')));
+		$this->assertStringNotContainsString('id="no-proxy-acknowledged"', $this->render('summary', $proxied),
+			'the proxy has been set up since (on the settings page)');
+	}
+
+	/**
+	 * Behind a CDN other than Cloudflare, the proxy step proposes no address
+	 * (the request's is one of the CDN's many servers) and recommends that
+	 * the web server resolves the address; several nodes entered are offered
+	 * as their narrowest network, which the dry run takes.
+	 */
+	public function testTheProxyStepBehindACdnAndWithSeveralNodes()
+	{
+		self::storeSettings($this->db, json_encode(array('useProxy' => '0')));
+		$cdn = array('REMOTE_ADDR' => '198.51.100.20', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7');
+		$html = $this->render('proxy', $cdn);
+		$this->assertStringContainsString(\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETUP_PROXY_CDN_REALIP'), $html);
+		$this->assertMatchesRegularExpression('#<textarea[^>]*id="proxy-trusted"[^>]*></textarea>#', $html, 'no address proposed');
+		$this->assertStringNotContainsString('198.51.100.20', $html === '' ? '' : preg_replace('#<li>.*?</li>#s', '', $html),
+			'the address only as what the request came from');
+
+		$app = Factory::getApplication();
+		$app->setUserState(\Codeling\Component\Bfstop\Administrator\Controller\SetupController::ProxyUserState,
+			array('choice' => 'proxy', 'header' => 'HTTP_X_FORWARDED_FOR', 'trusted' => "10.0.0.5\n10.0.0.6", 'previewed' => true));
+		try
+		{
+			$html = $this->render('proxy', array('REMOTE_ADDR' => '10.0.0.6', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7'));
+			$this->assertStringContainsString('id="proxy-network"', $html);
+			$this->assertStringContainsString('value="10.0.0.4/30"', $html);
+			$this->assertStringContainsString('<code>203.0.113.7</code>', $html, 'the dry run with both nodes');
+			$this->assertStringNotContainsString(\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETUP_PROXY_CDN_REALIP'), $html, 'B: no CDN');
+		}
+		finally
+		{
+			$app->setUserState(\Codeling\Component\Bfstop\Administrator\Controller\SetupController::ProxyUserState, null);
+		}
+		$this->assertTrue($this->model()->confirmProxy('HTTP_X_FORWARDED_FOR', '10.0.0.4/30', '203.0.113.7', array(),
+			array('REMOTE_ADDR' => '10.0.0.6', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7')), 'the network as the trusted proxies');
+	}
+
+	/**
+	 * The overview tells how the update's request came where it differs from
+	 * this one; the clean-up says when there is nothing to clean up.
+	 */
+	public function testTheOverviewAndTheCleanUpSayWhatTheyFound()
+	{
+		(new Repositories($this->logger))->state()->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2',
+			'scenario' => 'B', 'headers' => array('HTTP_X_FORWARDED_FOR'))));
+		$expected = strip_tags(\Joomla\CMS\Language\Text::sprintf('COM_BFSTOP_SETUP_OVERVIEW_UPDATE_REQUEST',
+			\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETUP_SCENARIO_B'), 'X-Forwarded-For'));
+		$html = $this->render('overview', array('REMOTE_ADDR' => '203.0.113.5'));
+		$this->assertStringContainsString($expected, html_entity_decode(strip_tags($html), ENT_QUOTES));
+		$html = $this->render('overview', array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7'));
+		$this->assertStringNotContainsString($expected, html_entity_decode(strip_tags($html), ENT_QUOTES), 'the same way as this one');
+
+		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.5')));
+		$this->assertStringContainsString(\Joomla\CMS\Language\Text::_('COM_BFSTOP_SETUP_CLEANUP_NOTHING'),
+			$this->render('cleanup', array('REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_FORWARDED_FOR' => '203.0.113.7')));
 	}
 
 	/** The pages which only make sense after an update are shown only then. */
