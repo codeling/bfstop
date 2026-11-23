@@ -58,6 +58,8 @@ jobs:
           composer install --no-interaction --no-progress
           composer check-geoip
       - name: Release zips contain everything the manifests reference
+        # those of the library, the task, quick icon and console plugins and
+        # the package are checked by package/build.sh (job "package")
         run: |
           plugin/deploy.sh zip
           php tests/lint/check-zip.php plugin/bfstop-*.zip bfstop.xml

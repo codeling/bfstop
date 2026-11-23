@@ -244,11 +244,11 @@ class SetupTest extends IntegrationTestCase
 		$_SERVER['HTTP_X_FORWARDED_FOR'] = '203.0.113.7';
 		self::storeSettings($this->db, json_encode(array('useProxy' => '0')));
 		$app = Factory::getApplication();
-		$messages = function ($pluginEnabled) use ($app)
+		$messages = function ($pluginEnabled, $mismatches = true) use ($app)
 		{
 			$controller = new DisplayController(array('base_path' => JPATH_ADMINISTRATOR.'/components/com_bfstop'),
 				new MVCFactory('Codeling\\Component\\Bfstop'), $app, $app->getInput());
-			$controller->showSetupBanners($pluginEnabled);
+			$controller->showSetupBanners($pluginEnabled, $mismatches);
 			return array_map(fn ($m) => $m['type'].': '.strip_tags($m['message']), $app->getMessageQueue(true));
 		};
 		$notActive = 'error: '.strip_tags(\Joomla\CMS\Language\Text::sprintf('COM_BFSTOP_BANNER_NOT_ACTIVE', ''));
@@ -258,6 +258,7 @@ class SetupTest extends IntegrationTestCase
 		$this->assertContains($notActive, $shown);
 		$this->assertCount(1, array_filter($shown, fn ($m) => str_contains($m, $proxy)));
 		$this->assertContains($incomplete, $messages(true));
+		$this->assertSame(array($notActive), $messages(false, false), 'the settings page shows the mismatches itself');
 
 		// dismissed: not shown again; the setup completed: no banner of it
 		$mismatch = $this->model()->mismatches()[0];

@@ -70,7 +70,8 @@ the component (booted through Joomla), so that the same checks apply.
   blocks of an address lifted in the database:
   `INSERT INTO <prefix>bfstop_unblock (block_id, source, crdate) SELECT id, 0, CURRENT_TIMESTAMP FROM <prefix>bfstop_bannedip WHERE ipaddress = '<address>' AND id NOT IN (SELECT block_id FROM <prefix>bfstop_unblock);`
   (with blocking through `.htaccess`, take the address out of the file's
-  `BFStop Blocks` section too). The banners and the quick icon keep saying
+  `BFStop Blocks` section too; with an nginx deny file, its `deny <address>;`
+  line, and reload nginx). The banners and the quick icon keep saying
   that the setup isn't complete until the assistant has run.
 - Configure everything else under *Components → Brute Force Stop →
   Settings*. Keep the proxy settings up to date: whenever the hosting

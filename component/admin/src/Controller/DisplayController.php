@@ -43,8 +43,9 @@ class DisplayController extends BaseController
 		$this->warnIfHtAccessNotWorking($view);
 		if ($view !== 'setup')
 		{
-			// the assistant shows both itself
-			$this->showSetupBanners($pluginInstalled === 'enabled');
+			// the assistant shows both itself; the settings page the
+			// mismatches, next to the proxy settings
+			$this->showSetupBanners($pluginInstalled === 'enabled', $view !== 'settings');
 		}
 		if ($view !== 'settings')
 		{
@@ -139,8 +140,10 @@ class DisplayController extends BaseController
 	 * messages can hold no form, so "This is expected" is on its proxy page.
 	 *
 	 * @param bool $pluginEnabled whether the system plugin is enabled
+	 * @param bool $mismatches whether to show the mismatches (not where the
+	 *                         page shows them itself)
 	 */
-	public function showSetupBanners(bool $pluginEnabled)
+	public function showSetupBanners(bool $pluginEnabled, bool $mismatches = true)
 	{
 		$user = $this->app->getIdentity();
 		if (!$user || !$user->authorise('core.admin', 'com_bfstop') || !class_exists(SetupState::class))
@@ -156,6 +159,10 @@ class DisplayController extends BaseController
 		elseif (!$setup->isCompleted())
 		{
 			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_BANNER_SETUP_INCOMPLETE', $assistant), 'warning');
+		}
+		if (!$mismatches)
+		{
+			return;
 		}
 		$proxyPage = Route::_('index.php?option=com_bfstop&view=setup&page=proxy', false);
 		foreach (ProxyMismatch::open(ProxyMismatch::check($_SERVER, ProxyDetector::proxySettings(Settings::stored()),
