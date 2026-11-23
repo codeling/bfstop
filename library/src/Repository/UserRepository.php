@@ -94,6 +94,46 @@ class UserRepository extends Repository
 		}, array());
 	}
 
+	/**
+	 * The email addresses of the enabled accounts in the user groups
+	 * $groupIds (the super users' groups) which receive system emails
+	 * ("Receive System Emails" in their account) - or of all of them, if
+	 * none does: a warning which concerns the whole site must reach
+	 * somebody. Fail-open: none.
+	 *
+	 * @param int[] $groupIds
+	 * @return string[]
+	 */
+	public function emailsOfGroupsForSystemMails(array $groupIds)
+	{
+		$groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+		if (count($groupIds) === 0)
+		{
+			return array();
+		}
+		return $this->failOpen('emailsOfGroupsForSystemMails', function () use ($groupIds)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName(array('u.email', 'u.sendEmail')))
+				->from($this->db->quoteName('#__users', 'u'))
+				->innerJoin($this->db->quoteName('#__user_usergroup_map', 'g').
+					' ON '.$this->db->quoteName('u.id').' = '.$this->db->quoteName('g.user_id'))
+				->whereIn($this->db->quoteName('g.group_id'), $groupIds)
+				->where($this->db->quoteName('u.block').' = 0');
+			$all = array();
+			$system = array();
+			foreach ($this->objects($query) as $row)
+			{
+				$all[] = (string) $row->email;
+				if ((int) $row->sendEmail === 1)
+				{
+					$system[] = (string) $row->email;
+				}
+			}
+			return array_values(array_unique(count($system) > 0 ? $system : $all));
+		}, array());
+	}
+
 	// how many logins one query looks up (see anyAccountExists())
 	private const LookupChunk = 500;
 
@@ -189,5 +229,53 @@ class UserRepository extends Repository
 			$parts[] = ($lower ? 'LOWER('.$quoted.')' : $quoted).' IN ('.implode(', ', $placeholders).')';
 		}
 		return implode(' OR ', $parts);
+	}
+
+	/**
+	 * Those of $logins which are the username or the email address of an
+	 * account, each decided by the same comparison as accountExists() (on
+	 * MySQL by the collation, so "muller" is the account "müller"'s): one
+	 * query for up to LookupChunk / 5 of them, with one EXISTS per login.
+	 * Fail-closed: all of them (nothing is taken for a name which belongs to
+	 * no account).
+	 *
+	 * @param string[] $logins
+	 * @return string[]
+	 */
+	public function existingLogins(array $logins)
+	{
+		$logins = array_values(array_unique(array_map('strval', $logins)));
+		if (count($logins) === 0)
+		{
+			return array();
+		}
+		return $this->failClosed('existingLogins', function () use ($logins)
+		{
+			$found = array();
+			foreach (array_chunk($logins, intdiv(self::LookupChunk, 5)) as $chunk)
+			{
+				$values = array();
+				$columns = array();
+				foreach ($chunk as $i => $login)
+				{
+					$values['u'.$i] = $login;
+					$values['e'.$i] = $login;
+					$exists = $this->db->createQuery()
+						->select('1')
+						->from($this->db->quoteName('#__users'))
+						->where('('.$this->loginCondition(array('u'.$i), array('e'.$i)).')');
+					$columns[] = 'CASE WHEN EXISTS ('.$exists.') THEN 1 ELSE 0 END AS '.$this->db->quoteName('a'.$i);
+				}
+				$row = $this->row($this->db->createQuery()->select($columns), $values);
+				foreach ($chunk as $i => $login)
+				{
+					if (is_array($row) && (int) ($row['a'.$i] ?? 0) === 1)
+					{
+						$found[] = $login;
+					}
+				}
+			}
+			return $found;
+		}, $logins);
 	}
 }

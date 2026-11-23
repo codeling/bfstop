@@ -20,6 +20,8 @@ use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Access\Rules;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Form\Form;
+use Joomla\CMS\Form\FormFactoryInterface;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Model\AdminModel;
 use Joomla\CMS\Table\Asset;
@@ -109,49 +111,78 @@ class SettingsModel extends AdminModel
 	}
 
 	/**
-	 * Unblock links are only safe with the site's $live_site, see
-	 * BlockPolicy::effectiveNotifyBlockedUser(): without it, the settings page
-	 * doesn't take them (for any IP address or only known ones).
+	 * The checks across fields, after those of the form's fields (see
+	 * crossFieldErrors()).
 	 */
 	public function validate($form, $data, $group = null)
 	{
 		$valid = parent::validate($form, $data, $group);
-		if (is_array($valid) && !BlockPolicy::hasLiveSite() &&
-			(int) ($valid['params']['notifyBlockedUser'] ?? 0) !== 0)
-		{
-			$this->setError(Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE'));
-			return false;
-		}
-		if (is_array($valid) && ($valid['params']['blockMode'] ?? '') === 'htaccess' &&
-			HtaccessHelper::webServer($_SERVER['SERVER_SOFTWARE'] ?? '') === HtaccessHelper::ServerNginx)
-		{
-			// nginx never reads the file: the mode would only pretend to block
-			// in the web server
-			$this->setError(Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE',
-				Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS'), Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL')));
-			return false;
-		}
 		if (is_array($valid))
 		{
-			// the floor of the risk scoring is a floor of the threshold for
-			// every client (see BlockPolicy::effectiveBlockNumber()): above the
-			// threshold it would raise it for everybody
-			$params = new Registry($valid['params'] ?? array());
-			$blockNumber = Settings::int($params, 'blockNumber');
-			$minBlockNumber = Settings::int($params, 'riskMinBlockNumber');
-			if ($minBlockNumber > $blockNumber)
+			foreach (self::crossFieldErrors($valid['params'] ?? array()) as $message)
 			{
-				// the label of the threshold is the plugin's, see the view
-				$language = Factory::getApplication()->getLanguage();
-				$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
-					|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS.'/system/bfstop');
-				$this->setError(Text::sprintf('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_ABOVE_BLOCK_NUMBER',
-					Text::_('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_LABEL'), $minBlockNumber,
-					Text::_('PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL'), $blockNumber));
+				$this->setError($message);
 				return false;
 			}
 		}
 		return $valid;
+	}
+
+	/**
+	 * What the settings page refuses beyond the rules of the form's fields,
+	 * because it depends on another field or on the site: field name =>
+	 * message, in the order they are checked. The setup assistant shows them
+	 * too (see the library's SettingsAudit): a stored value which fails them
+	 * keeps every change of the settings from being saved.
+	 */
+	public static function crossFieldErrors(array $params): array
+	{
+		$errors = array();
+		// unblock links are only safe with the site's $live_site, see
+		// BlockPolicy::effectiveNotifyBlockedUser(): without it, the settings
+		// page doesn't take them (for any IP address or only known ones)
+		if (!BlockPolicy::hasLiveSite() && (int) ($params['notifyBlockedUser'] ?? 0) !== 0)
+		{
+			$errors['notifyBlockedUser'] = Text::_('COM_BFSTOP_SETTINGS_NOTIFY_ANY_NEEDS_LIVE_SITE');
+		}
+		if (($params['blockMode'] ?? '') === 'htaccess' &&
+			HtaccessHelper::webServer($_SERVER['SERVER_SOFTWARE'] ?? '') === HtaccessHelper::ServerNginx)
+		{
+			// nginx never reads the file: the mode would only pretend to block
+			// in the web server
+			$errors['blockMode'] = Text::sprintf('COM_BFSTOP_SETTINGS_HTACCESS_NEEDS_APACHE',
+				Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_HTACCESS'), Text::_('COM_BFSTOP_SETTINGS_BLOCK_MODE_FULL'));
+		}
+		// the floor of the risk scoring is a floor of the threshold for
+		// every client (see BlockPolicy::effectiveBlockNumber()): above the
+		// threshold it would raise it for everybody
+		$registry = new Registry($params);
+		$blockNumber = Settings::int($registry, 'blockNumber');
+		$minBlockNumber = Settings::int($registry, 'riskMinBlockNumber');
+		if ($minBlockNumber > $blockNumber)
+		{
+			// the label of the threshold is the plugin's, see the view
+			$language = Factory::getApplication()->getLanguage();
+			$language->load('plg_system_bfstop.sys', JPATH_ADMINISTRATOR)
+				|| $language->load('plg_system_bfstop.sys', JPATH_PLUGINS.'/system/bfstop');
+			$errors['riskMinBlockNumber'] = Text::sprintf('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_ABOVE_BLOCK_NUMBER',
+				Text::_('COM_BFSTOP_SETTINGS_RISK_MIN_BLOCK_NUMBER_LABEL'), $minBlockNumber,
+				Text::_('PLG_SYSTEM_BFSTOP_BLOCK_NUMBER_LABEL'), $blockNumber);
+		}
+		return $errors;
+	}
+
+	/**
+	 * The settings form, loaded from this component's forms directory -
+	 * also where getForm() can't (the console, which has no
+	 * JPATH_COMPONENT): for the setup assistant and its console command.
+	 */
+	public static function settingsForm(): Form
+	{
+		$form = Factory::getContainer()->get(FormFactoryInterface::class)
+			->createForm('com_bfstop.settings.check', array('control' => 'jform'));
+		$form->loadFile(dirname(__DIR__, 2).'/forms/settings.xml');
+		return $form;
 	}
 
 	public function save($data)

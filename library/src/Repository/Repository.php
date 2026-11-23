@@ -229,6 +229,19 @@ abstract class Repository
 		return $this->db->quoteName('username_lc').' = LOWER(:'.$parameter.')';
 	}
 
+	/**
+	 * SQL of the column $column (a name of the calling repository's table)
+	 * compared byte by byte: MySQL and MariaDB compare by the column's
+	 * collation, which takes "muller", "müller" and "Müller" for the same
+	 * (utf8mb4_unicode_ci) - for what has to tell those spellings apart.
+	 * PostgreSQL compares exactly anyway.
+	 */
+	protected function exact($column): string
+	{
+		$quoted = $this->db->quoteName($column);
+		return $this->db->getServerType() === 'mysql' ? 'CAST('.$quoted.' AS BINARY)' : $quoted;
+	}
+
 	protected static function daysAgo($days): string
 	{
 		return date('Y-m-d H:i:s', time() - $days * 86400);

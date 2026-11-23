@@ -27,6 +27,7 @@
 			<menu view="failedloginlist">com_bfstop_failedloginlist</menu>
 			<menu view="usernamestats">com_bfstop_usernamestats</menu>
 			<menu view="settings">com_bfstop_settings</menu>
+			<menu view="setup">com_bfstop_setup</menu>
 			<menu view="allowlist">com_bfstop_allowlist</menu>
 			<menu view="log">com_bfstop_log</menu>
 		</submenu>
@@ -34,6 +35,7 @@
 			<filename>access.xml</filename>
 			<filename>index.html</filename>
 			<folder>forms</folder>
+			<folder>postinstall</folder>
 			<folder>services</folder>
 			<folder>src</folder>
 			<folder>tmpl</folder>

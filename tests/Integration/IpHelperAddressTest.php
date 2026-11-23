@@ -208,6 +208,23 @@ class IpHelperAddressTest extends IntegrationTestCase
 		$this->assertSame('203.0.113.77', IpHelper::getAddress($this->logger));
 	}
 
+	/**
+	 * Anybody can send CF-Connecting-IP: it counts only from one of the
+	 * trusted proxies (Cloudflare's ranges), never from a request which
+	 * reached the server directly.
+	 */
+	public function testCloudflareHeaderFromAnUntrustedAddressIsIgnored()
+	{
+		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '173.245.48.0/20, 103.21.244.0/22',
+			'proxyHeaderSource' => IpHelper::CloudflareHeader));
+		$_SERVER[IpHelper::CloudflareHeader] = '203.0.113.5';
+		$this->assertSame('198.51.100.7', IpHelper::getAddress($this->logger), 'not from Cloudflare');
+		$_SERVER['REMOTE_ADDR'] = '173.245.48.9';
+		$this->assertSame('203.0.113.5', IpHelper::getAddress($this->logger), 'from Cloudflare');
+		$this->configure(array('useProxy' => 0, 'proxyHeaderSource' => IpHelper::CloudflareHeader));
+		$this->assertSame('173.245.48.9', IpHelper::getAddress($this->logger), 'proxy support off');
+	}
+
 	public function testWorkedOutOnceForTheSameRequest()
 	{
 		$this->configure(array('useProxy' => 1, 'proxyIpAddress' => '198.51.100.7'));

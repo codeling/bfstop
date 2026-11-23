@@ -10,6 +10,8 @@ namespace Codeling\Library\Bfstop\Repository;
 
 defined('_JEXEC') or die;
 
+use Joomla\Database\ParameterType;
+
 /**
  * The plugin's own bookkeeping (#__bfstop_state: name => value), apart from
  * its settings. It lived in the settings - the plugin's row of #__extensions -
@@ -38,6 +40,35 @@ class StateRepository extends Repository
 			$value = $this->scalar($query, array('name' => (string) $name));
 			return $value === null ? $default : $value;
 		}, $default);
+	}
+
+	/**
+	 * What is stored under each of $names, in one query: name => value, for
+	 * those which are stored. Fail-open: none.
+	 *
+	 * @param string[] $names
+	 * @return array<string, string>
+	 */
+	public function getMany(array $names): array
+	{
+		$names = array_values(array_unique(array_map('strval', $names)));
+		if (count($names) === 0)
+		{
+			return array();
+		}
+		return $this->failOpen('getMany', function () use ($names)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName(array('name', 'value')))
+				->from($this->db->quoteName(self::Table))
+				->whereIn($this->db->quoteName('name'), $names, ParameterType::STRING);
+			$values = array();
+			foreach ($this->objects($query) as $row)
+			{
+				$values[(string) $row->name] = (string) $row->value;
+			}
+			return $values;
+		}, array());
 	}
 
 	/**

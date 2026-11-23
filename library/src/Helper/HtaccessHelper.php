@@ -502,6 +502,21 @@ class HtaccessHelper
 	}
 
 	/**
+	 * The block section as the file has it, and as upgradeFormat() would
+	 * write it: for the administrator to compare before it is rewritten.
+	 *
+	 * @return array{current: string[], proposed: string[]}
+	 */
+	public function sectionPreview(): array
+	{
+		$section = $this->load()['section'];
+		return array(
+			'current' => array_values(array_map(fn ($line) => rtrim($line, "\r"), $section)),
+			'proposed' => self::renderSection(self::parseSection($section)),
+		);
+	}
+
+	/**
 	 * Writes the block section in the form the plugin writes it now, keeping
 	 * the blocked addresses, the 403 message and the lines added by hand: a
 	 * section of an earlier version (see LegacyLines) grants access, and one

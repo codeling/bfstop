@@ -65,4 +65,74 @@ class UsernameStatsRepository extends Repository
 			$this->trimOldest(self::Table, 'username', 'attempts ASC, last_attempt ASC', $maxRows, 1000, ParameterType::STRING);
 		}, null);
 	}
+
+	/**
+	 * The usernames of the statistics which sort after $after, at most
+	 * $limit, in order (byte by byte, see exact()). Fail-open: none (the
+	 * round ends).
+	 *
+	 * @return string[]
+	 */
+	public function usernamesAfter(string $after, int $limit)
+	{
+		return $this->failOpen('usernamesAfter', function () use ($after, $limit)
+		{
+			$query = $this->db->createQuery()
+				->select($this->exact('username').' AS '.$this->db->quoteName('name'))
+				->from($this->db->quoteName(self::Table))
+				->where($this->exact('username').' > :after')
+				->order($this->db->quoteName('name'));
+			return $this->column($query, array('after' => $after), 0, $limit);
+		}, array());
+	}
+
+	/**
+	 * Renames the statistics of $old (that spelling, see exact()) to $new
+	 * (its hash, see UsernameHelper);
+	 * if $new has statistics already, the two are merged: the attempts
+	 * added, the earliest and the latest time kept. Fail-open: it stays.
+	 */
+	public function rename(string $old, string $new)
+	{
+		$this->failOpen('rename', function () use ($old, $new)
+		{
+			$this->inTransaction(function () use ($old, $new)
+			{
+				$select = fn () => $this->db->createQuery()
+					->select($this->db->quoteName(array('attempts', 'first_attempt', 'last_attempt')))
+					->from($this->db->quoteName(self::Table))
+					->where($this->db->quoteName('username').' = :username')
+					->where($this->exact('username').' = :exact');
+				$from = $this->row($select(), array('username' => $old, 'exact' => $old));
+				if (!is_array($from))
+				{
+					return;
+				}
+				$into = $this->row($select(), array('username' => $new, 'exact' => $new));
+				if (!is_array($into))
+				{
+					$this->execute($this->db->createQuery()
+						->update($this->db->quoteName(self::Table))
+						->set($this->db->quoteName('username').' = :new')
+						->where($this->db->quoteName('username').' = :old')
+						->where($this->exact('username').' = :exact'), array('new' => $new, 'old' => $old, 'exact' => $old));
+					return;
+				}
+				$this->execute($this->db->createQuery()
+					->update($this->db->quoteName(self::Table))
+					->set($this->db->quoteName('attempts').' = :attempts')
+					->set($this->db->quoteName('first_attempt').' = :first')
+					->set($this->db->quoteName('last_attempt').' = :last')
+					->where($this->db->quoteName('username').' = :new'), array(
+						'attempts' => (int) $into['attempts'] + (int) $from['attempts'],
+						'first' => min((string) $into['first_attempt'], (string) $from['first_attempt']),
+						'last' => max((string) $into['last_attempt'], (string) $from['last_attempt']),
+						'new' => $new));
+				$this->execute($this->db->createQuery()
+					->delete($this->db->quoteName(self::Table))
+					->where($this->db->quoteName('username').' = :old')
+					->where($this->exact('username').' = :exact'), array('old' => $old, 'exact' => $old));
+			});
+		}, null);
+	}
 }

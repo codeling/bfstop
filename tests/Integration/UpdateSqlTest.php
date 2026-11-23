@@ -33,7 +33,7 @@ class UpdateSqlTest extends IntegrationTestCase
 		{
 			$this->markTestSkipped('PostgreSQL is supported from 2.0.0 on, there is no update SQL for it yet');
 		}
-		$extensionId = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND element='bfstop'");
+		$extensionId = (int) $this->queryValue("SELECT extension_id FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'");
 		$original = $this->schemaVersion($extensionId);
 		$this->assertNotNull($original);
 		try

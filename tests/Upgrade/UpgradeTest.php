@@ -97,20 +97,44 @@ class UpgradeTest extends IntegrationTestCase
 		$this->assertSame(array('component' => $version, 'package' => $version, 'plugin' => $version),
 			$this->installedVersions());
 		$this->assertSame(self::latestSchema(), $this->schemaVersion());
+		// an update from the command line, without Joomla's "Behind Load
+		// Balancer": the plugin stays enabled (see the setup assistant)
 		$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='system' AND element='bfstop'"));
+	}
+
+	/**
+	 * What the update wrote into the state of the setup assistant: an update,
+	 * from which version, that it removed delays which were in use - and no
+	 * scenario or headers (the command line has no request to look at).
+	 */
+	public function testTheUpdateRecordsTheSetupState()
+	{
+		$setup = json_decode((string) $this->queryValue("SELECT value FROM #__bfstop_state WHERE name='setup'"), true);
+		$this->assertSame('upgrade', $setup['mode'] ?? null);
+		$this->assertSame(getenv('UPGRADE_FROM'), $setup['from'] ?? null);
+		$this->assertSame(1, $setup['delays'] ?? null, 'the seed delayed failed logins');
+		$this->assertArrayNotHasKey('scenario', $setup);
+		$this->assertArrayNotHasKey('disabled', $setup);
+		$this->assertArrayNotHasKey('completed', $setup);
+		// the quick icon and the console plugin are new in 2.0.0: installed, switched on
+		foreach (array('quickicon', 'console') as $folder)
+		{
+			$this->assertSame(1, (int) $this->queryValue("SELECT enabled FROM #__extensions WHERE type='plugin' AND folder='".
+				$folder."' AND element='bfstop'"), $folder);
+		}
 	}
 
 	public function testUpdateMessages()
 	{
 		// the CLI wraps the messages
 		$log = preg_replace('/\s+/', ' ', (string) file_get_contents(getenv('UPGRADE_LOG')));
-		$settingsMoved = version_compare(getenv('UPGRADE_FROM'), '2.0.0-dev', '<') ? 1 : 0;
-		$this->assertSame($settingsMoved, substr_count($log, 'major configuration changes'),
-			'the "configuration has moved" hint, only when updating from before 2.0.0');
-		$this->assertSame($settingsMoved, substr_count($log, 'now also protects logins through'),
-			'the hint that the API is protected now, only when updating from before 2.0.0');
-		$this->assertSame(0, substr_count($log, 'protects your site with its default settings'),
-			'the hint of a new installation');
+		// what the update changed and what is left to decide is the setup
+		// assistant's (it replaced the hints of the settings which moved and
+		// of the API), with the console commands on the command line
+		$this->assertSame(1, substr_count($log, 'Action required: open the setup assistant'), 'the message of the setup');
+		$this->assertSame(1, substr_count($log, 'bfstop:setup --no-proxy'), 'the console commands');
+		$this->assertSame(0, substr_count($log, 'major configuration changes'), 'the former hint of the settings which moved');
+		$this->assertSame(0, substr_count($log, 'installed but not active yet'), 'the message of a new installation');
 		// the seed delays failed logins by 90 seconds, which 2.0.0 doesn't any more
 		$this->assertSame(1, substr_count($log, 'no longer delays the response to failed logins'),
 			'the notice that the delays are gone');

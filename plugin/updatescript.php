@@ -53,6 +53,12 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 	public const RemovedDelaySettings = array('delayDuration', 'adaptiveDelay', 'adaptiveDelayMax',
 		'adaptiveDelayThresholdMin', 'adaptiveDelayThresholdMax');
 
+	// why update() disabled the plugin (see setupDisableReason()), if it did
+	private $pluginDisabled = null;
+
+	// whether the setup assistant had been completed before this update
+	private $setupCompleted = false;
+
 	// the bit of the "enabledForOrigin" setting for the Web Services API
 	// (Origin::Api - the class of the version being replaced may be the
 	// one loaded while this runs)
@@ -71,23 +77,18 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 
 	public function install(InstallerAdapter $adapter): bool
 	{
-		// plugins install disabled by default, but bfstop only does anything
-		// useful while running, and all its settings now live in the
-		// component - so there's nothing left to configure before enabling it.
+		// the plugin installs disabled, as plugins do: it only runs once its
+		// address handling is known to be right - behind a proxy, it would
+		// count every visitor's failed logins against the proxy's address
+		// and block everybody. The setup assistant of the component (or the
+		// console command bfstop:setup) activates it
 		$db = Factory::getContainer()->get(DatabaseInterface::class);
-		$query = $db->createQuery()
-			->update($db->quoteName('#__extensions'))
-			->set($db->quoteName('enabled') . ' = 1')
-			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
-			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
-			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'));
-		$db->setQuery($query);
-		$db->execute();
 		// the scheduled task is on its way (it is made by the task plugin, which the
 		// package installs next): a request needn't run the maintenance meanwhile
 		try
 		{
 			self::seedMaintenanceState($db, time());
+			self::writeSetupState($db, array('mode' => 'install'));
 		}
 		catch (\Throwable $e)
 		{
@@ -298,22 +299,15 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 				'error'
 			);
 		}
-		// only for the update from a version before the settings moved, not
-		// for every later update
-		if ($this->updatesFromBefore200($type))
+		// a new installation, and an update while the setup assistant hasn't
+		// been completed (the first update to 2.0.0, for example): what the
+		// update did and what is left to decide is the assistant's
+		if ($type === 'install' || ($type === 'update' && !$this->setupCompleted))
 		{
-			$lang = Factory::getApplication()->getLanguage();
-			$lang->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
-			$settingsUrl = Route::_('index.php?option=com_bfstop&view=settings', false);
-			Factory::getApplication()->enqueueMessage(
-				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_HINT', $settingsUrl),
-				'warning'
-			);
-			// update() switched the protection of the API on, see there
-			Factory::getApplication()->enqueueMessage(
-				Text::sprintf('PLG_SYSTEM_BFSTOP_UPDATE_2_0_0_API_HINT', $settingsUrl),
-				'warning'
-			);
+			Factory::getApplication()->getLanguage()->load('plg_system_bfstop', JPATH_ADMINISTRATOR);
+			list($message, $level) = self::setupMessage($type, $this->pluginDisabled,
+				Factory::getApplication()->isClient('cli'));
+			Factory::getApplication()->enqueueMessage($message, $level);
 		}
 		// the settings of the version replaced delayed responses, see update()
 		if ($this->delaysRemoved)
@@ -467,7 +461,387 @@ class PlgsystembfstopInstallerScript extends InstallerScript implements Installe
 			Log::add('Brute Force Stop: the update could not migrate the settings and data: '.$e->getMessage(),
 				Log::ERROR, 'jerror');
 		}
+		// also if the migration failed: the plugin must not block everybody
+		try
+		{
+			$this->recordSetupState($db);
+		}
+		catch (\Throwable $e)
+		{
+			Log::add('Brute Force Stop: the update could not record the state of the setup: '.$e->getMessage(),
+				Log::ERROR, 'jerror');
+		}
 		return true;
+	}
+
+	/**
+	 * What the update writes into the state of the setup assistant, unless
+	 * the assistant has been completed: that it was an update (from which
+	 * version), what it found and did. And disables the plugin where it
+	 * would block everybody (see setupDisableReason()): it stays disabled
+	 * until the assistant has been completed.
+	 *
+	 * What an update finds about the request (scenario, headers) and why it
+	 * disabled the plugin replaces what an earlier one found (UpdateFindings):
+	 * a second update may come another way, or after the proxy was set up.
+	 * The reason stays while the plugin is still disabled for it. What was
+	 * done to the settings (delays, .htaccess) stays to be told, and the
+	 * version of the first update whose setup is still open: the steps for
+	 * an update from before 2.0.0 are still to be offered.
+	 */
+	private function recordSetupState($db)
+	{
+		$setup = self::readSetupState($db);
+		if (!empty($setup['completed']))
+		{
+			$this->setupCompleted = true;
+			return;
+		}
+		$app = Factory::getApplication();
+		$cli = $app->isClient('cli');
+		$entry = array(
+			// an installation whose setup is still open stays one
+			'mode' => ($setup['mode'] ?? '') === 'install' ? 'install' : 'upgrade',
+			'from' => isset($setup['from']) && (string) $setup['from'] !== '' ? (string) $setup['from'] : (string) $this->previousVersion,
+		);
+		if (!$cli)
+		{
+			// the names of the headers, never their values or an address
+			$entry['scenario'] = self::proxyScenario($_SERVER);
+			$entry['headers'] = self::forwardingHeaderNames($_SERVER);
+		}
+		if ($this->delaysRemoved)
+		{
+			$entry['delays'] = 1;
+		}
+		if ($this->htaccessNotRewritten !== null)
+		{
+			$entry['htaccess'] = 1;
+		}
+		$steps = json_decode((string) $db->setQuery($db->createQuery()
+			->select($db->quoteName('value'))
+			->from($db->quoteName('#__bfstop_state'))
+			->where($db->quoteName('name') . ' = ' . $db->quote('setupSteps')))->loadResult(), true);
+		$reason = self::setupDisableReason($_SERVER, $cli, (bool) $app->get('behind_loadbalancer', 0),
+			self::storedSettings($db)['params'], is_array($steps) && ($steps['proxy'] ?? '') === 'done');
+		if ($reason !== null && self::disablePlugin($db))
+		{
+			$entry['disabled'] = $reason;
+			$this->pluginDisabled = $reason;
+		}
+		elseif (isset($setup['disabled']) && !self::pluginEnabled($db))
+		{
+			// disabled by an earlier update, and still
+			$entry['disabled'] = (string) $setup['disabled'];
+		}
+		self::writeSetupState($db, $entry, self::UpdateFindings);
+	}
+
+	// the parts of the state of the setup which each update finds anew, see
+	// recordSetupState()
+	public const UpdateFindings = array('scenario', 'headers', 'disabled');
+
+	// the forwarding headers of IpHelper::KnownProxyHeaders and
+	// ::UnsupportedProxyHeaders of the library, and its non-public networks
+	// (IpHelper::NonPublicNetworks), see proxyScenario(); a test checks that
+	// they are the same
+	public const SupportedProxyHeaders = array('HTTP_X_FORWARDED_FOR', 'HTTP_FORWARDED', 'HTTP_X_FORWARDED',
+		'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'HTTP_CF_CONNECTING_IP');
+	public const UnsupportedProxyHeaders = array('HTTP_X_REAL_IP', 'HTTP_TRUE_CLIENT_IP', 'HTTP_FASTLY_CLIENT_IP',
+		'HTTP_X_CLIENT_IP', 'HTTP_X_AZURE_CLIENTIP', 'HTTP_X_AZURE_SOCKETIP', 'HTTP_X_ENVOY_EXTERNAL_ADDRESS',
+		'HTTP_CLOUDFRONT_VIEWER_ADDRESS', 'HTTP_FLY_CLIENT_IP');
+	public const NonPublicNetworks = array('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8',
+		'100.64.0.0/10', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10');
+
+	/**
+	 * How the request $server reached the site - the scenario of the
+	 * library's ProxyDetector (A direct, B behind a proxy, C the web server
+	 * resolves the address, D behind a CDN, E only headers BFStop doesn't
+	 * read), which the update can't call (see canonicalAddress()); a test
+	 * checks that both agree.
+	 */
+	public static function proxyScenario(array $server)
+	{
+		$present = function ($key) use ($server)
+		{
+			return isset($server[$key]) && trim((string) $server[$key]) !== '';
+		};
+		$supported = array_values(array_filter(self::SupportedProxyHeaders, $present));
+		if (count($supported) === 0)
+		{
+			return count(array_filter(self::UnsupportedProxyHeaders, $present)) > 0 ? 'E' : 'A';
+		}
+		$remote = self::unmapped(trim((string) ($server['REMOTE_ADDR'] ?? '')));
+		if (filter_var($remote, FILTER_VALIDATE_IP) !== false)
+		{
+			foreach (self::NonPublicNetworks as $network)
+			{
+				// the address masked to the network's prefix is the network
+				// (an address of the other family makes no valid network)
+				if (self::canonicalAddress($remote.'/'.explode('/', $network)[1]) === $network)
+				{
+					return 'B';
+				}
+			}
+		}
+		// the header ProxyDetector proposes: Forwarded, X-Forwarded-For,
+		// CF-Connecting-IP, then the others
+		$header = null;
+		foreach (array_merge(array('HTTP_FORWARDED', 'HTTP_X_FORWARDED_FOR', 'HTTP_CF_CONNECTING_IP'), $supported) as $key)
+		{
+			if (in_array($key, $supported, true))
+			{
+				$header = $key;
+				break;
+			}
+		}
+		$value = (string) $server[$header];
+		if ($header === 'HTTP_CF_CONNECTING_IP')
+		{
+			$last = trim($value);
+		}
+		else
+		{
+			$elements = explode(',', $value);
+			$last = (string) end($elements);
+			if ($header === 'HTTP_FORWARDED')
+			{
+				$address = '';
+				foreach (explode(';', $last) as $pair)
+				{
+					$keyValue = explode('=', $pair, 2);
+					if (count($keyValue) === 2 && strcasecmp(trim($keyValue[0]), 'for') === 0)
+					{
+						$address = $keyValue[1];
+						break;
+					}
+				}
+				$last = $address;
+			}
+			$last = trim(trim($last), '"');
+			if (preg_match('/^\[([^\]]+)\](?::\d+)?$/', $last, $m) || preg_match('/^(\d{1,3}(?:\.\d{1,3}){3}):\d+$/', $last, $m))
+			{
+				$last = $m[1];
+			}
+		}
+		$last = self::unmapped($last);
+		$same = filter_var($last, FILTER_VALIDATE_IP) !== false && self::canonicalAddress($last) !== null &&
+			self::canonicalAddress($last) === self::canonicalAddress($remote);
+		return $same ? 'C' : 'D';
+	}
+
+	/**
+	 * The names of the forwarding headers (BFStop's and those it doesn't
+	 * read) the request $server carried, as the $_SERVER keys, for the
+	 * state of the setup assistant.
+	 */
+	private static function forwardingHeaderNames(array $server)
+	{
+		return array_values(array_filter(array_merge(self::SupportedProxyHeaders, self::UnsupportedProxyHeaders),
+			function ($key) use ($server)
+			{
+				return isset($server[$key]) && trim((string) $server[$key]) !== '';
+			}));
+	}
+
+	/**
+	 * Why the update has to disable the plugin, null if it needn't: an update
+	 * through the browser ($cli false) whose request $server came through a
+	 * proxy, a load balancer or a CDN (scenarios B, D and E, see
+	 * proxyScenario()) - the plugin would take the proxy's address for every
+	 * visitor's, so the first few failed logins of anybody would block
+	 * everybody, the administrator too. An update from the command line has
+	 * no request to look at: there it is Joomla's "Behind Load Balancer"
+	 * ($behindLoadBalancer).
+	 *
+	 * Not if the step of the assistant for the proxy is done
+	 * ($proxyStepDone), or the settings $settings already read the address
+	 * behind the proxy (proxySetUp()).
+	 */
+	public static function setupDisableReason(array $server, $cli, $behindLoadBalancer, array $settings = array(),
+		$proxyStepDone = false)
+	{
+		if ($proxyStepDone || self::proxySetUp($server, $cli, $settings))
+		{
+			return null;
+		}
+		if ($cli)
+		{
+			return $behindLoadBalancer ? 'loadbalancer' : null;
+		}
+		return in_array(self::proxyScenario($server), array('B', 'D', 'E'), true) ? 'proxy' : null;
+	}
+
+	/**
+	 * Whether the settings $settings read the client address behind a
+	 * proxy for the request $server: proxy support is on and REMOTE_ADDR is
+	 * one of the trusted proxies - as IpHelper::getAddress() of the library
+	 * decides it, which the update can't call (see canonicalAddress()); a
+	 * test checks that both agree. On the command line ($cli) there is no
+	 * request: that there are trusted proxies.
+	 */
+	public static function proxySetUp(array $server, $cli, array $settings)
+	{
+		if ((string) ($settings['useProxy'] ?? '0') !== '1')
+		{
+			return false;
+		}
+		$trusted = preg_split('/[\s,;]+/', (string) ($settings['proxyIpAddress'] ?? ''), -1, PREG_SPLIT_NO_EMPTY);
+		if ($cli)
+		{
+			return count($trusted) > 0;
+		}
+		return self::isTrustedProxy((string) ($server['REMOTE_ADDR'] ?? ''), $trusted);
+	}
+
+	/**
+	 * Whether $ip is one of the addresses or networks $trusted: the
+	 * library's IpHelper::isTrustedProxy(), see proxySetUp().
+	 */
+	public static function isTrustedProxy($ip, array $trusted)
+	{
+		$address = self::canonicalAddress($ip);
+		if ($address === null || strpos($address, '/') !== false)
+		{
+			return false;
+		}
+		foreach ($trusted as $entry)
+		{
+			$entry = self::unmapped((string) $entry);
+			$parts = explode('/', $entry);
+			if (count($parts) === 1)
+			{
+				if (self::canonicalAddress($entry) === $address)
+				{
+					return true;
+				}
+				continue;
+			}
+			// the address masked to the network's prefix is the network
+			$network = self::canonicalAddress($entry);
+			if ($network !== null && self::canonicalAddress($address.'/'.$parts[1]) === $network)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether the system plugin is enabled. */
+	private static function pluginEnabled($db)
+	{
+		return (int) $db->setQuery($db->createQuery()
+			->select($db->quoteName('enabled'))
+			->from($db->quoteName('#__extensions'))
+			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop')))->loadResult() === 1;
+	}
+
+	/**
+	 * Disables the system plugin. Whoever enables it again by hand in the
+	 * Plugin Manager can; the backend keeps saying that the setup isn't
+	 * complete.
+	 *
+	 * @return bool whether it was enabled
+	 */
+	private static function disablePlugin($db)
+	{
+		$query = $db->createQuery()
+			->update($db->quoteName('#__extensions'))
+			->set($db->quoteName('enabled') . ' = 0')
+			->where($db->quoteName('type') . ' = ' . $db->quote('plugin'))
+			->where($db->quoteName('folder') . ' = ' . $db->quote('system'))
+			->where($db->quoteName('element') . ' = ' . $db->quote('bfstop'))
+			->where($db->quoteName('enabled') . ' = 1');
+		$db->setQuery($query);
+		$db->execute();
+		return $db->getAffectedRows() > 0;
+	}
+
+	/**
+	 * The message for the end of an installation or update ($type) whose
+	 * setup isn't complete, and its level: an error if the update disabled
+	 * the plugin ($disabled: why, see setupDisableReason()). On the command
+	 * line ($cli), without markup, with the console commands.
+	 *
+	 * @return string[] array(message, level)
+	 */
+	public static function setupMessage($type, $disabled, $cli)
+	{
+		$path = 'index.php?option=com_bfstop&view=setup';
+		// Route::_() gives an empty string when installing from the command line
+		$url = $cli ? '' : Route::_($path, false);
+		$url = $url !== '' ? $url : $path;
+		if ($disabled === 'proxy')
+		{
+			$message = Text::sprintf('PLG_SYSTEM_BFSTOP_SETUP_DISABLED_PROXY', $url);
+		}
+		elseif ($disabled === 'loadbalancer')
+		{
+			$message = Text::sprintf('PLG_SYSTEM_BFSTOP_SETUP_DISABLED_LOADBALANCER', $url);
+		}
+		else
+		{
+			$message = Text::sprintf($type === 'install' ? 'PLG_SYSTEM_BFSTOP_SETUP_INSTALLED' : 'PLG_SYSTEM_BFSTOP_SETUP_UPDATED', $url);
+		}
+		if ($cli)
+		{
+			// the console prints messages as they are: no markup there
+			$message = html_entity_decode(strip_tags($message), ENT_QUOTES, 'UTF-8').' '.
+				Text::_('PLG_SYSTEM_BFSTOP_SETUP_CONSOLE');
+		}
+		return array($message, $disabled !== null ? 'error' : 'warning');
+	}
+
+	/**
+	 * The main row of the state of the setup assistant (#__bfstop_state,
+	 * "setup"), as the library's SetupState keeps it - which the update
+	 * can't call (see canonicalAddress()); a test checks that SetupState
+	 * reads what this writes. Empty if there is none.
+	 */
+	public static function readSetupState($db)
+	{
+		$query = $db->createQuery()
+			->select($db->quoteName('value'))
+			->from($db->quoteName('#__bfstop_state'))
+			->where($db->quoteName('name') . ' = ' . $db->quote('setup'));
+		$db->setQuery($query);
+		$value = json_decode((string) $db->loadResult(), true);
+		return is_array($value) ? $value : array();
+	}
+
+	/**
+	 * Adds $values to the main row of the state of the setup assistant (see
+	 * readSetupState()), after taking the parts $replace out of it; a row
+	 * holds 255 characters at most, so the header names are left out if
+	 * they don't fit (as SetupState does).
+	 */
+	public static function writeSetupState($db, array $values, array $replace = array())
+	{
+		$exists = $db->setQuery($db->createQuery()
+			->select('COUNT(*)')
+			->from($db->quoteName('#__bfstop_state'))
+			->where($db->quoteName('name') . ' = ' . $db->quote('setup')))->loadResult() > 0;
+		$state = array_merge(array_diff_key(self::readSetupState($db), array_flip($replace)), $values);
+		$json = json_encode((object) $state);
+		if (strlen($json) > 255)
+		{
+			unset($state['headers']);
+			$json = json_encode((object) $state);
+		}
+		$row = new \stdClass();
+		$row->name = 'setup';
+		$row->value = $json;
+		$row->changed = gmdate('Y-m-d H:i:s');
+		if ($exists)
+		{
+			$db->updateObject('#__bfstop_state', $row, 'name');
+		}
+		else
+		{
+			$db->insertObject('#__bfstop_state', $row);
+		}
 	}
 
 	/**

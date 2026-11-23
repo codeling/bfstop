@@ -138,6 +138,24 @@ class KnownIpRepository extends Repository
 	}
 
 	/**
+	 * How many different accounts have logged in from $key (the key a
+	 * client is trusted by, see IpHelper::trustPrefixLength()). Several
+	 * accounts behind one address: a proxy, a NAT - or an office. Fail-open:
+	 * 0.
+	 */
+	public function countAccountsFrom($key): int
+	{
+		return $this->failOpen('countAccountsFrom', function () use ($key)
+		{
+			$query = $this->db->createQuery()
+				->select('COUNT(DISTINCT '.$this->db->quoteName('username_lc').')')
+				->from($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('ipaddress').' = :ip');
+			return $this->count($query, array('ip' => (string) $key));
+		}, 0);
+	}
+
+	/**
 	 * Forgets the addresses users logged in from longer ago than $maxAgeDays,
 	 * and, oldest first, as many more as needed to keep at most $maxRows.
 	 * Fail-open: the next run does it.
@@ -150,6 +168,43 @@ class KnownIpRepository extends Repository
 		{
 			$this->deleteBefore(self::Table, 'last_success', self::daysAgo($maxAgeDays));
 			$this->trimOldest(self::Table, 'id', 'last_success ASC', $maxRows, 1000, ParameterType::INTEGER);
+		}, null);
+	}
+
+	/**
+	 * The addresses (keys) users have logged in from. Fail-open: none.
+	 *
+	 * @return string[]
+	 */
+	public function addresses()
+	{
+		return $this->failOpen('addresses', function ()
+		{
+			return $this->column($this->db->createQuery()
+				->select('DISTINCT '.$this->db->quoteName('ipaddress'))
+				->from($this->db->quoteName(self::Table)));
+		}, array());
+	}
+
+	/**
+	 * Forgets the logins from $addresses: a proxy's address, which became a
+	 * "known address" of every user who logged in through it. Fail-open:
+	 * they stay.
+	 *
+	 * @param string[] $addresses
+	 */
+	public function forgetAddresses(array $addresses)
+	{
+		$addresses = array_values(array_unique(array_map('strval', $addresses)));
+		if (count($addresses) === 0)
+		{
+			return;
+		}
+		$this->failOpen('forgetAddresses', function () use ($addresses)
+		{
+			$this->execute($this->db->createQuery()
+				->delete($this->db->quoteName(self::Table))
+				->whereIn($this->db->quoteName('ipaddress'), $addresses, ParameterType::STRING));
 		}, null);
 	}
 }

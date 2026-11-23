@@ -212,4 +212,107 @@ class FailedLoginRepository extends Repository
 			$this->trimOldest(self::Table, 'id', 'id ASC', $maxRows, 5000, ParameterType::INTEGER);
 		}, null);
 	}
+
+	/**
+	 * The addresses (tracked keys) which have failed logins, at most $limit
+	 * of them, those with the most first. Fail-open: none.
+	 *
+	 * @return array<string, int> address => number of failed logins
+	 */
+	public function countsByAddress($limit = 10000)
+	{
+		return $this->failOpen('countsByAddress', function () use ($limit)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName('ipaddress'))
+				->select('COUNT(*) AS attempts')
+				->from($this->db->quoteName(self::Table))
+				->group($this->db->quoteName('ipaddress'))
+				->order('attempts DESC');
+			$counts = array();
+			foreach ($this->objects($query, array(), 0, (int) $limit) as $row)
+			{
+				$counts[(string) $row->ipaddress] = (int) $row->attempts;
+			}
+			return $counts;
+		}, array());
+	}
+
+	/**
+	 * Deletes the failed logins of $addresses (tracked keys): those a proxy's
+	 * address was given for its visitors' attempts. Fail-open: they stay.
+	 *
+	 * @param string[] $addresses
+	 */
+	public function deleteFromAddresses(array $addresses)
+	{
+		$addresses = array_values(array_unique(array_map('strval', $addresses)));
+		if (count($addresses) === 0)
+		{
+			return;
+		}
+		$this->failOpen('deleteFromAddresses', function () use ($addresses)
+		{
+			$this->execute($this->db->createQuery()
+				->delete($this->db->quoteName(self::Table))
+				->whereIn($this->db->quoteName('ipaddress'), $addresses, ParameterType::STRING));
+		}, null);
+	}
+
+	/**
+	 * The usernames of the failed logins which sort after $after, at most
+	 * $limit, in order: for going through all of them in rounds. Every
+	 * spelling of a name on its own (see exact()). Fail-open: none (the
+	 * round ends).
+	 *
+	 * @return string[]
+	 */
+	public function usernamesAfter(string $after, int $limit)
+	{
+		return $this->failOpen('usernamesAfter', function () use ($after, $limit)
+		{
+			$query = $this->db->createQuery()
+				->select('DISTINCT '.$this->exact('username').' AS '.$this->db->quoteName('name'))
+				->from($this->db->quoteName(self::Table))
+				->where($this->exact('username').' > :after')
+				->order($this->db->quoteName('name'));
+			return $this->column($query, array('after' => $after), 0, $limit);
+		}, array());
+	}
+
+	/**
+	 * Replaces the username $old of the failed logins by $new (its hash, see
+	 * UsernameHelper) - that spelling only (see exact()). Fail-open: it
+	 * stays.
+	 */
+	public function renameUsername(string $old, string $new)
+	{
+		$this->failOpen('renameUsername', function () use ($old, $new)
+		{
+			$this->execute($this->db->createQuery()
+				->update($this->db->quoteName(self::Table))
+				->set($this->db->quoteName('username').' = :new')
+				// by the index of the column, then exactly
+				->where($this->db->quoteName('username').' = :old')
+				->where($this->exact('username').' = :exact'), array('new' => $new, 'old' => $old, 'exact' => $old));
+		}, null);
+	}
+
+	/**
+	 * How many failed logins there are, and when the oldest was. Fail-open:
+	 * none.
+	 *
+	 * @return array{count: int, oldest: string|null}
+	 */
+	public function extent()
+	{
+		return $this->failOpen('extent', function ()
+		{
+			$row = $this->row($this->db->createQuery()
+				->select('COUNT(*) AS '.$this->db->quoteName('total'))
+				->select('MIN('.$this->db->quoteName('logtime').') AS '.$this->db->quoteName('oldest'))
+				->from($this->db->quoteName(self::Table)));
+			return array('count' => (int) ($row['total'] ?? 0), 'oldest' => isset($row['oldest']) ? (string) $row['oldest'] : null);
+		}, array('count' => 0, 'oldest' => null));
+	}
 }

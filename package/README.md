@@ -1,8 +1,9 @@
 # The BFStop package
 
 What users install: one Joomla! package (`pkg_bfstop-<version>.zip`) with the
-library (`library/`), the system plugin (`plugin/`), the task plugin (`task/`)
-and the component (`component/`) of this repository in it. The library comes
+library (`library/`), the system plugin (`plugin/`), the task plugin (`task/`),
+the quick icon plugin (`quickicon/`), the console plugin (`console/`) and the
+component (`component/`) of this repository in it. The library comes
 first in `pkg_bfstop.xml`: Joomla installs the extensions of a package in that
 order (and uninstalls them in the reverse one), and the others use it. It used to have a repository of its
 own, codeling/pkg_bfstop, with the extension zips committed into it by hand;
@@ -23,8 +24,8 @@ repository (with its history) for 2.0.0.
 
 zips the system plugin and the component with their own `deploy.sh`
 (`plugin/deploy.sh zip`, `component/deploy.sh zip`), from a copy of their
-directories, and the library and the task plugin from their directories
-(whose manifests are called `bfstop.xml` too: Joomla finds a plugin's
+directories, and the library and the task, quick icon and console plugins
+from their directories (whose manifests are called `bfstop.xml` too: Joomla finds a plugin's
 namespace in `<element>.xml`), and puts them and the package into `build/` (or the given
 directory), with a `SHA256SUMS-<version>` file. Nothing is committed: CI builds
 the package for every push and pull request and keeps it as an artifact of the
@@ -34,7 +35,7 @@ site of the previous release with it (see `tests/README.md`).
 ## Versions
 
 Plugin, component and package are released together, with one version number,
-written in `library/bfstop.xml`, `plugin/bfstop.xml`, `task/bfstop.xml`, `component/bfstop.xml`, `package/pkg_bfstop.xml` and in the
+written in `library/bfstop.xml`, `plugin/bfstop.xml`, `task/bfstop.xml`, `quickicon/bfstop.xml`, `console/bfstop.xml`, `component/bfstop.xml`, `package/pkg_bfstop.xml` and in the
 first entry of `CHANGELOG` - which says `(unreleased)` until the release, then
 the date. `tests/lint/check-versions.php` checks that they agree (CI runs it,
 and `build.sh` refuses to build otherwise). The `deploy.sh` scripts take the

@@ -11,8 +11,6 @@ use Joomla\CMS\Factory;
 use Joomla\CMS\Installer\InstallerAdapter;
 use Joomla\CMS\Installer\InstallerScript;
 use Joomla\CMS\Installer\InstallerScriptInterface;
-use Joomla\CMS\Language\Text;
-use Joomla\CMS\Router\Route;
 use Joomla\Database\DatabaseInterface;
 use Joomla\Filesystem\Folder;
 use Joomla\Registry\Registry;
@@ -44,7 +42,90 @@ class com_bfstopInstallerScript extends InstallerScript implements InstallerScri
 	public function uninstall(InstallerAdapter $adapter): bool
 	{
 		self::unregisterFromActionLogs(Factory::getContainer()->get(DatabaseInterface::class));
+		self::removePostInstallationMessage(Factory::getContainer()->get(DatabaseInterface::class));
 		return true;
+	}
+
+	// the post-installation message which leads to the setup assistant
+	public const PostInstallationTitle = 'COM_BFSTOP_POSTINSTALL_SETUP_TITLE';
+
+	/**
+	 * Adds the post-installation message which leads to the setup assistant
+	 * (Joomla's Post-installation Messages, com_postinstall): shown while
+	 * the setup isn't complete, see postinstall/setup.php. Written into the
+	 * table as MessagesModel::addPostInstallationMessage() writes it: the
+	 * model can't be used from the command line (it finds no table class
+	 * there), and it can't add a message of type "link" (it drops the URL
+	 * before it checks that there is one), so this is one of type "action".
+	 * A message which is there already is replaced (and so shown again).
+	 */
+	public static function addPostInstallationMessage(DatabaseInterface $db): void
+	{
+		$element = 'com_bfstop';
+		$query = $db->createQuery()
+			->select($db->quoteName('extension_id'))
+			->from($db->quoteName('#__extensions'))
+			->where($db->quoteName('type').' = '.$db->quote('component'))
+			->where($db->quoteName('element').' = :element')
+			->bind(':element', $element);
+		$id = (int) $db->setQuery($query)->loadResult();
+		if ($id < 1)
+		{
+			return;
+		}
+		$title = self::PostInstallationTitle;
+		$db->setQuery($db->createQuery()
+			->delete($db->quoteName('#__postinstall_messages'))
+			->where($db->quoteName('extension_id').' = :id')
+			->where($db->quoteName('title_key').' = :title')
+			->bind(':id', $id, \Joomla\Database\ParameterType::INTEGER)
+			->bind(':title', $title))->execute();
+		$file = 'admin://components/com_bfstop/postinstall/setup.php';
+		$row = (object) array(
+			'extension_id' => $id,
+			'title_key' => $title,
+			'description_key' => 'COM_BFSTOP_POSTINSTALL_SETUP_DESC',
+			'action_key' => 'COM_BFSTOP_POSTINSTALL_SETUP_ACTION',
+			'language_extension' => 'com_bfstop',
+			'language_client_id' => 1,
+			'type' => 'action',
+			'action_file' => $file,
+			'action' => 'com_bfstop_postinstall_setup_action',
+			'condition_file' => $file,
+			'condition_method' => 'com_bfstop_postinstall_setup_condition',
+			'version_introduced' => '2.0.0',
+			'enabled' => 1,
+		);
+		$db->insertObject('#__postinstall_messages', $row);
+	}
+
+	/**
+	 * Removes the post-installation messages of the component: Joomla
+	 * doesn't when it uninstalls an extension.
+	 */
+	public static function removePostInstallationMessage(DatabaseInterface $db): void
+	{
+		try
+		{
+			$element = 'com_bfstop';
+			$ids = $db->setQuery($db->createQuery()
+				->select($db->quoteName('extension_id'))
+				->from($db->quoteName('#__extensions'))
+				->where($db->quoteName('type').' = '.$db->quote('component'))
+				->where($db->quoteName('element').' = :element')
+				->bind(':element', $element))->loadColumn();
+			if (count($ids) === 0)
+			{
+				return;
+			}
+			$db->setQuery($db->createQuery()
+				->delete($db->quoteName('#__postinstall_messages'))
+				->whereIn($db->quoteName('extension_id'), array_map('intval', $ids)))->execute();
+		}
+		catch (\Throwable $e)
+		{
+			// nothing which should keep the component from being uninstalled
+		}
 	}
 
 	// what the User Actions Log knows the component by (see ActionLogHelper)
@@ -181,22 +262,22 @@ class com_bfstopInstallerScript extends InstallerScript implements InstallerScri
 					htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'), 'warning');
 			}
 		}
-		// on an update, the plugin says what there is to review (if anything)
-		if ($type !== 'install')
+		if ($type === 'install' || $type === 'update' || $type === 'discover_install')
 		{
-			return true;
+			// what there is to do now - the setup assistant, which activates
+			// the plugin - is said by the plugin's installer script; this
+			// message stays in Joomla's Post-installation Messages until it
+			// is done
+			try
+			{
+				self::addPostInstallationMessage(Factory::getContainer()->get(DatabaseInterface::class));
+			}
+			catch (\Throwable $e)
+			{
+				Factory::getApplication()->enqueueMessage('Could not add the post-installation message: '.
+					htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'), 'warning');
+			}
 		}
-		$lang = Factory::getApplication()->getLanguage();
-		$lang->load('com_bfstop', JPATH_ADMINISTRATOR);
-		// Route::_() gives an empty string when installing from the command line
-		$url = Route::_('index.php?option=com_bfstop&view=settings', false);
-		$message = Text::sprintf('COM_BFSTOP_INSTALL_HINT', $url !== '' ? $url : 'index.php?option=com_bfstop&view=settings');
-		if (PHP_SAPI === 'cli')
-		{
-			// the console prints messages as they are: no markup there
-			$message = html_entity_decode(strip_tags($message), ENT_QUOTES, 'UTF-8');
-		}
-		Factory::getApplication()->enqueueMessage($message, 'warning');
 		return true;
 	}
 }

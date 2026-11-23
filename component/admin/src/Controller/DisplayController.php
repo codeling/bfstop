@@ -10,12 +10,17 @@ namespace Codeling\Component\Bfstop\Administrator\Controller;
 
 defined('_JEXEC') or die;
 
+use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\ParamHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
-use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Repository\Repositories;
 use Codeling\Library\Bfstop\Service\BlockPolicy;
+use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
+use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
+use Codeling\Library\Bfstop\Service\Setup\SetupState;
+use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\Controller\BaseController;
@@ -30,13 +35,18 @@ class DisplayController extends BaseController
 		$view = $input->getCmd('view', 'blocklist');
 
 		$pluginInstalled = $this->checkWhetherPluginInstalled();
-		if (!$pluginInstalled)
+		if ($pluginInstalled === false)
 		{
 			return $this;
 		}
 		$this->warnIfAdminUserExists();
 		$this->warnIfHtAccessNotWorking($view);
-		$this->checkWhetherProxyConfigured();
+		if ($view !== 'setup')
+		{
+			// the assistant shows both itself; the settings page the
+			// mismatches, next to the proxy settings
+			$this->showSetupBanners($pluginInstalled === 'enabled', $view !== 'settings');
+		}
 		if ($view !== 'settings')
 		{
 			// the settings page says it itself, see its view
@@ -121,24 +131,58 @@ class DisplayController extends BaseController
 		}
 	}
 
-	public function checkWhetherProxyConfigured()
+	/**
+	 * The banners of the setup (for who may change the settings, who can do
+	 * something about them): protection isn't active or the setup isn't
+	 * complete, and the mismatches of the proxy settings and this request
+	 * which haven't been dismissed (see ProxyMismatch) - the same the quick
+	 * icon of the Home Dashboard shows. With links to the assistant: the
+	 * messages can hold no form, so "This is expected" is on its proxy page.
+	 *
+	 * @param bool $pluginEnabled whether the system plugin is enabled
+	 * @param bool $mismatches whether to show the mismatches (not where the
+	 *                         page shows them itself)
+	 */
+	public function showSetupBanners(bool $pluginEnabled, bool $mismatches = true)
 	{
-		$useProxy = (bool) ParamHelper::get('useProxy');
-		if ($useProxy)
+		$user = $this->app->getIdentity();
+		if (!$user || !$user->authorise('core.admin', 'com_bfstop') || !class_exists(SetupState::class))
 		{
 			return;
 		}
-		foreach (IpHelper::KnownProxyHeaders as $header)
+		$setup = SetupState::load((new Repositories(LogHelper::getLogger()))->state());
+		$assistant = Route::_('index.php?option=com_bfstop&view=setup', false);
+		if (!$pluginEnabled)
 		{
-			if (array_key_exists($header, $_SERVER) && $_SERVER[$header] !== '')
-			{
-				$application = $this->app;
-				$application->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_PROXY_NOT_CONFIGURED', Route::_('index.php?option=com_bfstop&view=settings', false)), 'warning');
-				return;
-			}
+			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_BANNER_NOT_ACTIVE', $assistant), 'error');
+		}
+		elseif (!$setup->isCompleted())
+		{
+			$this->app->enqueueMessage(Text::sprintf('COM_BFSTOP_BANNER_SETUP_INCOMPLETE', $assistant), 'warning');
+		}
+		if (!$mismatches)
+		{
+			return;
+		}
+		$proxyPage = Route::_('index.php?option=com_bfstop&view=setup&page=proxy', false);
+		foreach (ProxyMismatch::open(ProxyMismatch::check($_SERVER, ProxyDetector::proxySettings(Settings::stored()),
+			(bool) $this->app->get('behind_loadbalancer', 0), $setup)) as $mismatch)
+		{
+			$text = $mismatch['code'] === ProxyMismatch::LoadBalancer
+				? Text::_('COM_BFSTOP_SETUP_LOADBALANCER_'.strtoupper($mismatch['hint']))
+				: Text::_('COM_BFSTOP_SETUP_MISMATCH_'.strtoupper($mismatch['code']));
+			$this->app->enqueueMessage($text.' '.Text::sprintf('COM_BFSTOP_BANNER_PROXY_CHECK', $proxyPage),
+				$mismatch['information'] ? 'notice' : 'warning');
 		}
 	}
 
+	/**
+	 * Whether the system plugin is installed, in a version which fits the
+	 * component, and enabled.
+	 *
+	 * @return string|false 'enabled' or 'disabled'; false if it isn't
+	 *                      installed or doesn't fit (said in a message)
+	 */
 	public function checkWhetherPluginInstalled()
 	{
 		try
@@ -181,12 +225,17 @@ class DisplayController extends BaseController
 			}
 			if ($plugin->enabled != 1)
 			{
-				$application = $this->app;
-				$application->enqueueMessage(Text::sprintf('COM_BFSTOP_WARNING_PLUGIN_DISABLED', Route::_('index.php?option=com_plugins&view=plugins', false)), 'warning');
 				// this is not a "hard" failure; we can still manage the tables!
-				// return false;
+				// Who may change the settings is sent to the setup assistant,
+				// which activates the plugin (see showSetupBanners())
+				$user = $this->app->getIdentity();
+				if (!$user || !$user->authorise('core.admin', 'com_bfstop'))
+				{
+					$this->app->enqueueMessage(Text::_('COM_BFSTOP_WARNING_PLUGIN_DISABLED'), 'warning');
+				}
+				return 'disabled';
 			}
-			return true;
+			return 'enabled';
 		}
 		catch (\Throwable $e)
 		{
