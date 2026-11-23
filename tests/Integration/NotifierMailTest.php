@@ -326,7 +326,6 @@ class NotifierMailTest extends IntegrationTestCase
 		$group = $this->insert('#__usergroups', array('parent_id' => 8, 'lft' => (int) $parent['rgt'], 'rgt' => (int) $parent['rgt'],
 			'title' => 'Deputy super users'), 'id');
 		$helper = new \ReflectionProperty(\Joomla\CMS\Helper\UserGroupsHelper::class, 'instance');
-		$helper->setAccessible(true);
 		$helper->setValue(null, null);
 		try
 		{
