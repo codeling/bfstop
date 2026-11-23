@@ -26,7 +26,19 @@
     settings page's model, so its checks, the User Actions Log, the nginx
     deny file and the tidying of .htaccess apply; the steps and the
     activation are in the User Actions Log too. It can be run again from
-    the settings page ("Setup assistant", "Re-run proxy check")
+    the settings page ("Setup assistant", "Re-run proxy check"). Optional
+    steps, which don't hold the activation back: the clean-up after the
+    proxy fix (blocks, failed logins, offences and remembered logins of
+    the proxy's address; allow-list entries containing the proxy are
+    pointed out), the .htaccess section of 1.x (shown as it is and as it
+    would be, rewritten on request), notifications (with the changed
+    meaning of 1.x's unblock mails and the $live_site line), the protected
+    parts, rate limiting (advice by how the site is reached, where the
+    update removed delays), privacy ("Delete old entries", and - opt-in,
+    in rounds - hashing the usernames 1.x stored in plain text, merging
+    the statistics which end up with the same hash) and the scheduled
+    maintenance; the summary lists the defaults of 2.0 which change what
+    an updated site does
   - Activation: the system plugin installs disabled (as in 1.5) and the
     setup assistant activates it - behind a proxy, BFStop would count every
     visitor's failed logins against the proxy's address and block

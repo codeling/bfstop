@@ -599,3 +599,29 @@ plan left open:
   which calls the installer script as Joomla does; "Reporting Only" with a
   delay in `SetupTest`.
 
+## 15. Implementation notes (phases 2 and 3)
+
+- **Pages:** the assistant shows the pages of the steps which apply: the
+  clean-up after an update with a proxy configured, the `.htaccess` step
+  while the file has the section of 1.x (or the update couldn't rewrite
+  it), rate limiting where the update removed delays which were in use
+  (for a new installation, the advice is in the summary), privacy after an
+  update. Every optional step can be skipped; a saved step goes on to the
+  next page.
+- **Steps of settings** (notifications, protected parts, privacy) render
+  the settings form's own fields and save only the settings of the step,
+  through the settings model. The changed meaning of `notifyBlockedUser`
+  (3b) is explained on the notifications page and decided with it.
+- **Clean-up (1b)** works on the trusted proxies of the saved settings:
+  active blocks whose entry lies in or contains a proxy are lifted, the
+  failed logins, offences and known-address rows of such entries removed.
+  There is no record of when the update ran, so it isn't limited to what
+  happened since. The proxy step also lists active blocks of non-public
+  addresses and of the request's own address (signal 5 of section 5.1,
+  without the share of failed logins).
+- **Hashing old usernames (5)** goes on in rounds of about five seconds,
+  each a POST of the page, until done (no JavaScript). The log is cleared
+  on BFStop's log page, which the step links to.
+- **Scheduler (7)** shows the task plugin, the maintenance task and
+  whether the Task Scheduler's lazy mode is on, with links.
+

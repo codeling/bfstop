@@ -55,8 +55,10 @@ the site only needs to be set up again when the database schema changes.
   saved through the settings model with the fixes of stored values which
   would keep the settings from being saved (settings of 1.5.2), the dry run
   of the proxy settings, the activation of the plugin, the banners, the
-  quick icon, the pages rendered for each kind of request, and the console
-  commands (called on the installed site). `InstallerScriptTest` has the
+  quick icon, the pages rendered for each kind of request, the optional
+  steps (the clean-up after the proxy fix, the .htaccess section of 1.x,
+  the steps of settings, hashing the usernames of 1.x, the scheduler), and
+  the console commands (called on the installed site). `InstallerScriptTest` has the
   activation model of the installation and the update (the plugin
   disabled by an update behind a proxy), and checks that the update tells
   the proxy scenarios apart as the library's `ProxyDetector` does (whose
