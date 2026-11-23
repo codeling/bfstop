@@ -105,11 +105,15 @@ Optional steps do not hold activation back.
   lockout risk remains. Mitigations: the console output, the
   post-installation message, the quick icon, and the proxy warning in the
   block mail.
-- **No automatic disabling from a visitor's request.** With nginx real-IP
-  recursion (`set_real_ip_from 10.0.0.0/8; real_ip_recursive on;`), a request
-  carrying `X-Forwarded-For: 10.66.66.66` ends up with `REMOTE_ADDR` set to
-  that forged private address plus a forwarding header. One forged request
-  could then switch BFStop off.
+
+  This gap can't be closed by having the plugin disable itself later, when
+  a visitor's request shows proxy signals, because such signals can be
+  forged. With nginx real-IP recursion (`set_real_ip_from 10.0.0.0/8;
+  real_ip_recursive on;`), a request carrying `X-Forwarded-For: 10.66.66.66`
+  ends up with `REMOTE_ADDR` set to that forged private address plus a
+  forwarding header, so one forged request could switch BFStop off. The
+  plugin is therefore only ever disabled during the update itself, based on
+  the request of the admin running it, never by a later request.
 - **False positive:** an admin behind a corporate proxy that adds
   `X-Forwarded-For` gets the plugin disabled unnecessarily. The message
   appears on the update screen, and the proxy step clears it quickly.
