@@ -30,7 +30,58 @@ class IpHelper
 		'HTTP_X_CLUSTER_CLIENT_IP',
 		'HTTP_FORWARDED_FOR',
 		'HTTP_CLIENT_IP',
+		self::CloudflareHeader,
 	);
+
+	/**
+	 * Cloudflare's header: Cloudflare sets it on every request it forwards,
+	 * overwriting whatever the visitor sent, and it always holds exactly one
+	 * address - so it is only taken if it is exactly that (see
+	 * clientAddressFromHeader()).
+	 */
+	public const CloudflareHeader = 'HTTP_CF_CONNECTING_IP';
+
+	/**
+	 * Headers of proxies and CDNs which carry the visitor's address, but which
+	 * BFStop doesn't read: they are recognised, to tell the administrator
+	 * that the proxy sends one of them and what to do instead (see the setup
+	 * assistant). X-Real-IP holds what X-Forwarded-For's last entry holds
+	 * where a proxy sets it, and is passed on as the visitor sent it where
+	 * none does; Fastly-Client-IP can be forged unless the site's own
+	 * configuration overwrites it; True-Client-IP is rare (Akamai and
+	 * Cloudflare Enterprise, which sends CF-Connecting-IP too). The others
+	 * are each one provider's, which append to X-Forwarded-For as well.
+	 * $_SERVER key => the header's name.
+	 */
+	public const UnsupportedProxyHeaders = array(
+		'HTTP_X_REAL_IP' => 'X-Real-IP',
+		'HTTP_TRUE_CLIENT_IP' => 'True-Client-IP',
+		'HTTP_FASTLY_CLIENT_IP' => 'Fastly-Client-IP',
+		'HTTP_X_CLIENT_IP' => 'X-Client-IP',
+		'HTTP_X_AZURE_CLIENTIP' => 'X-Azure-ClientIP',
+		'HTTP_X_AZURE_SOCKETIP' => 'X-Azure-SocketIP',
+		'HTTP_X_ENVOY_EXTERNAL_ADDRESS' => 'X-Envoy-External-Address',
+		'HTTP_CLOUDFRONT_VIEWER_ADDRESS' => 'CloudFront-Viewer-Address',
+		'HTTP_FLY_CLIENT_IP' => 'Fly-Client-IP',
+	);
+
+	/**
+	 * The name of the header of the $_SERVER key $key, as it is written
+	 * ("HTTP_X_FORWARDED_FOR": "X-Forwarded-For").
+	 */
+	public static function headerName($key): string
+	{
+		$key = (string) $key;
+		if ($key === self::CloudflareHeader)
+		{
+			return 'CF-Connecting-IP';
+		}
+		if (isset(self::UnsupportedProxyHeaders[$key]))
+		{
+			return self::UnsupportedProxyHeaders[$key];
+		}
+		return str_replace(' ', '-', ucwords(strtolower(str_replace('_', ' ', preg_replace('/^HTTP_/', '', $key)))));
+	}
 
 	/**
 	 * Whether $ip lies within $subnet, given in CIDR notation (e.g.
@@ -74,6 +125,52 @@ class IpHelper
 		}
 		$mask = (0xff << (8 - $remainingBits)) & 0xff;
 		return (ord($ipBin[$fullBytes]) & $mask) === (ord($subnetBin[$fullBytes]) & $mask);
+	}
+
+	/**
+	 * The networks whose addresses are not on the public internet: private
+	 * (RFC 1918, IPv6 unique local), loopback, shared address space of
+	 * carrier-grade NAT (RFC 6598) and link-local. A proxy or load balancer
+	 * in front of a site usually reaches it from one of them.
+	 */
+	public const NonPublicNetworks = array('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.0/8',
+		'100.64.0.0/10', '169.254.0.0/16', '::1/128', 'fc00::/7', 'fe80::/10');
+
+	/**
+	 * Whether $ip is an address of one of the NonPublicNetworks (an
+	 * IPv4-mapped one as the IPv4 address); false for what is no address.
+	 */
+	public static function isNonPublic($ip): bool
+	{
+		$ip = self::unmapped(trim((string) $ip));
+		if (filter_var($ip, FILTER_VALIDATE_IP) === false)
+		{
+			return false;
+		}
+		foreach (self::NonPublicNetworks as $network)
+		{
+			if (self::isInSubnet($ip, $network))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * The last entry of the forwarding header $headerName with the value
+	 * $headerValue (the one the proxy next to the web server added), as an
+	 * address; null if it isn't one.
+	 */
+	public static function lastHeaderAddress($headerName, $headerValue): ?string
+	{
+		if ($headerName === self::CloudflareHeader)
+		{
+			return self::clientAddressFromHeader($headerName, $headerValue, array());
+		}
+		$addresses = self::headerAddresses($headerName, (string) $headerValue);
+		$last = (string) end($addresses);
+		return filter_var($last, FILTER_VALIDATE_IP) !== false ? self::unmapped($last) : null;
 	}
 
 	/**
@@ -486,9 +583,19 @@ class IpHelper
 	 * appends to an incoming X-Forwarded-For, an attacker could otherwise
 	 * pick any address - to dodge blocking, to get another visitor's
 	 * address blocked, or to pass as an allowlisted one.
+	 *
+	 * CF-Connecting-IP (CloudflareHeader) is the exception: it holds one
+	 * address, which counts only if it is exactly one valid address.
 	 */
 	public static function clientAddressFromHeader($headerName, $headerValue, array $trustedProxies)
 	{
+		if ($headerName === self::CloudflareHeader)
+		{
+			// one address, which Cloudflare wrote itself: a list, a port or
+			// anything else is not what Cloudflare sends
+			$value = trim((string) $headerValue);
+			return filter_var($value, FILTER_VALIDATE_IP) !== false ? self::unmapped($value) : null;
+		}
 		$addresses = self::headerAddresses($headerName, (string) $headerValue);
 		for ($i = count($addresses) - 1; $i >= 0; --$i)
 		{

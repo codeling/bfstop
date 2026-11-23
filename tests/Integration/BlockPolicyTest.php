@@ -488,4 +488,25 @@ class BlockPolicyTest extends IntegrationTestCase
 		$this->assertSame(0, RiskHelper::computeScore($this->repos, $this->logger, new Registry($params), self::Ip, 'bob'),
 			'without the failed login as recorded');
 	}
+
+	/**
+	 * The address being blocked may be a proxy (and the administrators' mail
+	 * warns about it): a private address whose request carried a forwarding
+	 * header, or one from which two different accounts have logged in.
+	 */
+	public function testWhetherTheBlockedAddressMayBeAProxy()
+	{
+		$policy = $this->policy();
+		$this->assertTrue($policy->mayBeProxy('10.0.0.5', array('HTTP_X_FORWARDED_FOR' => '203.0.113.7')));
+		$this->assertTrue($policy->mayBeProxy('10.0.0.5', array('HTTP_X_REAL_IP' => '203.0.113.7')), 'a header BFStop doesn\'t read');
+		$this->assertFalse($policy->mayBeProxy('10.0.0.5', array()), 'a private address without a header');
+		$this->assertFalse($policy->mayBeProxy(self::Ip, array('HTTP_X_FORWARDED_FOR' => '198.51.100.1')), 'public, no known logins');
+
+		$logins = new \Codeling\Library\Bfstop\Service\LoginService(new Repositories($this->logger));
+		$logins->recordSuccessfulLogin((object) array('ipaddress' => self::Ip, 'username' => 'alice'));
+		$logins->recordSuccessfulLogin((object) array('ipaddress' => self::Ip, 'username' => 'ALICE'));
+		$this->assertFalse($policy->mayBeProxy(self::Ip, array()), 'one account, in two spellings');
+		$logins->recordSuccessfulLogin((object) array('ipaddress' => self::Ip, 'username' => 'bob'));
+		$this->assertTrue($policy->mayBeProxy(self::Ip, array()), 'two accounts behind one address');
+	}
 }

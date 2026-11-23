@@ -83,7 +83,7 @@
 				<option value="1">PLG_SYSTEM_BFSTOP_ENABLED</option>
 			</field>
 		</fieldset>
-		<fieldset name="proxy" label="PLG_SYSTEM_BFSTOP_PROXY_FIELDSET_LABEL">
+		<fieldset name="proxy" label="PLG_SYSTEM_BFSTOP_PROXY_FIELDSET_LABEL" description="COM_BFSTOP_SETUP_REMINDER">
 			<field name="useProxy" type="list" validate="options" default="0"
 				label="PLG_SYSTEM_BFSTOP_USE_PROXY_LABEL"
 				description="PLG_SYSTEM_BFSTOP_USE_PROXY_DESC">
@@ -99,6 +99,7 @@
 				<option value="HTTP_X_CLUSTER_CLIENT_IP">X-Cluster-Client-Ip</option>
 				<option value="HTTP_FORWARDED_FOR">Forwarded-For</option>
 				<option value="HTTP_CLIENT_IP">Client-Ip</option>
+				<option value="HTTP_CF_CONNECTING_IP">CF-Connecting-IP</option>
 			</field>
 			<field name="proxyIpAddress" type="text" size="40" default="" validate="proxylist"
 				label="PLG_SYSTEM_BFSTOP_PROXY_IP_LABEL"

@@ -138,6 +138,24 @@ class KnownIpRepository extends Repository
 	}
 
 	/**
+	 * How many different accounts have logged in from $key (the key a
+	 * client is trusted by, see IpHelper::trustPrefixLength()). Several
+	 * accounts behind one address: a proxy, a NAT - or an office. Fail-open:
+	 * 0.
+	 */
+	public function countAccountsFrom($key): int
+	{
+		return $this->failOpen('countAccountsFrom', function () use ($key)
+		{
+			$query = $this->db->createQuery()
+				->select('COUNT(DISTINCT '.$this->db->quoteName('username_lc').')')
+				->from($this->db->quoteName(self::Table))
+				->where($this->db->quoteName('ipaddress').' = :ip');
+			return $this->count($query, array('ip' => (string) $key));
+		}, 0);
+	}
+
+	/**
 	 * Forgets the addresses users logged in from longer ago than $maxAgeDays,
 	 * and, oldest first, as many more as needed to keep at most $maxRows.
 	 * Fail-open: the next run does it.

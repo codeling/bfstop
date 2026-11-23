@@ -277,4 +277,70 @@ class NotifierMailTest extends IntegrationTestCase
 		$notifier = $this->notifier('TWICE@example.org', $id);
 		$this->assertCount(1, $notifier->getNotifyAddresses());
 	}
+
+	/**
+	 * A block which may have hit a proxy: the mail says so, with how to lift
+	 * the block, and goes to the super users who receive system emails as
+	 * well - once to each address, whatever its case.
+	 */
+	public function testABlockWhichMayHaveHitAProxyWarnsTheSuperUsersToo()
+	{
+		$this->createUser('sysmail', 8);
+		$quiet = $this->createUser('quiet', 8);
+		$this->db->setQuery('UPDATE #__users SET '.$this->db->quoteName('sendEmail').' = CASE WHEN id = '.(int) $quiet.' THEN 0 ELSE 1 END WHERE id IN ('.
+			implode(',', array_map('intval', $this->createdUsers)).')')->execute();
+		$this->createUser('blocked', 8, 1);
+		$this->blocks(1, 0);
+		$notifier = $this->notifier('notify@example.org;ADMIN@example.org');
+		$notifier->blockedNotifyAdmin($this->entry(), array(), -1, true);
+
+		$this->assertCount(1, $notifier->mails, 'one mail per event');
+		$to = array_map('strtolower', $notifier->mails[0]['to']);
+		sort($to);
+		$this->assertSame(array('admin@example.org', 'notify@example.org', 'sysmail@example.org'), $to,
+			'the notification addresses and the super users with system emails, nobody twice');
+		$this->assertStringContainsString(NotifierHelper::proxyWarning(self::Ip), $notifier->mails[0]['body']);
+		$this->assertStringContainsString('bfstop:unblock '.self::Ip, $notifier->mails[0]['body']);
+
+		// without the warning, as before: the notification addresses only
+		$notifier = $this->notifier('notify@example.org');
+		$notifier->blockedNotifyAdmin($this->entry(), array(), -1);
+		$this->assertSame(array('notify@example.org'), $notifier->mails[0]['to']);
+		$this->assertStringNotContainsString(NotifierHelper::proxyWarning(self::Ip), $notifier->mails[0]['body']);
+	}
+
+	/**
+	 * The warning reaches the super users also where nobody is configured to
+	 * get BFStop's notifications (the default) - and all of them, if none
+	 * receives system emails; still within the limit of block mails a day.
+	 */
+	public function testTheProxyWarningNeedsNoNotificationAddress()
+	{
+		$this->blocks(1, 0);
+		$notifier = $this->notifier('');
+		$this->assertTrue($notifier->mailsBlocks(5, true));
+		$this->assertFalse($notifier->mailsBlocks(5, false));
+		$this->assertFalse($notifier->mailsBlocks(0, true), '"Notify on blocks": never');
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 5, true);
+		$this->assertCount(1, $notifier->mails);
+		$this->assertContains('admin@example.org', array_map('strtolower', $notifier->mails[0]['to']));
+
+		$this->db->setQuery('UPDATE #__users SET '.$this->db->quoteName('sendEmail').' = 0 WHERE email = '.$this->db->quote('admin@example.org'))->execute();
+		try
+		{
+			$notifier = $this->notifier('');
+			$notifier->blockedNotifyAdmin($this->entry(), array(), 5, true);
+			$this->assertContains('admin@example.org', array_map('strtolower', $notifier->mails[0]['to']),
+				'no super user receives system emails: all of them');
+		}
+		finally
+		{
+			$this->db->setQuery('UPDATE #__users SET '.$this->db->quoteName('sendEmail').' = 1 WHERE email = '.$this->db->quote('admin@example.org'))->execute();
+		}
+
+		$this->blocks(5, 0);
+		$notifier = $this->notifier('');
+		$notifier->blockedNotifyAdmin($this->entry(), array(), 5, true);
+		$this->assertCount(0, $notifier->mails, 'over the limit of the day');
+	}
 }

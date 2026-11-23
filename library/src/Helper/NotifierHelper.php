@@ -12,6 +12,7 @@ defined('_JEXEC') or die;
 
 use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
+use Joomla\CMS\Access\Access;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Log\Log;
@@ -237,9 +238,49 @@ class NotifierHelper
 	 * somebody to mail, and the limit isn't 0. For whoever has to collect
 	 * what the mail lists before it knows whether one is sent.
 	 */
-	public function mailsBlocks($maxNumber): bool
+	public function mailsBlocks($maxNumber, bool $mayBeProxy = false): bool
 	{
-		return count($this->notifyAddresses) > 0 && $maxNumber != 0;
+		return (count($this->notifyAddresses) > 0 || $mayBeProxy) && $maxNumber != 0;
+	}
+
+	/**
+	 * The groups whose members are super users: those with core.admin on
+	 * the root asset.
+	 *
+	 * @return int[]
+	 */
+	public static function superUserGroups(): array
+	{
+		$rules = Access::getAssetRules('root.1')->getData();
+		if (!isset($rules['core.admin']))
+		{
+			return array();
+		}
+		return array_keys(array_filter($rules['core.admin']->getData(), fn ($allowed) => (int) $allowed === 1));
+	}
+
+	/**
+	 * Who gets the mail about a block which may have hit a proxy (see
+	 * blockedNotifyAdmin()): the notification addresses, and the super users
+	 * who receive system emails (all of them if none does). Nobody twice
+	 * (see validAddresses()).
+	 *
+	 * @return string[]
+	 */
+	public function proxyWarningRecipients(): array
+	{
+		return self::validAddresses(array_merge($this->notifyAddresses,
+			$this->repositories->users()->emailsOfGroupsForSystemMails(self::superUserGroups())), $this->logger);
+	}
+
+	/**
+	 * The paragraph of the administrators' mail about the block of
+	 * $address which says that it may be a proxy, and how to lift the block.
+	 */
+	public static function proxyWarning($address): string
+	{
+		return Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_PROXY_WARNING', $address,
+			'php cli/joomla.php bfstop:unblock '.$address);
 	}
 
 	/**
@@ -247,21 +288,35 @@ class NotifierHelper
 	 * with the failed logins $failedLogins it was for (those it marked
 	 * handled - see BlockService::blockAsDecided() - not every failed login
 	 * of the address still stored, which may have led to earlier blocks).
+	 * If the blocked address $mayBeProxy (see BlockPolicy::mayBeProxy()),
+	 * the mail says so, and goes to the super users too.
 	 *
 	 * @param object[] $failedLogins
 	 */
-	public function blockedNotifyAdmin($logEntry, array $failedLogins, $maxNumber)
+	public function blockedNotifyAdmin($logEntry, array $failedLogins, $maxNumber, bool $mayBeProxy = false)
 	{
-		if (!$this->mailsBlocks($maxNumber) ||
+		if (!$this->mailsBlocks($maxNumber, $mayBeProxy) ||
 			!$this->isNotificationAllowed($logEntry->logtime, $maxNumber, true))
 		{
 			return;
 		}
 		$body = $this->getBlockedBody($logEntry, $failedLogins);
+		$recipients = $this->notifyAddresses;
+		if ($mayBeProxy)
+		{
+			// if it is the proxy, the whole site is blocked - also for the
+			// administrators, who may not have set up BFStop's notifications
+			$body .= "\n\n".self::proxyWarning($logEntry->ipaddress);
+			$recipients = $this->proxyWarningRecipients();
+		}
+		if (count($recipients) === 0)
+		{
+			return;
+		}
 		$subject = Text::sprintf('PLG_SYSTEM_BFSTOP_BLOCKED_IP_ADDRESS_SUBJECT',
 			$this->getSiteName(),
 			$logEntry->ipaddress);
-		$this->sendMail($subject, $body, $this->notifyAddresses);
+		$this->sendMail($subject, $body, $recipients);
 	}
 
 	public function sendUnblockMail($userEmail, $unblockLink)

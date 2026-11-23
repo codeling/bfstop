@@ -415,4 +415,67 @@ class IpHelperTest extends TestCase
 		$this->assertSame('2001:db8:1:2::/64',
 			IpHelper::trackedAddress('2001:db8:1:2:aaaa::1', IpHelper::trustPrefixLength(56)));
 	}
+
+	public static function cloudflareProvider()
+	{
+		$proxy = array('198.51.100.0/24');
+		return array(
+			'one address'                   => array('203.0.113.5', '203.0.113.5'),
+			'with white space'              => array(' 203.0.113.5 ', '203.0.113.5'),
+			'IPv6'                          => array('2001:db8::5', '2001:db8::5'),
+			'IPv4-mapped'                   => array('::ffff:203.0.113.5', '203.0.113.5'),
+			'a list'                        => array('203.0.113.5, 192.0.2.1', null),
+			'with a port'                   => array('203.0.113.5:443', null),
+			'IPv6 in brackets'              => array('[2001:db8::5]', null),
+			'garbage'                       => array('unknown', null),
+			'empty'                         => array('', null),
+			'a network'                     => array('203.0.113.0/24', null),
+		);
+	}
+
+	/**
+	 * CF-Connecting-IP counts only if it is exactly one valid address:
+	 * Cloudflare writes it itself, always with one address.
+	 */
+	#[DataProvider('cloudflareProvider')]
+	public function testCloudflareHeaderIsOneAddressOnly($value, $expected)
+	{
+		$this->assertSame($expected, IpHelper::clientAddressFromHeader(IpHelper::CloudflareHeader, $value, array('198.51.100.0/24')));
+	}
+
+	/** The header is one BFStop reads, and the settings form offers it (with Cloudflare's spelling). */
+	public function testCloudflareHeaderIsKnown()
+	{
+		$this->assertContains(IpHelper::CloudflareHeader, IpHelper::KnownProxyHeaders);
+		$this->assertSame('CF-Connecting-IP', IpHelper::headerName(IpHelper::CloudflareHeader));
+		$this->assertSame('X-Forwarded-For', IpHelper::headerName('HTTP_X_FORWARDED_FOR'));
+		$this->assertSame('X-Azure-ClientIP', IpHelper::headerName('HTTP_X_AZURE_CLIENTIP'));
+		$options = simplexml_load_file(BFSTOP_COMPONENT_ROOT.'/admin/forms/settings.xml')
+			->xpath('//field[@name="proxyHeaderSource"]/option/@value');
+		$this->assertSame(IpHelper::KnownProxyHeaders, array_map('strval', $options),
+			'the settings offer exactly the headers BFStop reads');
+		$this->assertSame(array(), array_intersect(IpHelper::KnownProxyHeaders, array_keys(IpHelper::UnsupportedProxyHeaders)));
+	}
+
+	public function testNonPublicAddresses()
+	{
+		foreach (array('10.1.2.3', '172.16.0.1', '172.31.255.255', '192.168.1.1', '127.0.0.1', '100.64.0.1',
+			'100.127.255.255', '169.254.1.1', '::1', 'fd00::1', 'fc00::1', 'fe80::1', '::ffff:10.0.0.1') as $ip)
+		{
+			$this->assertTrue(IpHelper::isNonPublic($ip), $ip);
+		}
+		foreach (array('203.0.113.5', '172.32.0.1', '100.128.0.1', '8.8.8.8', '2001:db8::1', 'not an address', '') as $ip)
+		{
+			$this->assertFalse(IpHelper::isNonPublic($ip), $ip);
+		}
+	}
+
+	public function testLastHeaderAddress()
+	{
+		$this->assertSame('203.0.113.7', IpHelper::lastHeaderAddress('HTTP_X_FORWARDED_FOR', '198.51.100.1, 203.0.113.7'));
+		$this->assertSame('2001:db8::7', IpHelper::lastHeaderAddress('HTTP_FORWARDED', 'for=1.2.3.4, for="[2001:db8::7]:443";proto=https'));
+		$this->assertSame('203.0.113.7', IpHelper::lastHeaderAddress('HTTP_X_FORWARDED_FOR', '203.0.113.7:8080'));
+		$this->assertNull(IpHelper::lastHeaderAddress('HTTP_X_FORWARDED_FOR', '203.0.113.7, unknown'));
+		$this->assertNull(IpHelper::lastHeaderAddress(IpHelper::CloudflareHeader, '203.0.113.7, 1.2.3.4'));
+	}
 }

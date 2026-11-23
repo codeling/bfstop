@@ -94,6 +94,46 @@ class UserRepository extends Repository
 		}, array());
 	}
 
+	/**
+	 * The email addresses of the enabled accounts in the user groups
+	 * $groupIds (the super users' groups) which receive system emails
+	 * ("Receive System Emails" in their account) - or of all of them, if
+	 * none does: a warning which concerns the whole site must reach
+	 * somebody. Fail-open: none.
+	 *
+	 * @param int[] $groupIds
+	 * @return string[]
+	 */
+	public function emailsOfGroupsForSystemMails(array $groupIds)
+	{
+		$groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+		if (count($groupIds) === 0)
+		{
+			return array();
+		}
+		return $this->failOpen('emailsOfGroupsForSystemMails', function () use ($groupIds)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName(array('u.email', 'u.sendEmail')))
+				->from($this->db->quoteName('#__users', 'u'))
+				->innerJoin($this->db->quoteName('#__user_usergroup_map', 'g').
+					' ON '.$this->db->quoteName('u.id').' = '.$this->db->quoteName('g.user_id'))
+				->whereIn($this->db->quoteName('g.group_id'), $groupIds)
+				->where($this->db->quoteName('u.block').' = 0');
+			$all = array();
+			$system = array();
+			foreach ($this->objects($query) as $row)
+			{
+				$all[] = (string) $row->email;
+				if ((int) $row->sendEmail === 1)
+				{
+					$system[] = (string) $row->email;
+				}
+			}
+			return array_values(array_unique(count($system) > 0 ? $system : $all));
+		}, array());
+	}
+
 	// how many logins one query looks up (see anyAccountExists())
 	private const LookupChunk = 500;
 

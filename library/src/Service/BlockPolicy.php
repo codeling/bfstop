@@ -259,6 +259,32 @@ class BlockPolicy
 		return true;
 	}
 
+	/**
+	 * Whether the client $clientAddress, which is being blocked for the
+	 * request $server, may be a proxy - then everybody behind it is blocked,
+	 * and the administrators' mail says so (see
+	 * NotifierHelper::blockedNotifyAdmin()): the request came from a
+	 * non-public address with a forwarding header (an unconfigured proxy, or
+	 * one whose header BFStop isn't told about), or at least two accounts
+	 * have logged in from the address (one query, only if the first isn't
+	 * so).
+	 */
+	public function mayBeProxy($clientAddress, array $server): bool
+	{
+		if (IpHelper::isNonPublic($clientAddress))
+		{
+			foreach (array_merge(IpHelper::KnownProxyHeaders, array_keys(IpHelper::UnsupportedProxyHeaders)) as $header)
+			{
+				if (isset($server[$header]) && trim((string) $server[$header]) !== '')
+				{
+					return true;
+				}
+			}
+		}
+		$key = IpHelper::trackedAddress($clientAddress, IpHelper::trustPrefixLength($this->intParam('ipv6PrefixLength')));
+		return $this->repositories->knownIps()->countAccountsFrom($key) >= 2;
+	}
+
 	/** Whether blocked users may be sent an unblock link at all. */
 	public function notifiesBlockedUser(): bool
 	{

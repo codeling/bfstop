@@ -263,9 +263,14 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	 */
 	private function block($logEntry)
 	{
+		// whether the client may be a proxy, which the administrators' mail
+		// warns about (and then goes to the super users too): asked before
+		// the block, which doesn't change it - only if a mail may be sent
+		$maxMails = $this->intParam('notifyBlockedNumber');
+		$mayBeProxy = $maxMails != 0 && $this->policy->mayBeProxy($this->clientAddress ?? $logEntry->ipaddress, $_SERVER);
 		// the administrators' mail lists the failed logins the block is for,
 		// which the block marks handled: read before, if there may be a mail
-		$listFailedLogins = $this->notifier()->mailsBlocks($this->intParam('notifyBlockedNumber'));
+		$listFailedLogins = $this->notifier()->mailsBlocks($maxMails, $mayBeProxy);
 		$block = $this->blocker->withLock($logEntry->ipaddress, function () use ($logEntry, $listFailedLogins)
 		{
 			return $this->blocker->blockAsDecided($logEntry, $this->clientAddress, $this->policy, $listFailedLogins);
@@ -275,17 +280,17 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$this->loginTurn->end();
 		if ($block !== null)
 		{
-			$this->notifyOfBlock($logEntry, $block['id'], $block['targetedOtherAccounts'], $block['failedLogins']);
+			$this->notifyOfBlock($logEntry, $block['id'], $block['targetedOtherAccounts'], $block['failedLogins'], $mayBeProxy);
 		}
 	}
 
 	/**
 	 * The mails about the new block $id (after the lock: sending may take a
-	 * while).
+	 * while); $mayBeProxy: see BlockPolicy::mayBeProxy().
 	 */
-	private function notifyOfBlock($logEntry, $id, $targetedOtherAccounts, array $failedLogins)
+	private function notifyOfBlock($logEntry, $id, $targetedOtherAccounts, array $failedLogins, bool $mayBeProxy = false)
 	{
-		$this->notifier()->blockedNotifyAdmin($logEntry, $failedLogins, $this->intParam('notifyBlockedNumber'));
+		$this->notifier()->blockedNotifyAdmin($logEntry, $failedLogins, $this->intParam('notifyBlockedNumber'), $mayBeProxy);
 		if (!$this->policy->notifiesBlockedUser())
 		{
 			return;
