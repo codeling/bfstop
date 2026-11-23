@@ -463,4 +463,68 @@ class BlockRepository extends AddressTableRepository
 		}
 		return $result;
 	}
+
+	/**
+	 * The ids of the active blocks whose entry is exactly one of $entries
+	 * (addresses or networks, in canonical form) - not those of networks
+	 * containing them.
+	 *
+	 * @param string[] $entries
+	 * @return int[]|null null (unknown) if the block list could not be read
+	 */
+	public function activeIdsOfEntries(array $entries)
+	{
+		$entries = array_values(array_unique(array_map('strval', $entries)));
+		if (count($entries) === 0)
+		{
+			return array();
+		}
+		return $this->unknown('activeIdsOfEntries', function () use ($entries)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName('t.id'))
+				->from($this->db->quoteName(self::Table, 't'))
+				->whereIn($this->db->quoteName('t.ipaddress'), $entries, ParameterType::STRING)
+				->where($this->activeCondition('t', 'u'));
+			return array_map('intval', $this->column($query, array('now' => self::now())));
+		});
+	}
+
+	/**
+	 * The addresses whose earlier blocks the purge remembered (the offences,
+	 * see foldAndDelete()). Fail-open: none.
+	 *
+	 * @return string[]
+	 */
+	public function offenceAddresses()
+	{
+		return $this->failOpen('offenceAddresses', function ()
+		{
+			return $this->column($this->db->createQuery()
+				->select($this->db->quoteName('ipaddress'))
+				->from($this->db->quoteName(self::OffenceTable)));
+		}, array());
+	}
+
+	/**
+	 * Forgets the earlier blocks of $addresses (their offences): for the
+	 * address of a proxy, which got blocked for its visitors' failed logins.
+	 * Fail-open: they stay.
+	 *
+	 * @param string[] $addresses
+	 */
+	public function forgetOffences(array $addresses)
+	{
+		$addresses = array_values(array_unique(array_map('strval', $addresses)));
+		if (count($addresses) === 0)
+		{
+			return;
+		}
+		$this->failOpen('forgetOffences', function () use ($addresses)
+		{
+			$this->execute($this->db->createQuery()
+				->delete($this->db->quoteName(self::OffenceTable))
+				->whereIn($this->db->quoteName('ipaddress'), $addresses, ParameterType::STRING));
+		}, null);
+	}
 }

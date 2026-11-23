@@ -46,6 +46,13 @@ final class SetupState
 	// the steps of the assistant (see the plan, docs/setup-assistant-plan.md)
 	public const StepProxy = 'proxy';
 	public const StepBlockMode = 'blockMode';
+	// optional: they don't hold activation back
+	public const StepCleanup = 'cleanup';
+	public const StepHtaccess = 'htaccess';
+	public const StepNotify = 'notify';
+	public const StepNotifyMeaning = 'notifyMeaning';
+	public const StepParts = 'parts';
+	public const StepRateLimit = 'rateLimit';
 
 	/** the steps which have to be done before protection is activated */
 	public const RequiredSteps = array(self::StepProxy, self::StepBlockMode);

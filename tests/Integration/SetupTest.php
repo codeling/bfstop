@@ -389,7 +389,10 @@ class SetupTest extends IntegrationTestCase
 		);
 		(new Repositories($this->logger))->state()->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2',
 			'disabled' => 'proxy', 'delays' => 1, 'htaccess' => 1)));
-		self::storeSettings($this->db, json_encode(array('blockMode' => 'off', 'emailaddress' => 'a@example.org;')));
+		// a proxy, and the update's findings: every page is shown
+		self::storeSettings($this->db, json_encode(array('blockMode' => 'off', 'emailaddress' => 'a@example.org;',
+			'useProxy' => '1', 'proxyIpAddress' => '10.0.0.5')));
+		$this->assertSame(SetupModel::Pages, $this->model()->pages());
 		// the toolbar of the page sets the title of the application's document
 		$document = Factory::getContainer()->get(\Joomla\CMS\Document\FactoryInterface::class)->createDocument('html');
 		$app->loadDocument($document);
@@ -421,5 +424,156 @@ class SetupTest extends IntegrationTestCase
 		$input->set('page', null);
 		// as it was: the other tests run without a document
 		(new \ReflectionProperty($app, 'document'))->setValue($app, null);
+	}
+
+	/** The pages which only make sense after an update are shown only then. */
+	public function testThePagesDependOnTheSite()
+	{
+		$state = (new Repositories($this->logger))->state();
+		$state->set(SetupState::Name, json_encode(array('mode' => 'install')));
+		self::storeSettings($this->db, json_encode(array('htaccessPath' => sys_get_temp_dir().'/bfstop-no-such-dir')));
+		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'summary'), $this->model()->pages());
+		$this->assertSame('blockmode', $this->model()->nextPage('proxy'));
+		$this->assertSame('summary', $this->model()->nextPage('summary'));
+		$state->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2')));
+		$this->assertSame(array('overview', 'proxy', 'blockmode', 'notify', 'parts', 'summary'),
+			$this->model()->pages(), 'no proxy, no delays, no .htaccess section of 1.x');
+		$state->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2', 'delays' => 1)));
+		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => '10.0.0.5')));
+		$this->assertSame(array('overview', 'proxy', 'cleanup', 'blockmode', 'notify', 'parts', 'ratelimit', 'summary'),
+			$this->model()->pages());
+	}
+
+	/** Optional steps can be skipped, the required ones not. */
+	public function testSkippingAndAcknowledging()
+	{
+		$model = $this->model();
+		$this->assertTrue($model->skip(SetupState::StepNotify));
+		$this->assertFalse($model->skip(SetupState::StepProxy), 'required');
+		$this->assertFalse($model->skip('nonsense'));
+		$this->assertTrue($model->acknowledge(SetupState::StepRateLimit));
+		$this->assertFalse($model->acknowledge(SetupState::StepNotify), 'a step of settings is saved');
+		$state = $this->state();
+		$this->assertSame(SetupState::Skipped, $state->status(SetupState::StepNotify));
+		$this->assertSame(SetupState::Done, $state->status(SetupState::StepRateLimit));
+		$this->assertSame(SetupState::RequiredSteps, $state->pendingRequiredSteps(), 'optional steps hold nothing back');
+	}
+
+	/**
+	 * After the proxy fix: the blocks of the proxy are lifted, its failed
+	 * logins, offences and remembered logins removed; the allow list's
+	 * entries which contain it are only shown.
+	 */
+	public function testTheCleanUpAfterTheProxyFix()
+	{
+		self::storeSettings($this->db, json_encode(array('useProxy' => '1', 'proxyIpAddress' => "10.0.0.5\n198.51.100.0/24")));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '10.0.0.5', 'crdate' => self::minutesAgo(5), 'duration' => 0));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '198.51.100.7', 'crdate' => self::minutesAgo(5), 'duration' => 60));
+		$this->insert('#__bfstop_bannedip', array('ipaddress' => '203.0.113.9', 'crdate' => self::minutesAgo(5), 'duration' => 60));
+		foreach (array('10.0.0.5', '10.0.0.5', '198.51.100.7', '203.0.113.9') as $ip)
+		{
+			$this->insert('#__bfstop_failedlogin', array('ipaddress' => $ip, 'logtime' => self::minutesAgo(1), 'username' => 'bob', 'origin' => 0));
+		}
+		$this->insert('#__bfstop_offence', array('ipaddress' => '10.0.0.5', 'blocks' => 2, 'last_block' => self::minutesAgo(60)));
+		$this->insert('#__bfstop_offence', array('ipaddress' => '203.0.113.9', 'blocks' => 1, 'last_block' => self::minutesAgo(60)));
+		$this->insert('#__bfstop_knownip', array('ipaddress' => '10.0.0.5', 'username' => 'alice',
+			'first_success' => self::minutesAgo(60), 'last_success' => self::minutesAgo(1)));
+		$this->insert('#__bfstop_allowlist', array('ipaddress' => '10.0.0.0/24', 'notes' => 'the proxy'));
+
+		$this->assertSame(array('10.0.0.5', '198.51.100.7'), array_values(array_intersect(array('10.0.0.5', '198.51.100.7'),
+			$this->model()->suspiciousBlocks(array('REMOTE_ADDR' => '198.51.100.7')))), 'private, and the request\'s own');
+		$findings = $this->model()->cleanupFindings();
+		$this->assertEqualsCanonicalizing(array('10.0.0.5', '198.51.100.7'), $findings['blocks']);
+		$this->assertSame(array('10.0.0.5' => 2, '198.51.100.7' => 1), $findings['failedLogins']);
+		$this->assertSame(array('10.0.0.5'), $findings['offences']);
+		$this->assertSame(array('10.0.0.5'), $findings['knownIps']);
+		$this->assertSame(array('10.0.0.0/24'), $findings['allowList']);
+
+		$this->assertTrue($this->model()->cleanup());
+		$blocks = (new Repositories($this->logger))->blocks();
+		$this->assertFalse($blocks->isBlocked('10.0.0.5'));
+		$this->assertFalse($blocks->isBlocked('198.51.100.7'));
+		$this->assertTrue($blocks->isBlocked('203.0.113.9'), 'not a proxy');
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'));
+		$this->assertSame('203.0.113.9', $this->queryValue('SELECT ipaddress FROM #__bfstop_offence'));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+		$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_allowlist'), 'the administrator\'s to change');
+		$this->assertSame(SetupState::Done, $this->state()->status(SetupState::StepCleanup));
+		$this->assertFalse(\Codeling\Library\Bfstop\Service\Setup\ProxyCleanup::anything(
+			array('allowList' => array()) + $this->model()->cleanupFindings()));
+
+		self::storeSettings($this->db, json_encode(array('useProxy' => '0')));
+		$model = $this->model();
+		$this->assertFalse($model->cleanup(), 'no proxy configured');
+	}
+
+	/** The block section of 1.x in .htaccess, shown as it is and as it would be, and rewritten. */
+	public function testTheLegacyHtaccessStep()
+	{
+		$dir = sys_get_temp_dir().'/bfstop-legacy-'.bin2hex(random_bytes(4));
+		mkdir($dir);
+		try
+		{
+			file_put_contents($dir.'/.htaccess', "RewriteEngine On\n# BEGIN BFStop Blocks\n<RequireAll>\nRequire all granted\n".
+				"Require not ip 203.0.113.5\n</RequireAll>\n# END BFStop Blocks\n");
+			self::storeSettings($this->db, json_encode(array('htaccessPath' => $dir)));
+			(new Repositories($this->logger))->state()->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2')));
+			$model = $this->model();
+			$this->assertContains('htaccess', $model->pages());
+			$legacy = $model->legacyHtaccess();
+			$this->assertTrue($legacy['present']);
+			$this->assertContains('Require all granted', $legacy['current']);
+			$this->assertNotContains('Require all granted', $legacy['proposed']);
+			$this->assertStringContainsString("-R '203.0.113.5'", implode("\n", $legacy['proposed']));
+
+			$this->assertTrue($model->upgradeHtaccess(), implode(' ', array_map('strval', $model->getErrors())));
+			$this->assertStringNotContainsString('Require all granted', file_get_contents($dir.'/.htaccess'));
+			$this->assertStringContainsString('RewriteEngine On', file_get_contents($dir.'/.htaccess'));
+			$this->assertFalse($this->model()->legacyHtaccess()['present']);
+			$this->assertNotContains('htaccess', $this->model()->pages(), 'nothing left of 1.x');
+			$this->assertSame(SetupState::Done, $this->state()->status(SetupState::StepHtaccess));
+		}
+		finally
+		{
+			@unlink($dir.'/.htaccess');
+			@rmdir($dir);
+		}
+	}
+
+	/**
+	 * The steps of settings save their own settings only, through the
+	 * settings model; the changed meaning of the unblock mails of 1.x is
+	 * decided with the notifications.
+	 */
+	public function testTheStepsOfSettings()
+	{
+		Factory::getApplication()->set('live_site', 'https://www.example.org');
+		try
+		{
+			self::storeSettings($this->db, json_encode(array('notifyBlockedUser' => '1', 'blockNumber' => '7')));
+			(new Repositories($this->logger))->state()->set(SetupState::Name, json_encode(array('mode' => 'upgrade', 'from' => '1.5.2')));
+			$model = $this->model();
+			$this->assertTrue($model->notifyMeaningChanged());
+			$this->assertTrue($model->saveFields(SetupState::StepNotify, array('emailaddress' => 'security@example.org',
+				'notifyBlockedUser' => '1', 'blockNumber' => '3'), array()), self::errors($model));
+			$stored = $this->stored();
+			$this->assertSame('security@example.org', $stored['emailaddress']);
+			$this->assertSame('7', (string) $stored['blockNumber'], 'not a setting of this step');
+			$state = $this->state();
+			$this->assertSame(SetupState::Done, $state->status(SetupState::StepNotify));
+			$this->assertSame(SetupState::Done, $state->status(SetupState::StepNotifyMeaning));
+
+			$model = $this->model();
+			$this->assertFalse($model->saveFields(SetupState::StepParts, array('enabledForOrigin' => array()), array()));
+			$this->assertTrue($model->saveFields(SetupState::StepParts, array('enabledForOrigin' => array('1', '4')), array()),
+				self::errors($model));
+			$this->assertSame(5, (int) $this->stored()['enabledForOrigin']);
+			$this->assertFalse($this->model()->saveFields('proxy', array('useProxy' => '1'), array()), 'not a step of settings');
+			$this->assertGreaterThanOrEqual(0, $this->model()->apiTokenUsers());
+		}
+		finally
+		{
+			Factory::getApplication()->set('live_site', '');
+		}
 	}
 }

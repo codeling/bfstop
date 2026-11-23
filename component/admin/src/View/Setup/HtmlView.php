@@ -12,14 +12,18 @@ defined('_JEXEC') or die;
 
 use Codeling\Component\Bfstop\Administrator\Controller\SetupController;
 use Codeling\Component\Bfstop\Administrator\Helper\VersionHelper;
+use Codeling\Component\Bfstop\Administrator\Model\SettingsModel;
 use Codeling\Component\Bfstop\Administrator\Model\SetupModel;
+use Codeling\Component\Bfstop\Administrator\View\Settings\HtmlView as SettingsView;
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Service\BlockPolicy;
 use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
 use Codeling\Library\Bfstop\Service\Setup\SetupState;
 use Codeling\Library\Bfstop\Settings;
 use Joomla\CMS\Access\Exception\NotAllowed;
 use Joomla\CMS\Application\CMSApplication;
 use Joomla\CMS\Factory;
+use Joomla\CMS\Form\Form;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\MVC\View\HtmlView as BaseHtmlView;
 use Joomla\CMS\Toolbar\ToolbarHelper;
@@ -46,6 +50,16 @@ class HtmlView extends BaseHtmlView
 	protected Registry $settings;
 	protected ?string $loadBalancerHint = null;
 	protected string $issueUrl = '';
+	protected array $pages = array();
+	protected ?Form $settingsForm = null;
+	protected array $suspicious = array();
+	protected array $cleanup = array();
+	protected array $htaccess = array();
+	protected bool $notifyMeaningChanged = false;
+	protected int $apiTokenUsers = 0;
+	protected string $liveSiteNote = '';
+	/** the buttons of the optional step of the page: step, task of saving, its label (see default_buttons.php) */
+	public array $stepButtons = array('', '', '');
 
 	public function display($tpl = null)
 	{
@@ -66,8 +80,9 @@ class HtmlView extends BaseHtmlView
 		{
 			throw new \RuntimeException('The model of the setup assistant is missing');
 		}
+		$this->pages = $model->pages();
 		$page = Factory::getApplication()->getInput()->getCmd('page', 'overview');
-		$this->page = in_array($page, SetupModel::Pages, true) ? $page : 'overview';
+		$this->page = in_array($page, $this->pages, true) ? $page : 'overview';
 		$this->setup = $model->setupState();
 		$this->settings = new Registry($model->storedParams());
 		$this->detected = $model->detection();
@@ -80,6 +95,30 @@ class HtmlView extends BaseHtmlView
 		$this->loadBalancerHint = ProxyDetector::loadBalancerHint((bool) $this->setting('useProxy'), $this->detected['scenario'],
 			SetupModel::behindLoadBalancer());
 		$this->issueUrl = self::issueUrl($this->detected);
+		$this->suspicious = $model->suspiciousBlocks();
+		// what only some pages show
+		switch ($this->page)
+		{
+			case 'cleanup':
+				$this->cleanup = $model->cleanupFindings();
+				break;
+			case 'htaccess':
+				$this->htaccess = $model->legacyHtaccess();
+				break;
+			case 'notify':
+				$this->notifyMeaningChanged = $model->notifyMeaningChanged();
+				$this->liveSiteNote = BlockPolicy::hasLiveSite() ? '' : SettingsView::liveSiteNote();
+				break;
+			case 'parts':
+				$this->apiTokenUsers = $model->apiTokenUsers();
+				break;
+		}
+		if (isset(SetupModel::StepFields[SetupModel::PageSteps[$this->page] ?? '']))
+		{
+			// the settings of the step, rendered by the settings form's own fields
+			$this->settingsForm = SettingsModel::settingsForm();
+			$this->settingsForm->bind(array('params' => SettingsModel::paramsForForm($model->storedParams())));
+		}
 
 		// what the proxy step was given to check (see SetupController::preview())
 		$app = Factory::getApplication();
@@ -135,6 +174,21 @@ class HtmlView extends BaseHtmlView
 			'title' => 'Proxy header not supported: '.implode(', ', array_values($detected['unsupported'])),
 			'body' => $body,
 		));
+	}
+
+	/**
+	 * Which advice about rate limiting fits (the end of its language key):
+	 * PROXY behind a proxy or CDN (the web server sees the proxy's address
+	 * for everybody), RESOLVED where the web server resolves the address,
+	 * DIRECT otherwise.
+	 */
+	public function rateLimitAdvice(): string
+	{
+		if ((bool) $this->setting('useProxy') || ProxyDetector::needsProxySettings($this->detected['scenario']))
+		{
+			return 'PROXY';
+		}
+		return $this->detected['scenario'] === ProxyDetector::ServerResolves ? 'RESOLVED' : 'DIRECT';
 	}
 
 	/** A setting, as Settings::get() reads it. */

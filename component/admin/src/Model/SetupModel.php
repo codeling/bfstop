@@ -13,9 +13,12 @@ defined('_JEXEC') or die;
 use Codeling\Component\Bfstop\Administrator\Helper\ActionLogHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\IpValidateHelper;
 use Codeling\Component\Bfstop\Administrator\Helper\LogHelper;
+use Codeling\Component\Bfstop\Administrator\Helper\UnblockHelper;
 use Codeling\Library\Bfstop\Helper\HtaccessHelper;
 use Codeling\Library\Bfstop\Helper\IpHelper;
+use Codeling\Library\Bfstop\Origin;
 use Codeling\Library\Bfstop\Repository\Repositories;
+use Codeling\Library\Bfstop\Service\Setup\ProxyCleanup;
 use Codeling\Library\Bfstop\Service\Setup\ProxyDetector;
 use Codeling\Library\Bfstop\Service\Setup\ProxyMismatch;
 use Codeling\Library\Bfstop\Service\Setup\SettingsAudit;
@@ -43,11 +46,21 @@ use Joomla\Registry\Registry;
  */
 class SetupModel extends BaseDatabaseModel
 {
-	/** the pages of the assistant, in their order */
-	public const Pages = array('overview', 'proxy', 'blockmode', 'summary');
+	/** the pages of the assistant, in their order (not all are shown, see pages()) */
+	public const Pages = array('overview', 'proxy', 'cleanup', 'blockmode', 'htaccess', 'notify', 'parts', 'ratelimit',
+		'summary');
 
 	/** the step of the setup state each page stands for (the others stand for none) */
-	public const PageSteps = array('proxy' => SetupState::StepProxy, 'blockmode' => SetupState::StepBlockMode);
+	public const PageSteps = array('proxy' => SetupState::StepProxy, 'cleanup' => SetupState::StepCleanup,
+		'blockmode' => SetupState::StepBlockMode, 'htaccess' => SetupState::StepHtaccess,
+		'notify' => SetupState::StepNotify, 'parts' => SetupState::StepParts, 'ratelimit' => SetupState::StepRateLimit);
+
+	/** the settings each step of a page of settings saves (see saveFields()) */
+	public const StepFields = array(
+		SetupState::StepNotify => array('emailaddress', 'userID', 'groupNotificationEnabled', 'userGroup',
+			'notifyBlockedUser', 'notifyBlockedNumber', 'notifyFailedNumber', 'notifyFailedOnlyExisting'),
+		SetupState::StepParts => array('enabledForOrigin'),
+	);
 
 	/** Cloudflare's address ranges, which the proxy step fetches when asked to */
 	public const CloudflareRanges = array('https://www.cloudflare.com/ips-v4', 'https://www.cloudflare.com/ips-v6');
@@ -83,6 +96,217 @@ class SetupModel extends BaseDatabaseModel
 	private function settings(): Registry
 	{
 		return new Registry($this->storedParams());
+	}
+
+	/**
+	 * The pages of the assistant for this site: those of the steps which
+	 * only make sense after an update only then (the clean-up after the
+	 * proxy fix behind a proxy, the .htaccess section of an earlier version
+	 * while the file has one, the rate limiting where the update removed
+	 * delays which were in use).
+	 *
+	 * @return string[]
+	 */
+	public function pages(): array
+	{
+		$setup = $this->setupState();
+		$upgrade = $setup->mode() === SetupState::ModeUpgrade;
+		$shown = array(
+			'cleanup' => $upgrade && (Settings::bool($this->settings(), 'useProxy') ||
+				$setup->status(SetupState::StepCleanup) !== SetupState::Pending),
+			'htaccess' => $upgrade && ($this->legacyHtaccess()['present'] || $setup->htaccessNotRewritten()),
+			'ratelimit' => $upgrade && $setup->delaysRemoved(),
+		);
+		return array_values(array_filter(self::Pages, fn ($page) => $shown[$page] ?? true));
+	}
+
+	/** The page after $page (the last one: itself). */
+	public function nextPage(string $page): string
+	{
+		$pages = $this->pages();
+		$index = array_search($page, $pages, true);
+		return $index === false ? 'summary' : $pages[min($index + 1, count($pages) - 1)];
+	}
+
+	/** Marks the optional step $step as skipped. */
+	public function skip(string $step): bool
+	{
+		if (in_array($step, SetupState::RequiredSteps, true) || !in_array($step, self::PageSteps, true))
+		{
+			$this->setError(Text::_('COM_BFSTOP_SETUP_ERROR_SKIP'));
+			return false;
+		}
+		$this->setupState()->setStatus($step, SetupState::Skipped);
+		$this->saveSetupState();
+		return true;
+	}
+
+	/** Marks the step $step, which saves no settings (it explains), as done. */
+	public function acknowledge(string $step): bool
+	{
+		if (!in_array($step, array(SetupState::StepRateLimit), true))
+		{
+			$this->setError(Text::_('COM_BFSTOP_SETUP_ERROR_SKIP'));
+			return false;
+		}
+		$this->setupState()->setStatus($step, SetupState::Done);
+		$this->saveSetupState();
+		ActionLogHelper::log('setup_step_applied', array('step' => $step));
+		return true;
+	}
+
+	/**
+	 * Saves the settings $params (as the settings form sends them) of the
+	 * step $step - only those the step is about (StepFields) - with the
+	 * fixes $fixes, see apply().
+	 */
+	public function saveFields(string $step, array $params, array $fixes = array()): bool
+	{
+		if (!isset(self::StepFields[$step]))
+		{
+			$this->setError(Text::_('COM_BFSTOP_SETUP_ERROR_SKIP'));
+			return false;
+		}
+		$params = array_intersect_key($params, array_flip(self::StepFields[$step]));
+		if (in_array('enabledForOrigin', self::StepFields[$step], true) &&
+			Origin::mask($params['enabledForOrigin'] ?? array()) === 0)
+		{
+			// the form requires a part: without one, BFStop would protect nothing
+			$this->setError(Text::_('COM_BFSTOP_SETUP_PARTS_ERROR_NONE'));
+			return false;
+		}
+		if (!$this->apply($step, SettingsModel::paramsForStorage($params), $fixes))
+		{
+			return false;
+		}
+		if ($step === SetupState::StepNotify && $this->notifyMeaningChanged())
+		{
+			// the decision about the changed meaning of the unblock mails is made with it
+			$this->setupState()->setStatus(SetupState::StepNotifyMeaning, SetupState::Done);
+			$this->saveSetupState();
+		}
+		return true;
+	}
+
+	/**
+	 * Whether the notifications step has to explain that the unblock mails
+	 * ("notifyBlockedUser") changed their meaning: 1 meant "for any address"
+	 * in 1.x and means "only for addresses the user logged in from before"
+	 * now - and the update came from 1.x, with the setting on.
+	 */
+	public function notifyMeaningChanged(): bool
+	{
+		return $this->setupState()->fromBefore200() && Settings::int($this->settings(), 'notifyBlockedUser') !== 0;
+	}
+
+	/** How many users have a Joomla API token (enabled): the context of the API in the protected parts. */
+	public function apiTokenUsers(): int
+	{
+		try
+		{
+			$db = $this->getDatabase();
+			$query = $db->createQuery()
+				->select('COUNT(DISTINCT '.$db->quoteName('t.user_id').')')
+				->from($db->quoteName('#__user_profiles', 't'))
+				->innerJoin($db->quoteName('#__user_profiles', 'e').' ON '.$db->quoteName('e.user_id').' = '.
+					$db->quoteName('t.user_id'))
+				->where($db->quoteName('t.profile_key').' = '.$db->quote('joomlatoken.token'))
+				->where($db->quoteName('e.profile_key').' = '.$db->quote('joomlatoken.enabled'))
+				->where($db->quoteName('e.profile_value').' = '.$db->quote('1'));
+			$db->setQuery($query);
+			return (int) $db->loadResult();
+		}
+		catch (\Throwable $e)
+		{
+			return 0;
+		}
+	}
+
+	/** The trusted proxies of the saved settings (none while proxy support is off). */
+	private function trustedProxies(): array
+	{
+		$proxy = ProxyDetector::proxySettings($this->settings());
+		return $proxy['useProxy'] ? $proxy['trusted'] : array();
+	}
+
+	/** What the clean-up after the proxy fix finds, see ProxyCleanup::findings(). */
+	public function cleanupFindings(): array
+	{
+		return (new ProxyCleanup($this->repositories()))->findings($this->trustedProxies());
+	}
+
+	/**
+	 * The blocks which look like a proxy's (see ProxyCleanup::suspiciousBlocks()),
+	 * for the request $server (default: this one).
+	 */
+	public function suspiciousBlocks(?array $server = null): array
+	{
+		$server = $server ?? $_SERVER;
+		return (new ProxyCleanup($this->repositories()))->suspiciousBlocks((string) ($server['REMOTE_ADDR'] ?? ''));
+	}
+
+	/**
+	 * The clean-up after the proxy fix (see ProxyCleanup::clean()); the
+	 * .htaccess file and the nginx deny file lose the blocks lifted.
+	 */
+	public function cleanup(): bool
+	{
+		if (count($this->trustedProxies()) === 0)
+		{
+			$this->setError(Text::_('COM_BFSTOP_SETUP_CLEANUP_ERROR_NO_PROXY'));
+			return false;
+		}
+		$removed = (new ProxyCleanup($this->repositories()))->clean($this->trustedProxies());
+		if (count($removed['blockIds']) > 0)
+		{
+			UnblockHelper::removeLiftedHtaccessBlocks($this->repositories()->logger());
+			ActionLogHelper::log('blocks_lifted', array('ipaddresses' => $removed['blocks']));
+		}
+		$this->setupState()->setStatus(SetupState::StepCleanup, SetupState::Done);
+		$this->saveSetupState();
+		ActionLogHelper::log('setup_step_applied', array('step' => SetupState::StepCleanup));
+		return true;
+	}
+
+	/**
+	 * The .htaccess file of the settings, and whether it still has the block
+	 * section of an earlier version (which lets everybody who isn't blocked
+	 * past the other access controls of the directory), with the section as
+	 * it is and as it would be rewritten.
+	 *
+	 * @return array{file: string, present: bool, current: string[], proposed: string[]}
+	 */
+	public function legacyHtaccess(): array
+	{
+		$htaccess = new HtaccessHelper(HtaccessHelper::resolvePath(Settings::string($this->settings(), 'htaccessPath')), null);
+		try
+		{
+			$present = is_file($htaccess->getFileName()) && $htaccess->hasLegacySection();
+			$preview = $present ? $htaccess->sectionPreview() : array('current' => array(), 'proposed' => array());
+		}
+		catch (\Throwable $e)
+		{
+			$present = false;
+			$preview = array('current' => array(), 'proposed' => array());
+		}
+		return array('file' => $htaccess->getFileName(), 'present' => $present) + $preview;
+	}
+
+	/** Rewrites the block section of an earlier version in .htaccess (see HtaccessHelper::upgradeFormat()). */
+	public function upgradeHtaccess(): bool
+	{
+		$htaccess = new HtaccessHelper(HtaccessHelper::resolvePath(Settings::string($this->settings(), 'htaccessPath')),
+			$this->repositories()->logger());
+		if (!$htaccess->upgradeFormat())
+		{
+			$this->setError(Text::sprintf('COM_BFSTOP_SETUP_HTACCESS_ERROR_WRITE',
+				htmlspecialchars($htaccess->getFileName(), ENT_QUOTES, 'UTF-8')));
+			return false;
+		}
+		$this->setupState()->setStatus(SetupState::StepHtaccess, SetupState::Done);
+		$this->saveSetupState();
+		ActionLogHelper::log('setup_step_applied', array('step' => SetupState::StepHtaccess));
+		return true;
 	}
 
 	/** Joomla's "Behind Load Balancer" (see ProxyDetector::loadBalancerHint()). */

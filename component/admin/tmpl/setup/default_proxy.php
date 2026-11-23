@@ -44,6 +44,14 @@ $action = Route::_('index.php?option=com_bfstop&view=setup&page=proxy');
 </div>
 <?php endforeach; ?>
 
+<?php if (count($this->suspicious) > 0): ?>
+<div class="alert alert-warning">
+	<?php echo Text::sprintf('COM_BFSTOP_SETUP_PROXY_SUSPICIOUS_BLOCKS',
+		'<code>'.implode('</code>, <code>', array_map(array($this, 'escape'), $this->suspicious)).'</code>',
+		Route::_('index.php?option=com_bfstop&view=blocklist')); ?>
+</div>
+<?php endif; ?>
+
 <div class="card mb-3">
 	<div class="card-body">
 		<h3 class="card-title h5"><?php echo Text::_('COM_BFSTOP_SETUP_PROXY_DETECTED'); ?></h3>

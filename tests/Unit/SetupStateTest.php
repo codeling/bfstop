@@ -68,6 +68,12 @@ class SetupStateTest extends TestCase
 			'completed' => 1700000000, 'headers' => array_merge(array('HTTP_X_FORWARDED_FOR', 'HTTP_FORWARDED', 'HTTP_X_FORWARDED',
 			'HTTP_X_CLUSTER_CLIENT_IP', 'HTTP_FORWARDED_FOR', 'HTTP_CLIENT_IP', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP',
 			'HTTP_TRUE_CLIENT_IP', 'HTTP_FASTLY_CLIENT_IP'))))));
+		foreach (array(SetupState::StepProxy, SetupState::StepBlockMode, SetupState::StepCleanup, SetupState::StepHtaccess,
+			SetupState::StepNotify, SetupState::StepNotifyMeaning, SetupState::StepParts, SetupState::StepRateLimit) as $step)
+		{
+			// the longest status of every step
+			$state->setStatus($step, SetupState::Skipped);
+		}
 		for ($i = 0; $i < 40; ++$i)
 		{
 			$state->dismiss(substr(sha1((string) $i), 0, 12));

@@ -25,7 +25,7 @@ $completed = $this->setup->completedAt();
 </p>
 <?php endif; ?>
 <ul>
-<?php foreach (SetupModel::PageSteps as $page => $step): ?>
+<?php foreach (array_intersect_key(SetupModel::PageSteps, array_flip($this->pages)) as $page => $step): ?>
 	<li>
 		<a href="<?php echo Route::_('index.php?option=com_bfstop&view=setup&page='.$page); ?>"><?php echo Text::_('COM_BFSTOP_SETUP_PAGE_'.strtoupper($page)); ?></a>:
 		<?php echo Text::_('COM_BFSTOP_SETUP_STATUS_'.strtoupper($this->setup->status($step))); ?>
@@ -34,6 +34,9 @@ $completed = $this->setup->completedAt();
 </ul>
 <p><?php echo Text::sprintf('COM_BFSTOP_SETUP_SUMMARY_SETTINGS', (int) $this->setting('blockNumber'),
 	DurationHelper::toReadable((int) $this->setting('checkInterval')), DurationHelper::toReadable((int) $this->setting('blockDuration'))); ?></p>
+<?php if (!in_array('ratelimit', $this->pages, true)): ?>
+<p><?php echo Text::_('COM_BFSTOP_SETUP_RATELIMIT_'.$this->rateLimitAdvice()); ?></p>
+<?php endif; ?>
 <?php if ($this->loadBalancerHint !== null): ?>
 <p class="alert alert-info"><?php echo Text::_('COM_BFSTOP_SETUP_LOADBALANCER_'.strtoupper($this->loadBalancerHint)); ?></p>
 <?php endif; ?>

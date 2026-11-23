@@ -212,4 +212,50 @@ class FailedLoginRepository extends Repository
 			$this->trimOldest(self::Table, 'id', 'id ASC', $maxRows, 5000, ParameterType::INTEGER);
 		}, null);
 	}
+
+	/**
+	 * The addresses (tracked keys) which have failed logins, at most $limit
+	 * of them, those with the most first. Fail-open: none.
+	 *
+	 * @return array<string, int> address => number of failed logins
+	 */
+	public function countsByAddress($limit = 10000)
+	{
+		return $this->failOpen('countsByAddress', function () use ($limit)
+		{
+			$query = $this->db->createQuery()
+				->select($this->db->quoteName('ipaddress'))
+				->select('COUNT(*) AS attempts')
+				->from($this->db->quoteName(self::Table))
+				->group($this->db->quoteName('ipaddress'))
+				->order('attempts DESC');
+			$counts = array();
+			foreach ($this->objects($query, array(), 0, (int) $limit) as $row)
+			{
+				$counts[(string) $row->ipaddress] = (int) $row->attempts;
+			}
+			return $counts;
+		}, array());
+	}
+
+	/**
+	 * Deletes the failed logins of $addresses (tracked keys): those a proxy's
+	 * address was given for its visitors' attempts. Fail-open: they stay.
+	 *
+	 * @param string[] $addresses
+	 */
+	public function deleteFromAddresses(array $addresses)
+	{
+		$addresses = array_values(array_unique(array_map('strval', $addresses)));
+		if (count($addresses) === 0)
+		{
+			return;
+		}
+		$this->failOpen('deleteFromAddresses', function () use ($addresses)
+		{
+			$this->execute($this->db->createQuery()
+				->delete($this->db->quoteName(self::Table))
+				->whereIn($this->db->quoteName('ipaddress'), $addresses, ParameterType::STRING));
+		}, null);
+	}
 }

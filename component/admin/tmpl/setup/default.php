@@ -7,7 +7,6 @@
 **/
 defined('_JEXEC') or die;
 
-use Codeling\Component\Bfstop\Administrator\Model\SetupModel;
 use Joomla\CMS\Language\Text;
 use Joomla\CMS\Router\Route;
 
@@ -17,7 +16,7 @@ $badges = array('done' => 'bg-success', 'skipped' => 'bg-secondary', 'pending' =
 	<div class="col-lg-3">
 		<nav aria-label="<?php echo Text::_('COM_BFSTOP_SETUP_STEPS'); ?>">
 			<ol class="list-group list-group-numbered mb-3">
-<?php foreach (SetupModel::Pages as $page): ?>
+<?php foreach ($this->pages as $page): ?>
 <?php $status = $this->pageStatus($page); ?>
 				<li class="list-group-item d-flex justify-content-between align-items-start<?php echo $page === $this->page ? ' active' : ''; ?>">
 					<a class="ms-2 me-auto<?php echo $page === $this->page ? ' link-light' : ''; ?>"

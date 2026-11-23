@@ -82,18 +82,19 @@ class SetupController extends BaseController
 	}
 
 	/**
-	 * Redirects to $page with the outcome of a task of $model: $success's
-	 * message, or the model's errors.
+	 * Redirects with the outcome of a task of $model on the page $page: to
+	 * the next page with $success's message, or back to $page with the
+	 * model's errors.
 	 */
-	private function finish(SetupModel $model, bool $ok, string $page, string $success, string $failurePage = ''): void
+	private function finish(SetupModel $model, bool $ok, string $page, string $success): void
 	{
 		if ($ok)
 		{
-			$this->setRedirect(self::pageUrl($page), $success, 'message');
+			$this->setRedirect(self::pageUrl($model->nextPage($page)), $success, 'message');
 			return;
 		}
 		$errors = array_map(fn ($error) => $error instanceof \Throwable ? $error->getMessage() : (string) $error, $model->getErrors());
-		$this->setRedirect(self::pageUrl($failurePage !== '' ? $failurePage : $page), implode('<br>', $errors), 'error');
+		$this->setRedirect(self::pageUrl($page), implode('<br>', $errors), 'error');
 	}
 
 	/**
@@ -117,7 +118,7 @@ class SetupController extends BaseController
 		{
 			$this->keepProxyInput(null);
 		}
-		$this->finish($model, $ok, 'blockmode', Text::_('COM_BFSTOP_SETUP_PROXY_SAVED').' '.Text::_('COM_BFSTOP_SETUP_REMINDER'), 'proxy');
+		$this->finish($model, $ok, 'proxy', Text::_('COM_BFSTOP_SETUP_PROXY_SAVED').' '.Text::_('COM_BFSTOP_SETUP_REMINDER'));
 	}
 
 	/**
@@ -177,7 +178,7 @@ class SetupController extends BaseController
 		$ok = $model->confirmBlockMode($this->input->post->getCmd('blockMode', ''),
 			$this->input->post->exists('nginxDenyFile') ? $this->input->post->getString('nginxDenyFile', '') : null,
 			$this->input->post->getBool('confirmOff', false), $this->fixes());
-		$this->finish($model, $ok, 'summary', Text::_('COM_BFSTOP_SETUP_BLOCKMODE_SAVED'), 'blockmode');
+		$this->finish($model, $ok, 'blockmode', Text::_('COM_BFSTOP_SETUP_BLOCKMODE_SAVED'));
 	}
 
 	/** The blocking-mode step: whether the web server honours the .htaccess file (see HtaccessCheckHelper). */
@@ -216,5 +217,72 @@ class SetupController extends BaseController
 		}
 		$this->setupModel()->dismiss($this->input->post->getAlnum('fingerprint', ''));
 		$this->setRedirect(self::pageUrl('proxy'), Text::_('COM_BFSTOP_SETUP_DISMISSED'));
+	}
+
+	/** The page of the step $step (SetupModel::PageSteps), the summary for any other. */
+	private static function pageOf(string $step): string
+	{
+		$page = array_search($step, SetupModel::PageSteps, true);
+		return $page === false ? 'summary' : (string) $page;
+	}
+
+	/** Skips an optional step. */
+	public function skip()
+	{
+		$step = $this->input->post->getCmd('step', '');
+		if (!$this->allowed(self::pageOf($step)))
+		{
+			return;
+		}
+		$model = $this->setupModel();
+		$this->finish($model, $model->skip($step), self::pageOf($step), Text::_('COM_BFSTOP_SETUP_SKIPPED'));
+	}
+
+	/** A step which explains (rate limiting, the scheduler), read. */
+	public function acknowledge()
+	{
+		$step = $this->input->post->getCmd('step', '');
+		if (!$this->allowed(self::pageOf($step)))
+		{
+			return;
+		}
+		$model = $this->setupModel();
+		$this->finish($model, $model->acknowledge($step), self::pageOf($step), Text::_('COM_BFSTOP_SETUP_STEP_SAVED'));
+	}
+
+	/** A step of settings (notifications, protected parts, privacy), saved. */
+	public function saveFields()
+	{
+		$step = $this->input->post->getCmd('step', '');
+		if (!$this->allowed(self::pageOf($step)))
+		{
+			return;
+		}
+		$form = (array) $this->input->post->get('jform', array(), 'array');
+		$model = $this->setupModel();
+		$this->finish($model, $model->saveFields($step, (array) ($form['params'] ?? array()), $this->fixes()),
+			self::pageOf($step), Text::_('COM_BFSTOP_SETUP_STEP_SAVED'));
+	}
+
+	/** The clean-up after the proxy fix. */
+	public function cleanup()
+	{
+		if (!$this->allowed('cleanup'))
+		{
+			return;
+		}
+		$model = $this->setupModel();
+		$this->finish($model, $model->cleanup(), 'cleanup', Text::_('COM_BFSTOP_SETUP_CLEANUP_DONE'));
+	}
+
+	/** The block section of an earlier version in .htaccess, rewritten. */
+	public function upgradeHtaccess()
+	{
+		if (!$this->allowed('htaccess'))
+		{
+			return;
+		}
+		$model = $this->setupModel();
+		$this->finish($model, $model->upgradeHtaccess(), 'htaccess', Text::_('COM_BFSTOP_SETUP_HTACCESS_DONE'));
 	}
 }
