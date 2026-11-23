@@ -526,7 +526,9 @@ class SetupModel extends BaseDatabaseModel
 			$this->setError(Text::_('COM_BFSTOP_SETUP_PROXY_ERROR_HEADER'));
 			return false;
 		}
-		if (count(IpHelper::parseTrustedProxies($trusted)) === 0)
+		// in the form the settings page's field takes back (see formatTrustedProxies())
+		$trusted = IpHelper::formatTrustedProxies($trusted);
+		if ($trusted === '')
 		{
 			$this->setError(Text::_('COM_BFSTOP_SETUP_PROXY_ERROR_TRUSTED'));
 			return false;

@@ -350,7 +350,7 @@ class SetupTest extends IntegrationTestCase
 		$this->assertSame(1, (int) $this->queryValue(self::Enabled));
 		$stored = $this->stored();
 		$this->assertSame('1', (string) $stored['useProxy']);
-		$this->assertSame("10.0.0.5\n10.0.0.6", $stored['proxyIpAddress']);
+		$this->assertSame('10.0.0.5, 10.0.0.6', $stored['proxyIpAddress']);
 		$this->assertSame('loginonly', $stored['blockMode']);
 		$this->assertSame('admin@example.org', $stored['emailaddress']);
 		$this->assertTrue($this->state()->isCompleted());
@@ -633,5 +633,39 @@ class SetupTest extends IntegrationTestCase
 		$this->assertCount(1, $facts['tasks']);
 		$this->assertSame('Brute Force Stop maintenance', $facts['tasks'][0]->title);
 		$this->assertIsBool($facts['lazy']);
+	}
+
+	/**
+	 * Trusted proxies stored by the assistant (a list of several lines, as
+	 * the Cloudflare ranges come) survive the settings page: its field is one
+	 * line, from which a browser drops line breaks - a list stored with them
+	 * would come back glued together, and no later save would validate.
+	 */
+	public function testTrustedProxiesStoredByTheAssistantSurviveTheSettingsPage()
+	{
+		$server = array('REMOTE_ADDR' => '173.245.48.9', 'HTTP_CF_CONNECTING_IP' => '203.0.113.7');
+		$model = $this->model();
+		$this->assertTrue($model->confirmProxy(\Codeling\Library\Bfstop\Helper\IpHelper::CloudflareHeader,
+			"173.245.48.0/20\n103.21.244.0/22\r\n2400:cb00::/32", '203.0.113.7', array(), $server), self::errors($model));
+		$stored = $this->stored();
+		$this->assertSame('173.245.48.0/20, 103.21.244.0/22, 2400:cb00::/32', $stored['proxyIpAddress']);
+
+		// the field as the settings page renders it, and what a browser posts of it
+		$form = \Codeling\Component\Bfstop\Administrator\Model\SettingsModel::settingsForm();
+		$form->bind(array('params' => \Codeling\Component\Bfstop\Administrator\Model\SettingsModel::paramsForForm($stored)));
+		$this->assertMatchesRegularExpression('/<input[^>]*type="text"[^>]*value="([^"]*)"/', $form->getInput('proxyIpAddress', 'params'));
+		preg_match('/value="([^"]*)"/', $form->getInput('proxyIpAddress', 'params'), $m);
+		$posted = str_replace(array("\r", "\n"), '', html_entity_decode($m[1], ENT_QUOTES, 'UTF-8'));
+		$this->assertSame($stored['proxyIpAddress'], $posted);
+
+		$settings = new \Codeling\Component\Bfstop\Administrator\Model\SettingsModel(array('ignore_request' => true),
+			new MVCFactory('Codeling\\Component\\Bfstop'));
+		$settings->setDatabase($this->db);
+		$valid = $settings->validate(\Codeling\Component\Bfstop\Administrator\Model\SettingsModel::settingsForm(),
+			array('params' => \Codeling\Component\Bfstop\Administrator\Model\SettingsModel::paramsForForm(
+				array('proxyIpAddress' => $posted) + $stored)));
+		$this->assertIsArray($valid, implode(' ', array_map('strval', $settings->getErrors())));
+		$this->assertSame(array('173.245.48.0/20', '103.21.244.0/22', '2400:cb00::/32'),
+			\Codeling\Library\Bfstop\Helper\IpHelper::parseTrustedProxies($valid['params']['proxyIpAddress']));
 	}
 }

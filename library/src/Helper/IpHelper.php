@@ -358,6 +358,18 @@ class IpHelper
 	}
 
 	/**
+	 * The trusted proxies $setting (a list as parseTrustedProxies() takes
+	 * it) as they are stored: separated by a comma and a space. The settings
+	 * page's field is one line - a browser drops the line breaks of its
+	 * value - so a list with line breaks would come back from it as one
+	 * entry glued to the next.
+	 */
+	public static function formatTrustedProxies($setting): string
+	{
+		return implode(', ', self::parseTrustedProxies($setting));
+	}
+
+	/**
 	 * The trusted proxies of the settings, if proxy support is on
 	 * (see getAddress()); empty otherwise.
 	 *

@@ -478,4 +478,12 @@ class IpHelperTest extends TestCase
 		$this->assertNull(IpHelper::lastHeaderAddress('HTTP_X_FORWARDED_FOR', '203.0.113.7, unknown'));
 		$this->assertNull(IpHelper::lastHeaderAddress(IpHelper::CloudflareHeader, '203.0.113.7, 1.2.3.4'));
 	}
+
+	/** The stored form of the trusted proxies: one line, whatever separated them. */
+	public function testFormatTrustedProxies()
+	{
+		$this->assertSame('10.0.0.5, 10.0.0.0/24, 2001:db8::/32',
+			IpHelper::formatTrustedProxies("10.0.0.5\n10.0.0.0/24;\r\n 2001:db8::/32,"));
+		$this->assertSame('', IpHelper::formatTrustedProxies(" \n "));
+	}
 }

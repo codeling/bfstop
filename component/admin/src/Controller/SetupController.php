@@ -161,7 +161,7 @@ class SetupController extends BaseController
 		$this->keepProxyInput(array(
 			'choice' => 'proxy',
 			'header' => IpHelper::CloudflareHeader,
-			'trusted' => implode("\n", $ranges),
+			'trusted' => IpHelper::formatTrustedProxies(implode(' ', $ranges)),
 			'previewed' => true,
 		));
 		$this->setRedirect(self::pageUrl('proxy').'#preview', Text::sprintf('COM_BFSTOP_SETUP_CLOUDFLARE_FETCHED', count($ranges)));

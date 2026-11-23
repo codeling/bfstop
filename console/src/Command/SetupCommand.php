@@ -120,7 +120,7 @@ class SetupCommand extends BfstopCommand
 
 		$ok = $noProxy
 			? $model->confirmNoProxy(true)
-			: $model->confirmProxy((string) $headerKey, implode("\n", IpHelper::parseTrustedProxies($trusted)), null);
+			: $model->confirmProxy((string) $headerKey, $trusted, null);
 		if (!$ok)
 		{
 			$io->error(self::errors($model));
