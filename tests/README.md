@@ -60,9 +60,12 @@ the site only needs to be set up again when the database schema changes.
   the steps of settings, hashing the usernames of 1.x, the scheduler), and
   the console commands (called on the installed site). `InstallerScriptTest` has the
   activation model of the installation and the update (the plugin
-  disabled by an update behind a proxy), and checks that the update tells
-  the proxy scenarios apart as the library's `ProxyDetector` does (whose
-  unit test has the table of scenarios).
+  disabled by an update behind a proxy, not where the proxy is set up), and
+  checks that the update tells the proxy scenarios apart and matches
+  trusted proxies as the library does (`ProxyDetector`, whose unit test has
+  the table of scenarios, and `IpHelper`). `CloudflareRangesTest` fetches
+  Cloudflare's ranges from PHP's built-in web server (with
+  `fixtures/cloudflare.php`): no redirect is followed, no long answer read.
 - `Integration/QueryCountTest.php` keeps the number of queries a page view, the
   request of a blocked address and a failed login send within limits (the
   scripts of `Integration/fixtures` print the queries when called with

@@ -721,28 +721,55 @@ class SetupModel extends BaseDatabaseModel
 		$this->saveSetupState();
 	}
 
+	// the most a list of Cloudflare's ranges may hold, in bytes: they are a
+	// few hundred (cloudflareRanges() takes 200 entries at most)
+	public const CloudflareMaxBytes = 16384;
+
+	/**
+	 * The options of the requests for Cloudflare's ranges: no redirect
+	 * followed (the lists are where CloudflareRanges says, and only there),
+	 * and with cURL, the transfer broken off past CloudflareMaxBytes.
+	 */
+	public static function cloudflareHttpOptions(): array
+	{
+		$options = array('follow_location' => false);
+		if (defined('CURLOPT_NOPROGRESS'))
+		{
+			$options['transport.curl'] = array(
+				CURLOPT_MAXFILESIZE => self::CloudflareMaxBytes,
+				CURLOPT_NOPROGRESS => false,
+				CURLOPT_PROGRESSFUNCTION => fn ($curl, $total, $received) => $received > self::CloudflareMaxBytes ? 1 : 0,
+				CURLOPT_MAXREDIRS => 0,
+			);
+		}
+		return $options;
+	}
+
 	/**
 	 * Cloudflare's address ranges, fetched from cloudflare.com (only when the
-	 * administrator asks for them): addresses and networks only, none wider
-	 * than the trusted proxies may be (see ProxylistRule). Null if they
-	 * can't be fetched, or something else came back.
+	 * administrator asks for them; $urls for a test): addresses and networks
+	 * only, none wider than the trusted proxies may be (see ProxylistRule).
+	 * Null if they can't be fetched, or something else came back - a
+	 * redirect, or more than CloudflareMaxBytes.
 	 *
+	 * @param string[] $urls
 	 * @return string[]|null
 	 */
-	public static function cloudflareRanges(): ?array
+	public static function cloudflareRanges(array $urls = self::CloudflareRanges): ?array
 	{
 		$ranges = array();
 		try
 		{
-			$http = HttpFactory::getHttp();
-			foreach (self::CloudflareRanges as $url)
+			$http = HttpFactory::getHttp(self::cloudflareHttpOptions());
+			foreach ($urls as $url)
 			{
 				$response = $http->get($url, array(), 10);
-				if ((int) $response->getStatusCode() !== 200)
+				$body = (string) $response->getBody();
+				if ((int) $response->getStatusCode() !== 200 || strlen($body) > self::CloudflareMaxBytes)
 				{
 					return null;
 				}
-				foreach (preg_split('/\s+/', trim((string) $response->getBody())) as $entry)
+				foreach (preg_split('/\s+/', trim($body)) as $entry)
 				{
 					$parts = explode('/', $entry, 2);
 					$minBits = str_contains($parts[0], ':') ? IpValidateHelper::MinPrefixIPv6 : IpValidateHelper::MinPrefixIPv4;
