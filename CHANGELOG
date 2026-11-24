@@ -174,6 +174,16 @@
     validates with its own fields and stores the entry in canonical form;
     an update that can't migrate the settings says so; known addresses of
     two logins at the same time are one row; the log sorts by severity
+  - A login of a user with multi-factor authentication is a success only
+    once the second factor is done (issue #342, finding 4): Joomla
+    dispatches onUserLogin when the password is right, so BFStop used to
+    remember the address as one the user logs in from (the known-address
+    bonus, the unblock mail), and to forget its failed logins, on a
+    correct password alone. Now it holds the login back and completes it
+    with the first request in which Joomla's session says that the
+    multi-factor authentication is done (or none was needed). Users
+    without multi-factor authentication, and logins of the API, are
+    handled as before
   - Hand-written <If> blocks in the .htaccess block section are kept intact
     by every change and by the uninstallation
   - Code clean-up: every setting's default is in Settings::Defaults (and

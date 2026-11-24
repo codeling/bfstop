@@ -7,11 +7,13 @@
 **/
 namespace Codeling\Bfstop\Tests\Integration;
 
+use Codeling\Plugin\System\Bfstop\Service\MfaGate;
 use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Extension\PluginInterface;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Plugin\PluginHelper;
+use Joomla\CMS\User\User;
 use Joomla\DI\Container;
 use Joomla\Event\Dispatcher;
 use Joomla\Event\Event;
@@ -156,6 +158,172 @@ class PluginEventsTest extends IntegrationTestCase
 		$_SERVER['REMOTE_ADDR'] = '2001:db8:1:2::3';
 		$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
 		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+	}
+
+	/**
+	 * Gives the account a multi-factor authentication method, as Joomla
+	 * stores it. The options matter: Joomla ignores a record without any (it
+	 * can't be used), so that the user would have no MFA at all.
+	 */
+	private function addMfaRecord($userId)
+	{
+		$this->insert('#__user_mfa', array('user_id' => $userId, 'title' => 'Test', 'method' => 'totp',
+			'default' => 1, 'options' => '{"key":"JBSWY3DPEHPK3PXP"}', 'created_on' => self::minutesAgo(0)));
+	}
+
+	/** what is left in the session and the identity by a test of the MFA gate */
+	private function cleanUpMfaTest($userId)
+	{
+		$app = Factory::getApplication();
+		$session = $app->getSession();
+		$session->clear(MfaGate::CheckedKey);
+		$session->clear(MfaGate::HeldKey);
+		$app->loadIdentity(new User());
+		$this->db->setQuery('DELETE FROM #__user_mfa WHERE user_id='.$userId);
+		$this->db->execute();
+	}
+
+	/**
+	 * Joomla dispatches onUserLogin when the password is right; the second
+	 * factor comes with later requests (issue #342, finding 4). Until Joomla
+	 * says that it is done (its session flag), the login is no success:
+	 * the address isn't remembered and its failed logins keep counting.
+	 */
+	public function testLoginOfAUserWithMfaCountsOnceTheMfaIsDone()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->assertGreaterThan(0, $userId);
+		$this->addMfaRecord($userId);
+		$ip = '203.0.113.50';
+		$app = Factory::getApplication();
+		try
+		{
+			$this->failedLogin($ip, 'Admin');
+			$this->failedLogin($ip, 'Admin');
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin', 'email' => 'admin@example.org'), array()));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'),
+				'a correct password alone makes the address a known one');
+			$this->assertSame(2, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'),
+				'a correct password alone forgets the failed logins');
+
+			// the requests after it, while Joomla asks for the second factor
+			$app->loadIdentity(User::getInstance($userId));
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+			$this->assertSame(2, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+
+			// the second factor is validated: Joomla sets its flag
+			$app->getSession()->set(MfaGate::CheckedKey, 1);
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame('Admin', $this->queryValue("SELECT username FROM #__bfstop_knownip WHERE ipaddress='$ip'"));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/** the login held back is completed once, not by every request after it */
+	public function testLoginHeldBackForMfaIsCompletedOnce()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$app = Factory::getApplication();
+		try
+		{
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.52';
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+			$app->loadIdentity(User::getInstance($userId));
+			$app->getSession()->set(MfaGate::CheckedKey, 1);
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(1, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ipaddress='203.0.113.52'"));
+			// another address, with nothing held back any more
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.53';
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(0, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_knownip WHERE ipaddress='203.0.113.53'"));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/**
+	 * The login held back is completed for the user it was for, and only for
+	 * one who is still logged in with the flag set.
+	 */
+	public function testLoginHeldBackForMfaIsNotCompletedForAnotherUser()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$app = Factory::getApplication();
+		try
+		{
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.51';
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+			$app->getSession()->set(MfaGate::CheckedKey, 1);
+			// nobody logged in: a guest's request completes nothing
+			$this->dispatch('onAfterDispatch', array());
+			$other = new User();
+			$other->id = $userId + 1000;
+			$other->guest = 0;
+			$other->username = 'somebody-else';
+			$app->loadIdentity($other);
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/** a login held back for a day or more is not completed any more */
+	public function testLoginHeldBackForMfaExpires()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$app = Factory::getApplication();
+		try
+		{
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.54';
+			$app->getSession()->set(MfaGate::HeldKey, json_encode(array('username' => 'Admin', 'email' => '',
+				'time' => time() - MfaGate::MaxAgeSeconds - 60)));
+			$app->loadIdentity(User::getInstance($userId));
+			$app->getSession()->set(MfaGate::CheckedKey, 1);
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/**
+	 * A user who logs in again (or whose account has no MFA) supersedes the
+	 * login held back: it is not completed later.
+	 */
+	public function testLoginWithoutMfaSupersedesTheOneHeldBack()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$app = Factory::getApplication();
+		try
+		{
+			$_SERVER['REMOTE_ADDR'] = '203.0.113.55';
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+			// the account of the next login has no MFA: counted at once
+			$this->dispatch('onUserLogin', array(array('username' => 'nobody-with-mfa'), array()));
+			$this->assertSame(1, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_knownip'));
+			$this->assertFalse($app->getSession()->has(MfaGate::HeldKey));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
 	}
 
 	/**

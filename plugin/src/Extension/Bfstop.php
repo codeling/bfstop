@@ -25,6 +25,7 @@ use Codeling\Library\Bfstop\Service\DailyMaintenance;
 use Codeling\Library\Bfstop\Service\LoginService;
 use Codeling\Library\Bfstop\Settings;
 use Codeling\Plugin\System\Bfstop\Service\LoginTurn;
+use Codeling\Plugin\System\Bfstop\Service\MfaGate;
 use Codeling\Plugin\System\Bfstop\Service\RequestClassifier;
 use Codeling\Plugin\System\Bfstop\Service\Responder;
 use Joomla\CMS\Event\User\LoginEvent;
@@ -39,9 +40,10 @@ use Joomla\Event\SubscriberInterface;
  * Codeling\Library\Bfstop): BlockPolicy, with BlockService and LoginService
  * doing what it decides, and DailyMaintenance. What a request is and what
  * the client is told are the plugin's own: RequestClassifier, Responder and
- * LoginTurn (Service namespace of the plugin). Its params are the settings
- * of BFStop, which are the component's (see services/provider.php and the
- * library's Settings): the plugin has none of its own.
+ * LoginTurn (Service namespace of the plugin), and so is the wait for a
+ * second factor before a login counts as a success (MfaGate). Its params are
+ * the settings of BFStop, which are the component's (see services/provider.php
+ * and the library's Settings): the plugin has none of its own.
  */
 class Bfstop extends CMSPlugin implements SubscriberInterface
 {
@@ -67,6 +69,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	// kept for the whole request, unlike the others: the turn of a login
 	// lasts from its routing to its login event
 	private ?LoginTurn $loginTurn = null;
+	// created on first use (see mfa())
+	private ?MfaGate $mfaGate = null;
 	// the client's actual address while handling a failed login; the failed
 	// login entry holds the key it is tracked under instead (IPv6: its network)
 	private ?string $clientAddress = null;
@@ -90,6 +94,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			'onAfterInitialise'  => 'onAfterInitialise',
 			'onAfterRoute'       => 'onAfterRoute',
 			'onAfterApiRoute'    => 'onAfterApiRoute',
+			'onAfterDispatch'    => 'onAfterDispatch',
 		);
 	}
 
@@ -125,6 +130,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 	private function isAccount($login): bool
 	{
 		return $this->accounts[$login] ??= $this->repositories->users()->accountExists($login);
+	}
+
+	private function mfa(): MfaGate
+	{
+		return $this->mfaGate ??= new MfaGate($this->getApplication());
 	}
 
 	private function notifier(): NotifierHelper
@@ -358,9 +368,69 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		$info->email = (string) ($user['email'] ?? '');
 		$this->logger->log('Successful login by '.$info->username.
 			' from IP address '.$info->ipaddress, Log::DEBUG);
+		// a login held back before is another one, which is not completed now
+		$this->mfa()->discard();
+		// Joomla dispatches this event when the password is right: for a
+		// user with multi-factor authentication, the second factor is still
+		// to come (issue #342, finding 4). The login counts as a success -
+		// the address is remembered, its failed logins are forgotten - when
+		// it is done, see onAfterDispatch()
+		if ($this->mfa()->hasMfa($info->username) && $this->mfa()->hold($info->username, $info->email))
+		{
+			$this->logger->log('Password of '.$info->username.' is right, but the login is not a success '.
+				'before its multi-factor authentication is done', Log::DEBUG);
+			return;
+		}
+		$this->recordSuccess($info);
+	}
+
+	/**
+	 * What a successful login of $info (ipaddress, username, email) means for
+	 * the address: see LoginService::recordSuccessfulLogin().
+	 */
+	private function recordSuccess($info)
+	{
 		$this->logins->recordSuccessfulLogin($info, $this->trackedAddress($info->ipaddress),
 			IpHelper::trackedAddress($info->ipaddress, IpHelper::trustPrefixLength(
 				$this->intParam('ipv6PrefixLength'))));
+	}
+
+	/**
+	 * Completes a login which onUserLogin() held back, with the first request
+	 * in which Joomla says that its multi-factor authentication is done (the
+	 * captive page validated, or none needed). Called for every dispatched
+	 * request: unless there is such a login, it costs a look at the user
+	 * logged in, and at the session if there is one (see
+	 * MfaGate::releaseIfChecked()).
+	 *
+	 * A login which isn't completed (the second factor wrong, or never
+	 * entered) leaves the address unknown and its failed logins counting.
+	 */
+	public function onAfterDispatch($event)
+	{
+		$held = $this->mfa()->releaseIfChecked();
+		if ($held === null)
+		{
+			return;
+		}
+		$this->init();
+		if (!$this->isEnabledForCurrentOrigin())
+		{
+			return;
+		}
+		$ipAddress = IpHelper::getAddress($this->logger);
+		if ($ipAddress === '')
+		{
+			$this->logger->log('Empty IP address!', Log::ERROR);
+			return;
+		}
+		$info = new \stdClass();
+		$info->ipaddress = $ipAddress;
+		$info->username = $held['username'];
+		$info->email = $held['email'];
+		$this->logger->log('Multi-factor authentication of '.$info->username.
+			' is done, successful login from IP address '.$info->ipaddress, Log::DEBUG);
+		$this->recordSuccess($info);
 	}
 
 	public function onAfterInitialise($event)
