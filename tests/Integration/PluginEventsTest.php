@@ -8,6 +8,7 @@
 namespace Codeling\Bfstop\Tests\Integration;
 
 use Codeling\Plugin\System\Bfstop\Service\MfaGate;
+use Joomla\CMS\Event\MultiFactor\NotifyActionLog;
 use Joomla\CMS\Event\User\LoginEvent;
 use Joomla\CMS\Event\User\LoginFailureEvent;
 use Joomla\CMS\Extension\PluginInterface;
@@ -65,9 +66,17 @@ class PluginEventsTest extends IntegrationTestCase
 	{
 		// the login events as Joomla's CMSApplication::login() dispatches them
 		$classes = array('onUserLogin' => LoginEvent::class, 'onUserLoginFailure' => LoginFailureEvent::class);
-		$event = isset($classes[$eventName])
-			? new $classes[$eventName]($eventName, array('subject' => $arguments[0], 'options' => $arguments[1]))
-			: new Event($eventName, $arguments);
+		if (str_starts_with($eventName, 'onComUsersCaptive'))
+		{
+			// as the captive controller dispatches them
+			$event = new NotifyActionLog($eventName, $arguments);
+		}
+		else
+		{
+			$event = isset($classes[$eventName])
+				? new $classes[$eventName]($eventName, array('subject' => $arguments[0], 'options' => $arguments[1]))
+				: new Event($eventName, $arguments);
+		}
 		Factory::getApplication()->getDispatcher()->dispatch($eventName, $event);
 	}
 
@@ -323,6 +332,110 @@ class PluginEventsTest extends IntegrationTestCase
 		finally
 		{
 			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/** logs the user in, as far as Joomla's identity goes: what a request after the password has */
+	private function loginIdentity($username)
+	{
+		$user = User::getInstance((int) $this->queryValue("SELECT id FROM #__users WHERE username='".$username."'"));
+		Factory::getApplication()->loadIdentity($user);
+	}
+
+	/**
+	 * A wrong second factor is a failed login of the user logged in with the
+	 * password (issue #342, finding 4): counted towards the block of the
+	 * address like a wrong password, whether the code was wrong or the limit
+	 * of tries of the method was reached.
+	 */
+	public function testWrongSecondFactorCountsLikeAFailedPassword()
+	{
+		$ip = '203.0.113.60';
+		$_SERVER['REMOTE_ADDR'] = $ip;
+		$_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0';
+		try
+		{
+			$this->loginIdentity('Admin');
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->assertSame(2, (int) $this->queryValue("SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE ipaddress='$ip' AND username='Admin'"));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+			$this->dispatch('onComUsersCaptiveValidateTryLimitReached', array());
+			$this->assertSame($ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		}
+		finally
+		{
+			Factory::getApplication()->loadIdentity(new User());
+		}
+	}
+
+	/**
+	 * The strongest signal: failed passwords of an address, then the
+	 * password right and the second factor wrong. The login of a user with
+	 * multi-factor authentication doesn't make those forgotten before the
+	 * second factor is done, so they add to the wrong code.
+	 */
+	public function testWrongSecondFactorAddsToTheFailedPasswordsOfTheAddress()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$ip = '203.0.113.61';
+		try
+		{
+			$this->failedLogin($ip, 'Admin');
+			$this->failedLogin($ip, 'Admin');
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+			Factory::getApplication()->loadIdentity(User::getInstance($userId));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'));
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->assertSame($ip, $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/** the second factor of a login done after wrong ones makes them forgotten, as it does the passwords */
+	public function testSecondFactorDoneMakesTheWrongCodesForgotten()
+	{
+		$userId = (int) $this->queryValue("SELECT id FROM #__users WHERE username='Admin'");
+		$this->addMfaRecord($userId);
+		$ip = '203.0.113.62';
+		try
+		{
+			$_SERVER['REMOTE_ADDR'] = $ip;
+			$this->dispatch('onUserLogin', array(array('username' => 'Admin'), array()));
+			Factory::getApplication()->loadIdentity(User::getInstance($userId));
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->assertSame(2, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+			Factory::getApplication()->getSession()->set(MfaGate::CheckedKey, 1);
+			$this->dispatch('onAfterDispatch', array());
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0'));
+		}
+		finally
+		{
+			$this->cleanUpMfaTest($userId);
+		}
+	}
+
+	/** nobody logged in, or the address allowed: nothing to count */
+	public function testWrongSecondFactorOfNobodyOrAnAllowedAddressIsNotCounted()
+	{
+		$_SERVER['REMOTE_ADDR'] = '203.0.113.63';
+		$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+		$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'), 'a guest');
+		$this->insert('#__bfstop_allowlist', array('ipaddress' => '203.0.113.63', 'notes' => ''));
+		try
+		{
+			$this->loginIdentity('Admin');
+			$this->dispatch('onComUsersCaptiveValidateFailed', array('Test'));
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin'), 'an allowed address');
+		}
+		finally
+		{
+			Factory::getApplication()->loadIdentity(new User());
 		}
 	}
 

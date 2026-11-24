@@ -184,6 +184,18 @@
     multi-factor authentication is done (or none was needed). Users
     without multi-factor authentication, and logins of the API, are
     handled as before
+  - A wrong second factor counts like a wrong password (issue #342, finding
+    4): whoever has stolen a password still has the code to guess. The
+    captive page's wrong codes (and its attempts after Joomla's limit of
+    tries) are failed logins of the user logged in, from the address of the
+    request: they count towards its block, are scored by the same signals
+    (a known address is allowed more attempts), appear in the notifications
+    and are forgotten by the successful login of the user. Failed passwords
+    of the address, which a correct password no longer makes forget, add to
+    them. The captive page's code is a login attempt for the block mode
+    "Login only" too, and the codes sent at the same time are handled one
+    after the other, as passwords are. A typo or a clock which is off counts
+    like a mistyped password does
   - Hand-written <If> blocks in the .htaccess block section are kept intact
     by every change and by the uninstallation
   - Code clean-up: every setting's default is in Settings::Defaults (and

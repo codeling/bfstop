@@ -95,6 +95,11 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			'onAfterRoute'       => 'onAfterRoute',
 			'onAfterApiRoute'    => 'onAfterApiRoute',
 			'onAfterDispatch'    => 'onAfterDispatch',
+			// the captive page of Joomla's multi-factor authentication
+			'onComUsersCaptiveValidateFailed'          => 'onSecondFactorFailure',
+			'onComUsersCaptiveValidateTryLimitReached' => 'onSecondFactorFailure',
+			'onComUsersCaptiveValidateSuccess'         => 'onSecondFactorChecked',
+			'onComUsersCaptiveValidateInvalidMethod'   => 'onSecondFactorChecked',
 		);
 	}
 
@@ -175,23 +180,38 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$this->getApplication()->get('secret', ''));
 	}
 
-	public function onUserLoginFailure(LoginFailureEvent $event)
+	/**
+	 * The address of the client whose failed login is to be counted, or null
+	 * if there is nothing to count: BFStop is off for the origin of the
+	 * request, there is no address, or it is on the allow list.
+	 */
+	private function failedLoginAddress(): ?string
 	{
-		$user = $event->getAuthenticationResponse();
 		$this->init();
 		if (!$this->isEnabledForCurrentOrigin())
 		{
-			return;
+			return null;
 		}
 		$ipAddress = IpHelper::getAddress($this->logger);
 		if ($ipAddress === '')
 		{
 			$this->logger->log('Empty IP address!', Log::ERROR);
-			return;
+			return null;
 		}
 		if ($this->repositories->allowList()->contains($ipAddress))
 		{
 			$this->logger->log('Ignoring failed login by allowed address '.$ipAddress, Log::INFO);
+			return null;
+		}
+		return $ipAddress;
+	}
+
+	public function onUserLoginFailure(LoginFailureEvent $event)
+	{
+		$user = $event->getAuthenticationResponse();
+		$ipAddress = $this->failedLoginAddress();
+		if ($ipAddress === null)
+		{
 			return;
 		}
 		$username = (string) ($user['username'] ?? '');
@@ -209,6 +229,57 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 				return;
 			}
 		}
+		$this->countFailedLogin($username, $ipAddress);
+	}
+
+	/**
+	 * The second factor of the login of the user who is logged in with the
+	 * password was wrong (or the limit of tries of the method was reached: the
+	 * code isn't even checked then, it is an attempt all the same). Counted
+	 * like a failed password: whoever has the password still has the code to
+	 * guess, and an address which failed with the password before - which a
+	 * correct password no longer makes forget, see MfaGate - is closer to its
+	 * block with every wrong code (issue #342, finding 4). The same signals
+	 * apply (a known address is allowed more attempts, ...), and the same
+	 * successful login of the user makes the failed ones forgotten.
+	 *
+	 * Joomla doesn't document the arguments of its events (a NotifyActionLog,
+	 * which says nothing of who), so the user is the one logged in.
+	 */
+	public function onSecondFactorFailure($event)
+	{
+		$identity = $this->getApplication()->getIdentity();
+		$ipAddress = $this->failedLoginAddress();
+		if ($ipAddress === null)
+		{
+			return;
+		}
+		if ($identity === null || $identity->guest || (string) $identity->username === '')
+		{
+			$this->logger->log('Ignoring failed second factor of nobody logged in from '.$ipAddress, Log::DEBUG);
+			return;
+		}
+		$this->logger->log('Failed second factor of '.$identity->username, Log::DEBUG);
+		$this->countFailedLogin((string) $identity->username, $ipAddress, true);
+	}
+
+	/**
+	 * The attempt to give the second factor is over, whatever came of it: the
+	 * next login of this address may be handled (see LoginTurn).
+	 */
+	public function onSecondFactorChecked($event)
+	{
+		$this->loginTurn?->end();
+	}
+
+	/**
+	 * Records the failed login of $username from $ipAddress and does what
+	 * follows from it: the risk score, the remaining attempts shown to the
+	 * client, the block, the notifications. $secondFactor: it was the code
+	 * of the second factor which was wrong, not the password.
+	 */
+	private function countFailedLogin($username, $ipAddress, bool $secondFactor = false)
+	{
 		$username = mb_strimwidth($username, 0, 150, "...");
 
 		$logEntry = new \stdClass();
@@ -241,7 +312,8 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 			$attemptsLeft = $this->policy->attemptsLeft($logEntry, $riskScore);
 			if ($this->responder->showsRemainingAttempts())
 			{
-				$this->responder->showRemainingAttempts($attemptsLeft);
+				// a new password is no help against a wrong code
+				$this->responder->showRemainingAttempts($attemptsLeft, !$secondFactor);
 			}
 			if ($attemptsLeft <= 0)
 			{
@@ -544,7 +616,7 @@ class Bfstop extends CMSPlugin implements SubscriberInterface
 		}
 		$blockIds = $early !== null ? $early['blockIds'] : $this->repositories->blocks()->activeIdsFor($ipaddress);
 		if ($blockIds !== null && count($blockIds) === 0 && !$this->policy->isOff() &&
-			$this->request->isPasswordLogin() &&
+			$this->request->isGuessableLogin() &&
 			$this->loginTurn->await($this->trackedAddress($ipaddress), $ipaddress, $this->logger))
 		{
 			// the logins before this one may have got the address blocked

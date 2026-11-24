@@ -210,16 +210,38 @@ class RequestClassifier
 		}
 		$option = $this->requestedOption();
 		list(, $method) = $this->requestedTask();
-		return ($option === 'com_users' || $option === 'com_login') && $method === 'login';
+		return (($option === 'com_users' || $option === 'com_login') && $method === 'login') ||
+			$this->isSecondFactorAttempt();
 	}
 
 	/**
-	 * Whether the request submits a username and a password - what can be
-	 * guessed: a login as isLoginAttempt() recognises it, but of the API
-	 * requests only those with HTTP Basic credentials, not those with a token
-	 * (a long random value, and what nearly every API request carries).
+	 * Whether the request submits the code of the second factor of a login
+	 * (the captive page of Joomla's multi-factor authentication posts to the
+	 * validate task of com_users' captive controller), on the site or in the
+	 * backend. It is a login attempt as far as blocking goes: the one who
+	 * has the password still has the code to guess (issue #342, finding 4),
+	 * and "Login Only" has to turn it away too. The task is compared as
+	 * Joomla's dispatcher runs it, see requestedTask().
 	 */
-	public function isPasswordLogin(): bool
+	public function isSecondFactorAttempt(): bool
+	{
+		if (!($this->app->isClient('site') || $this->app->isClient('administrator')) ||
+			$this->requestedOption() !== 'com_users')
+		{
+			return false;
+		}
+		list($controller, $method) = $this->requestedTask();
+		return $controller === 'captive' && $method === 'validate';
+	}
+
+	/**
+	 * Whether the request submits what can be guessed - a username and a
+	 * password, or the code of a second factor: a login as isLoginAttempt()
+	 * recognises it, but of the API requests only those with HTTP Basic
+	 * credentials, not those with a token (a long random value, and what
+	 * nearly every API request carries).
+	 */
+	public function isGuessableLogin(): bool
 	{
 		return $this->isApi()
 			? ApiHelper::requestCredentialsArePassword()

@@ -149,6 +149,7 @@ foreach (json_decode(stream_get_contents(STDIN), true) as $query)
 		'option' => $classifier->requestedOption(),
 		'task' => $classifier->requestedTask(),
 		'login' => $classifier->isLoginAttempt(),
+		'secondFactor' => $classifier->isSecondFactorAttempt(),
 		'recovery' => $classifier->passwordRecovery(),
 		'unblock' => $classifier->unblockPageToken() !== null,
 	);

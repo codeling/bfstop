@@ -62,6 +62,7 @@ class MfaLoginHttpTest extends IntegrationTestCase
 			'checkInterval' => 60,
 			'blockDuration' => 60,
 			'accountAttackEnabled' => 0,
+			'riskBlockNumberReductionPerPoint' => 0,
 			'notifyBlockedNumber' => 0,
 			'logLevel' => 8, // errors only
 		)));
@@ -161,7 +162,13 @@ class MfaLoginHttpTest extends IntegrationTestCase
 		return (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_failedlogin WHERE handled=0');
 	}
 
-	public function testLoginIsASuccessOnlyOnceTheSecondFactorIsDone()
+	/**
+	 * Logs in with the password and opens the captive page which asks for the
+	 * second factor.
+	 *
+	 * @return array the parameters of the request which validates a code
+	 */
+	private function loginWithPassword()
 	{
 		list($status, $body) = $this->request('option=com_users&view=login');
 		$this->assertSame(200, $status, 'the login form');
@@ -175,17 +182,26 @@ class MfaLoginHttpTest extends IntegrationTestCase
 		list($status, $body) = $this->request('option=com_users&view=captive');
 		$this->assertSame(200, $status);
 		$this->assertStringContainsString('captive.validate', $body, 'Joomla asks for the second factor');
-		$token = $this->formToken($body);
 		$recordId = (int) $this->queryValue('SELECT id FROM #__user_mfa WHERE user_id='.$this->userId);
-		$validate = array('option' => 'com_users', 'task' => 'captive.validate', 'record_id' => $recordId, $token => 1);
+		return array('option' => 'com_users', 'task' => 'captive.validate', 'record_id' => $recordId,
+			$this->formToken($body) => 1);
+	}
+
+	private static function wrongCode()
+	{
+		return self::totpCode() === '000000' ? '000001' : '000000';
+	}
+
+	public function testLoginIsASuccessOnlyOnceTheSecondFactorIsDone()
+	{
+		$validate = $this->loginWithPassword();
 
 		// a wrong code, and the requests after it
-		$wrong = self::totpCode() === '000000' ? '000001' : '000000';
-		list($status) = $this->request('', $validate + array('code' => $wrong));
+		list($status) = $this->request('', $validate + array('code' => self::wrongCode()));
 		$this->assertSame(303, $status);
-		$this->request('option=com_users&view=captive&record_id='.$recordId);
+		$this->request('option=com_users&view=captive&record_id='.$validate['record_id']);
 		$this->assertSame(0, $this->knownAddresses(), 'a wrong second factor');
-		$this->assertSame(2, $this->unhandledFailedLogins(), 'a wrong second factor');
+		$this->assertSame(3, $this->unhandledFailedLogins(), 'the wrong code is a failed login, the earlier ones are kept');
 
 		// the right one: Joomla lets the user in with the request after it
 		list($status) = $this->request('', $validate + array('code' => self::totpCode()));
@@ -194,5 +210,26 @@ class MfaLoginHttpTest extends IntegrationTestCase
 		$this->assertSame(200, $status);
 		$this->assertSame('Admin', $this->queryValue("SELECT username FROM #__bfstop_knownip WHERE ipaddress='127.0.0.1'"));
 		$this->assertSame(0, $this->unhandledFailedLogins());
+	}
+
+	/**
+	 * Somebody who has the password still has the code to guess: the wrong
+	 * codes add to the failed passwords of the address (2, and the attempts
+	 * allowed are 5), and the address is blocked - the right code is
+	 * refused then.
+	 */
+	public function testWrongSecondFactorsBlockTheAddress()
+	{
+		$validate = $this->loginWithPassword();
+		for ($i = 1; $i <= 3; ++$i)
+		{
+			$this->assertSame(0, (int) $this->queryValue('SELECT COUNT(*) FROM #__bfstop_bannedip'), 'blocked before the attempts are used');
+			list($status) = $this->request('', $validate + array('code' => self::wrongCode()));
+			$this->assertSame(303, $status, 'wrong code '.$i);
+		}
+		$this->assertSame('127.0.0.1', $this->queryValue('SELECT ipaddress FROM #__bfstop_bannedip'));
+		list($status) = $this->request('', $validate + array('code' => self::totpCode()));
+		$this->assertSame(403, $status, 'the right code from a blocked address');
+		$this->assertSame(0, $this->knownAddresses());
 	}
 }
