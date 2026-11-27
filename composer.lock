@@ -69,18 +69,17 @@
                 "issues": "https://github.com/maxmind/MaxMind-DB-Reader-php/issues",
                 "source": "https://github.com/maxmind/MaxMind-DB-Reader-php/tree/v1.15.0"
             },
-            "time": "2026-11-17T21:46:48+00:00",
-            "published-time": "2026-11-17T21:46:54+00:00"
+            "time": "2026-11-17T21:46:48+00:00"
         }
     ],
     "packages-dev": [
         {
             "name": "phpstan/phpstan",
-            "version": "2.3.6",
+            "version": "2.3.7",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/00cedebb76cc82c1592414fa4f616cefdccda16f",
-                "reference": "00cedebb76cc82c1592414fa4f616cefdccda16f",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/90c91c2498849ab8cc4e873864bbf1cb2bf6ea12",
+                "reference": "90c91c2498849ab8cc4e873864bbf1cb2bf6ea12",
                 "shasum": ""
             },
             "require": {
@@ -136,7 +135,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-11-15T19:58:26+00:00"
+            "time": "2026-11-19T10:31:11+00:00"
         }
     ],
     "aliases": [],
@@ -151,5 +150,5 @@
     "platform-overrides": {
         "php": "8.2.0"
     },
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
