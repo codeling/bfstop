@@ -59,8 +59,11 @@ class Responder
 	/**
 	 * Shows the client of a failed login the messages about the $attemptsLeft
 	 * attempts it has before it is blocked, see showsRemainingAttempts().
+	 * $recommendsPasswordReset: whether the recommendation of the password
+	 * reset (if the settings ask for it) goes with it; not after a wrong
+	 * second factor.
 	 */
-	public function showRemainingAttempts($attemptsLeft)
+	public function showRemainingAttempts($attemptsLeft, bool $recommendsPasswordReset = true)
 	{
 		if ($attemptsLeft < 0)
 		{
@@ -72,7 +75,7 @@ class Responder
 		{
 			$this->app->enqueueMessage(Text::sprintf('PLG_SYSTEM_BFSTOP_X_ATTEMPTS_LEFT', $attemptsLeft), 'warning');
 		}
-		if ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder)
+		if ($recommendsPasswordReset && ($passwordReminder == -1 || $attemptsLeft <= $passwordReminder))
 		{
 			$this->app->enqueueMessage(Text::sprintf('PLG_SYSTEM_BFSTOP_PASSWORD_RESET_RECOMMENDED',
 				Route::_('index.php?option=com_users&view=reset')), 'warning');

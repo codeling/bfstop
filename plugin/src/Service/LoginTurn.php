@@ -22,11 +22,12 @@ use Joomla\CMS\Log\Log;
  * sent at the same time would therefore all be let through and all get
  * their password checked, however few attempts are allowed: as many as the
  * server handles in parallel, with every burst. So a request which submits
- * a password waits (await()) until the one before it from the same address
- * has been counted (Bfstop::onUserLoginFailure()) or has succeeded
- * (Bfstop::onUserLogin()) - or has ended otherwise, the operating system
- * releases the lock then. After that, the caller looks at the block list
- * again.
+ * a password - or the code of a second factor - waits (await()) until the
+ * one before it from the same address has been counted
+ * (Bfstop::onUserLoginFailure(), Bfstop::onSecondFactorFailure()) or has
+ * succeeded (Bfstop::onUserLogin(), Bfstop::onSecondFactorChecked()) - or
+ * has ended otherwise, the operating system releases the lock then. After
+ * that, the caller looks at the block list again.
  *
  * The turn lasts from the routing of the request to its login event, so one
  * object is kept for the whole request.

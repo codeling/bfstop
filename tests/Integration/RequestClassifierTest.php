@@ -32,8 +32,9 @@ class RequestClassifierTest extends IntegrationTestCase
 	private const Tasks = array(null, '', 'display', 'login', 'LOGIN', 'logout', 'user.login', 'User.Login',
 		'user.LOGIN', 'user.login.x', '.login', 'user.', 'display.login', 'user.logout', 'reset.request',
 		'Reset.Request', 'reset.confirm', 'reset.complete', 'remind.remind', 'user.remind', 'profile.remind',
-		'registration.register', 'request', 'remind', array('user.login'));
-	private const Controllers = array(null, 'user', 'User', 'reset', 'remind', 'display');
+		'registration.register', 'request', 'remind', array('user.login'), 'captive.validate', 'Captive.Validate',
+		'captive.validate.x', 'captive.display', 'validate');
+	private const Controllers = array(null, 'user', 'User', 'reset', 'remind', 'display', 'captive');
 	private const Views = array(null, 'reset', 'remind', 'login', 'tokenunblock', 'Reset');
 
 	private static $results = array();
@@ -212,6 +213,33 @@ class RequestClassifierTest extends IntegrationTestCase
 		if ($client !== 'admin=Admin')
 		{
 			$this->assertGreaterThan(10, $logins, 'requests which run a login');
+		}
+	}
+
+	/**
+	 * Every request for which Joomla validates the code of a second factor
+	 * (the captive controller's validate task of com_users) is recognised as
+	 * one, and so as a login attempt, which "Login only" blocks: whoever has
+	 * the password still has the code to guess.
+	 */
+	#[\PHPUnit\Framework\Attributes\DataProvider('clients')]
+	public function testEverySecondFactorJoomlaValidatesIsRecognised($client)
+	{
+		$validations = 0;
+		foreach ($this->results($client) as $result)
+		{
+			$joomla = $result['joomla'];
+			if ($joomla['option'] === 'com_users' && $joomla['controller'] === 'captive' && $joomla['method'] === 'validate')
+			{
+				$this->assertTrue($result['secondFactor'], self::describe($result));
+				$this->assertTrue($result['login'], self::describe($result));
+				++$validations;
+			}
+		}
+		// a guest of the backend has com_login only, see testEveryLoginJoomlaRunsIsRecognised()
+		if ($client === 'site' || $client === 'admin=Admin')
+		{
+			$this->assertGreaterThan(3, $validations, 'requests which validate a second factor');
 		}
 	}
 

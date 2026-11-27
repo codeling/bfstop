@@ -7,11 +7,12 @@
   to Joomla events as on a live site (failed logins, requests from blocked
   addresses). Skipped if `JOOMLA_ROOT` is not set.
 
-Two integration tests, `UnblockPageHttpTest` and `ParallelLoginHttpTest`, make
-real HTTP requests to PHP's built-in web server running the Joomla site (the
-status and headers of a response can't be seen from a CLI process, and logins
-sent at the same time need a server with several workers; the latter test
-needs the curl extension): they test the plugin and component as *installed*
+Three integration tests, `UnblockPageHttpTest`, `ParallelLoginHttpTest` and
+`MfaLoginHttpTest`, make real HTTP requests to PHP's built-in web server
+running the Joomla site (the status and headers of a response can't be seen
+from a CLI process, logins sent at the same time need a server with several
+workers, and a login with a second factor takes several requests of one
+session; `ParallelLoginHttpTest` needs the curl extension): they test the plugin and component as *installed*
 in the site, so after changing them, copy them there first
 (`plugin/deploy.sh <joomla dir>` and `component/deploy.sh <joomla dir>`, or run
 `tests/ci/install-joomla.sh` again).
